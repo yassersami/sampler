@@ -10,13 +10,13 @@ conf/local/**
 conf/**/*credentials*
 
 # ignore everything in the following folders
-data/**
-logs/**
+.vscode/tasks.json
 conf/**
 !conf/base
-to_del
-docs
-!README.md
+data/**
+docs/
+logs/**
+to_del/
 
 # except their sub-folders
 #!data/**/
