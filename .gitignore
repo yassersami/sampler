@@ -14,8 +14,10 @@ conf/**/*credentials*
 conf/**
 !conf/base
 data/**
+src/simulator_0d/data/
 docs/
 logs/**
+src/sampler/todo.py
 to_del/
 
 # except their sub-folders
@@ -164,4 +166,3 @@ src/sampler/pipelines/guided_sampling/__pycache__/
 src/sampler/pipelines/prep/__pycache__/
 src/sampler/models/__pycache__/
 src/sampler/__pycache__/
-src/simulator_0d/data/
