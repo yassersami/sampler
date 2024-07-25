@@ -1,0 +1,93 @@
+#!/bin/sh -e
+
+export PATH=/usr/bin:${PATH}
+
+DIR=$(cd ${0%/*}; pwd)
+cd ${DIR}
+
+if [ -z "$1" ]; then
+	echo "Give 'simulation directory path' as first argument"
+	exit 1
+fi
+
+simudir=${1}
+configpath=${simudir}/inputs_var.json
+simuname=$(basename ${simudir})
+stdoutpath=${simudir}/stdout.txt
+stderrpath=${simudir}/stderr.txt
+
+# shift user args to enable eventual sbatch options
+# (shift n: deletes ${1, ..., n} and shifts ${k}->${k-n})
+shift 1
+
+echo
+echo "simudir   =${simudir}"
+echo "configpath=${configpath}"
+echo "syntax    :$0 <data/data_map/simu_> [sbatch options]"
+echo
+
+if [ ! -f ${configpath} ]; then
+	echo "File '${configpath}' not found !"
+	exit 1
+fi
+
+# Name of job, EXEC is an exported variable, its name should be unchanged
+EXEC="DB_0D_jobs"
+
+# Command to execute in sub-sbatch
+EX="python3 src/pypp/launch.py $PWD/${simudir}"
+
+. /pfcalcul/tools/sbatchHelpers.sh
+
+jobMessage=$(
+######################### SBATCH launcher
+#########################     #SBATCH --option        # <= this is an enabled paramater
+#########################     ##SBATCH --option       # <= this is a disabled parameter
+sbatch ${sbatchopt} << eof
+#!/bin/bash
+#SBATCH --job-name="${simuname}"
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem-per-cpu=5G
+#SBATCH --output=${stdoutpath}
+#SBATCH --error=${stderrpath}
+
+# --mem-per-cpu: default maximum is 3.5GB
+# example: reserving 100GBytes per task (allowing max 256G/100G=2 tasks per node)
+####SBATCH --mem-per-cpu=100G
+
+# define default job name with exported variables
+####SBATCH --job-name="${EXECDIR}-${LOGNAME}"
+
+# activate mail notfication when submitting jobs
+####SBATCH --mail-type=ALL
+
+# restrict all taks on ***the same node***
+####SBATCH --nodes=1-1
+
+. /pfcalcul/tools/sbatchHelpers.sh
+
+#### User customization -------------
+
+echo
+ln -s ${simudir} $(pwd)/${simuname}  # symbolic link to simudir
+
+# conda deactivate
+
+echo "default_python3=$(which python3)" 
+echo "venv           =${DIR}/venv/bin/activate"
+
+. ${DIR}/venv/bin/activate
+
+eval echo "used_python3     =\$(which python3)"
+echo "EX             =${EX}"
+echo "pwd            =$(pwd)"
+
+#### End of user customization ------
+
+time $EX
+
+eof
+)
+
+showSubmitted

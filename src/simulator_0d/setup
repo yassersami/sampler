@@ -1,0 +1,24 @@
+#!/bin/sh -e
+
+env=${1}
+
+conda env remove --name ${env}
+
+conda create --name ${env} --channel cantera cantera ipython matplotlib jupyter
+conda activate ${env}
+
+which python
+which pip
+
+pip3 install --upgrade pip
+pip install -r requirements.txt
+
+pip install pandas
+pip install plotly
+pip install scipy
+
+# For Latex matplotlib
+sudo apt-get install texlive-latex-extra texlive-fonts-recommended dvipng cm-super
+sudo apt-get install --reinstall libxcb-xinerama0
+sudo apt-get install libx11-xcb1
+# sudo apt-get install cm-super (not used)

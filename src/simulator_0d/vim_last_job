@@ -1,0 +1,44 @@
+#!/bin/bash
+
+DIR=$(cd ${0%/*}; pwd)
+echo "DIR=${DIR}"
+
+if [ -z "$1" ]; then
+    echo "Give 'directory/path' as first argument and file_name as second argument"
+    exit 1
+elif [ -z "$2" ]; then
+    echo "Give 'file_name' or -l as second argument"
+    exit 1
+fi
+
+dir_path=${DIR}/$1
+echo "dir_path=${dir_path}"
+
+if [ ! -d ${dir_path} ]; then
+    echo "Directory '${dir_path}' not found !"
+    exit 1
+fi
+
+recent_dir=$(ls ${dir_path} -t | head -n1)
+echo "recent_dir=${recent_dir}"
+
+if [ "$2" = "--list" ] || [ "$2" = "-l" ]; then
+    ls ${dir_path}/${recent_dir} -al
+
+else
+    file_name=$2
+    echo "file_name=${file_name}"
+
+    file_path=${dir_path}/${recent_dir}/${file_name}
+    echo "file_path=${file_path}"
+
+    if [ ! -f ${file_path} ]; then
+        echo "File '${file_path}' not found !"
+        exit 1
+    fi
+
+    vim ${file_path}
+fi
+
+
+

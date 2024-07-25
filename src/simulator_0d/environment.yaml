@@ -1,0 +1,26 @@
+# run: conda env create -f environment.yaml
+# activate: conda activate venv_0D
+
+# You might need following commands in case latex matplotlib doesn't work.
+# sudo apt-get install texlive-latex-extra texlive-fonts-recommended dvipng cm-super
+# sudo apt-get install --reinstall libxcb-xinerama0
+# sudo apt-get install libx11-xcb1
+
+name: venv_0D
+channels:
+- cantera  # or use cantera/label/dev for alpha/beta packages
+- defaults
+dependencies:
+- python==3.9  # Cantera supports Python 3.6 and up
+- cantera==2.6.0
+- ipython  # optional (needed for nicer interactive command line)
+- jupyter  # optional (needed for Jupyter Notebook)
+- matplotlib  # optional (needed for plots)
+- python-graphviz  # optional (needed for reaction path diagrams)
+- h5py  # optional (needed for HDF/H5 output)
+- pandas==1.3.4  # optional (needed for pandas interface)
+- numpy==1.21.2
+- numba==0.56.4
+- numexpr==2.8.4
+- scipy==1.10.1
+- tqdm

@@ -1,0 +1,41 @@
+#!/bin/bash
+
+# requests for pfcalcul
+
+squeue_list () {
+	username=$1
+	states=$2
+
+	squeue -u $username -t $states -o '%.19V %.10T %.7i %.40j %.10M %.10m'
+}
+# %S Actual or expected start time of the job or job step.
+# %V The job's submission time. 
+
+squeue_count () {
+	username=$1
+	states=$2
+
+	lines_tot=$(squeue -u $username -t $states | wc -l)
+	jobs_tot=$(( $lines_tot - 1 ))
+
+	echo -e "------ Squeue request ------\n"
+	echo "States	   : $states"
+	echo "Total lines: $lines_tot"
+	echo "Total jobs : $jobs_tot"
+}
+
+
+# ---MAIN---
+
+username=$(whoami)
+states_1="running"
+states_2="pending,running"
+
+echo -e "\nlaunch: squeue_list $username $states_1\n"
+squeue_list $username $states_2
+
+echo -e "\nlaunch: squeue_count $username $states_2\n"
+squeue_count $username $states_2
+
+echo -e "\n"
+
