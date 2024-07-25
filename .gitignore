@@ -14,6 +14,9 @@ data/**
 logs/**
 conf/**
 !conf/base
+to_del
+docs
+!README.md
 
 # except their sub-folders
 #!data/**/
