@@ -123,18 +123,6 @@ class SimulationProcessor:
         new_xy = np.column_stack((new_x, np.zeros((new_x.shape[0], len(self.targets)))))
         return self.treatment.scaler.inverse_transform(new_xy)[:, :len(self.features)]
 
-    def _run_actual_simulation(self, real_df: pd.DataFrame, index: int) -> pd.DataFrame:
-        results_df = run_simulation(
-                x=real_df, index=index, n_proc=self.n_proc, map_dir=self.map_dir
-            )
-        return pd.concat([real_df, results_df], axis=1)
-
-    def _run_fake_simulation(self, x_real: np.ndarray) -> pd.DataFrame:
-        return run_fake_simulator(
-            x_real, self.features, self.targets, self.additional_values,
-            self.treatment.scaler
-        )
-
     def process_data(self, new_x: np.ndarray, real_x: bool, index: int) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
         Process simulation data, either from real or scaled input features.
@@ -151,9 +139,15 @@ class SimulationProcessor:
         real_df = pd.DataFrame(x_real, columns=self.features)
 
         if self.use_simulator:
-            new_points = self._run_actual_simulation(x=real_df, index=index)
+            results_df = run_simulation(
+                x=real_df, index=index, n_proc=self.n_proc, map_dir=self.map_dir
+            )
+            new_points = pd.concat([real_df, results_df], axis=1)
         else:
-            new_points = self._run_fake_simulation(x_real)
+            new_points = run_fake_simulator(
+                x_real, self.features, self.targets, self.additional_values,
+                self.treatment.scaler
+            )
 
         scaled_data, scaled_errors = self.treatment.treat_data(df_real=new_points, scale=True)
         scaled_data = scaled_data[self.features + self.targets + self.additional_values]
