@@ -183,7 +183,7 @@ class FigureOfMerit(GPSampler):
                 probabilities = point_norm.cdf(uppers) - point_norm.cdf(lowers)
 
                 # We want to minimize this function, to maximize the probability of being in the interest region
-                score = 1 - np.sum(probabilities, axis=1) / 2
+                score = 1 - np.prod(probabilities, axis=1)
                 
                 return score
         else:

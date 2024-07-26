@@ -66,8 +66,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             func=plot_metrics,
             inputs=dict(
                 data='scaled_exp_data',
-                features='features',
-                targets='targets',
+                names='params:names',
                 region='scaled_region',
                 ignition_points='params:ignition_points',
                 volume='volume',

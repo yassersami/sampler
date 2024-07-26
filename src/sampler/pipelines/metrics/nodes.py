@@ -13,7 +13,7 @@ from scipy.stats import norm
 from sampler.common.data_treatment import DataTreatment
 from sampler.models.fom import GPSampler
 from sampler.pipelines.metrics.postprocessing_functions import create_dict, prepare_new_data, prepare_benchmark, get_result
-from sampler.pipelines.metrics.volume import covered_space_upper
+from sampler.pipelines.metrics.volume import covered_space_bound
 import sampler.pipelines.metrics.graphics_metrics as gm
 
 def crps_norm(mu, sigma, y):
@@ -27,8 +27,8 @@ def prepare_data_metrics( # the name is the same as analysis. Interpreter will n
         additional_values: List[str], treatment: DataTreatment
 ) -> Dict:
     data = {}
-    f_r = names['features']
-    t_r = names['targets']
+    f_r = names['features']['str']
+    t_r = names['targets']['str']
     targets_prediction = [f'{t}_hat' for t in targets]
     renaming_cols = {v1: v2 for v1, v2 in zip(features + targets, f_r + t_r)}
     # region = {
@@ -81,9 +81,9 @@ def get_metrics(
             volume[key] = params_volume["default"][key]
         elif params_volume["compute_volume"]:
             scaled_data_interest = treatment.scaler.transform_features(value['interest'][features].values)
-            volume[key] = covered_space_upper(scaled_data_interest, radius, params_volume)
+            volume[key] = covered_space_bound(scaled_data_interest, radius, params_volume, len(features))
         else:
-            volume[key] = 0
+            volume[key] = np.array([0,0])
 
         # Train surrogate model
         len_train = initial_size + int( 0.8*(len(value['df']) - initial_size) )  # so length of test_set : 20% of the new points 
@@ -129,14 +129,18 @@ def scale_data_for_plots(data: Dict, features: List[str], targets: List[str], ta
 
 
 def plot_metrics(
-    data: Dict, features: List[str], targets: List[str], region: Dict,
+    data: Dict, names: Dict, region: Dict,
     ignition_points: Dict, volume: Dict,
     # r2: Dict, crps: Dict
 ):
+    features_dic = names['features']
+    features = features_dic['str']
+    targets = names['targets']['str']
+
     area_targets = None  # TODO yasser: compute covered area on targets space
     # area_targets = {k: 10000 for k in data}
     # Space distribution
-    features_2d = gm.plot_2d(data, features, ignition_points, volume)
+    features_2d = gm.plot_2d(data, features_dic, ignition_points, volume)
     violin_plot = gm.plot_violin_distribution(data, targets, region, area_targets)
     kde_plot = gm.targets_kde(data, targets, region)
     # pair_plot = gm.pair_grid_for_all_variables(data, features, targets)

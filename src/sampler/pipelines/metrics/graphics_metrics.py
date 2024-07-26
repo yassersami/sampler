@@ -128,19 +128,22 @@ def targets_kde(data: Dict, targets: List[str], region: Dict):
 
 
 
-def plot_2d(data: Dict, features: List[str], points: Dict, volume: Dict):
+def plot_2d(data: Dict, features_dic: Dict, points: Dict, volume: Dict):
+    features = features_dic["str"]
+    features_latex = features_dic["latex"]
     colors = points["colors"]
 
-    n_exp = len(data)
-    n_rows = len(features)
-    fig, axs = plt.subplots(
-        n_rows, n_exp, sharey='row', figsize=(4*n_exp, 4*n_rows),
-        constrained_layout=False
-    )
-
     feature_pairs = list(combinations(features, 2))
-    
-    for n_col, (k, v) in enumerate(data.items()):
+    n_exp = len(data)
+    n_rows = len(feature_pairs)
+
+    fig, axs = plt.subplots(n_rows, n_exp, sharey='row', figsize=(4*n_exp, 4*n_rows+1),
+                        constrained_layout=False, squeeze=False)
+
+    if len(feature_pairs)==1: # axs is a 2D array, but it have to be treated as a 1D array, squeeze
+        axs = axs[0]
+
+    for n_col, (k,v) in enumerate(data.items()):
         num_not_interesting = v['not_interesting'].shape[0]
         num_interest = v['interest'].shape[0]
         num_outliers = v['outliers'].shape[0]
@@ -151,7 +154,7 @@ def plot_2d(data: Dict, features: List[str], points: Dict, volume: Dict):
         # v['outliers'][features] = v['outliers'][features] / scales["features"]
 
         for n_row, (x, y) in enumerate(feature_pairs):
-            idx = (n_row, n_col) if len(data.keys()) > 1 else n_row
+            idx = (n_row, n_col) if len(data.keys()) > 1 else (n_row, 0)
             axs[idx].scatter(
                 x=v['not_interesting'][x],
                 y=v['not_interesting'][y],
@@ -171,23 +174,16 @@ def plot_2d(data: Dict, features: List[str], points: Dict, volume: Dict):
             )
             axs[idx].set_xticks(np.arange(11))
             axs[idx].set_xticklabels(['0', '', '2', '', '4', '', '6', '', '8', '', '10'])
-            if x == 'Al radius [micron]':
-                axs[idx].set_xlabel(r'$r_{Al} \;[\mu m]$')
-            else:
-                axs[idx].set_xlabel(r'$r_{CuO} \;[\mu m]$')
 
-            idx_label = (n_row, 0) if len(data.keys()) > 1 else n_row
-            if y == 'CuO radius [micron]':
-                axs[idx_label].set_ylabel(r'$r_{CuO} \;[\mu m]$')
-            else:
-                axs[idx_label].set_ylabel(r'$\phi$')
-                
+            axs[idx].set_xlabel(features_latex[features.index(x)])
+            axs[idx].set_ylabel(features_latex[features.index(y)])
+
         # Sort labels as Interest, Not int and Outliers
         idx_legend = (0, n_col) if len(data.keys()) > 1 else 0
         hs, _ = axs[idx_legend].get_legend_handles_labels()
 
         handles = [hs[2], hs[0]] if num_outliers == 0 else [hs[2], hs[0], hs[1]]
-        labels = [f'n_Itr: {num_interest} \nV_Itr: {volume[k]:.3e}', f'n_noItr: {num_not_interesting}']
+        labels = [f'n_Itr: {num_interest} - n_noItr: {num_not_interesting} \n V_Itr_bound : [{volume[k][0]:.2e} ; {volume[k][1]:.2e}]']
         if num_outliers != 0:
             labels += [f'Outliers {num_outliers}']
         

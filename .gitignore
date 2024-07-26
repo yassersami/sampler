@@ -19,6 +19,7 @@ docs/
 logs/**
 src/sampler/todo.py
 to_del/
+results/
 
 # except their sub-folders
 #!data/**/
