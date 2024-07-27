@@ -1,0 +1,18 @@
+{
+  "outliers_filling": {
+    "method": "fixed",
+    "default_values": {
+      "Pg_f":  2e5,
+      "Tg_Tmax": 600
+    }
+  },
+  "log_scale": 1,
+  "sim_time_cutoff": 41,
+  "variables_ranges": {
+    "r_ext_pAl": {"bounds": [2e-7, 1e-5], "scale": "lin"},
+    "r_ext_pMeO": {"bounds": [2e-7, 1e-5], "scale": "lin"},
+    "pAl_richness": {"bounds": [1, 4], "scale": "lin"},
+    "Pg_f":  {"bounds": [2e5, 1.5e8], "scale": "log"},
+    "Tg_Tmax": {"bounds": [600, 7500], "scale": "log"}
+  }
+}

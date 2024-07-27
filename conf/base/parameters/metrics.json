@@ -1,0 +1,77 @@
+{
+  "names": {
+    "features": ["Al radius [micron]", "CuO radius [micron]", "Al richness"],
+    "targets": ["Final Pressure [MPa]", "Combustion Temperature [K]"]
+  },
+  "scales": {
+    "features": [1e-6, 1e-6, 1],
+    "targets": [1e6, 1]
+  },
+  "ignition_points": {"colors": {
+    "interest": "#E02401", "not_interesting": "#A9B388", "outliers": "black"
+  }},
+  "params_volume":{
+    "compute_volume": false,
+    "same_sphere_tol":1e-3,
+    "max_depth":3,
+    "default": {
+      "EI_R1": 0.0101326, "EIC_R1": 0.007667, "optuna_R1": 0.003117,
+      "paregoItr_R1": 0.00544532, "paregoGP_R1": 0.007690, "paregoTent_R1": 0.005346,
+
+      "EI_R2": 0.00701125, "EIC_R2": 0.005006, "optuna_R2": 0.00424896,
+      "paregoItr_R2": 0.004215, "paregoGP_R2": 0.008742, "paregoTent_R2": 0.004049
+    }
+  },
+  "experiments": {
+    "EI_R2": {
+      "color": "darkolivegreen",
+      "name": "UI [R2]",
+      "path": "data/07_model_output/env_EI_R2/history",
+      "scale": "real-inverse"
+    },
+    "optuna_R2": {
+      "color": "firebrick",
+      "name": "Optuna 200 [R2]",
+      "path": "data/07_model_output/env_optuna_R2/sao_history_0703_200",
+      "scale": "real-inverse"
+    }
+  },
+  "other_possible_experiments": {
+    "lhs": {
+      "color": "gray",
+      "name": "LHS",
+      "path": "data/02_intermediate/100_initial_data.csv",
+      "scale": "classify"
+    },
+    "EI_R2": {
+      "color": "darkolivegreen",
+      "name": "UI [R2]",
+      "path": "data/07_model_output/env_EI_R2/history",
+      "scale": "real-inverse"
+    },
+    "EIC_R2": {
+      "color": "royalblue",
+      "name": "GPR + I + C [R2]",
+      "path": "data/07_model_output/env_EIC_R2/history",
+      "scale": "real-inverse"
+    },
+    "optuna_R2": {
+      "color": "firebrick",
+      "name": "Optuna 200 [R2]",
+      "path": "data/07_model_output/env_optuna_R2/sao_history_0703_200",
+      "scale": "real-inverse"
+    },
+    "paregoItr_R2": {
+      "color": "darkolivegreen",
+      "name": "parEGO Itr [R2]",
+      "path": "data/07_model_output/env_parego_R2/parego_history_Itr",
+      "scale": "real-inverse"
+    },
+    "paregoGP_R2": {
+      "color": "firebrick",
+      "name": "parEGO GP [R2]",
+      "path": "data/07_model_output/env_parego_GP_R2/history",
+      "scale": "real-inverse"
+    }
+  }
+}
