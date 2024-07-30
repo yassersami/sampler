@@ -17,7 +17,7 @@ data/*
 src/simulator_0d/data/
 docs/
 logs/*
-src/sampler/todo.py
+todo.md
 to_del/
 
 # except their sub-folders
