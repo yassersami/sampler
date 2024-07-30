@@ -13,11 +13,11 @@ conf/**/*credentials*
 .vscode/
 conf/*
 !conf/base/
-data/*
+data/*/**
+!data/**/
 src/simulator_0d/data/
 docs/
-logs/*
-todo.md
+logs/
 to_del/
 
 # except their sub-folders
