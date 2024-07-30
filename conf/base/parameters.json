@@ -9,9 +9,28 @@
   "features": ["r_ext_pAl", "r_ext_pMeO", "pAl_richness"],
   "targets": ["Pg_f", "Tg_Tmax"],
   "additional_values": ["sim_time"],
+  
+  "variables_ranges": {
+    "r_ext_pAl": {"bounds": [2e-7, 1e-5], "scale": "lin", "discete_steps": 0},
+    "r_ext_pMeO": {"bounds": [2e-7, 1e-5], "scale": "lin", "discete_steps": 0},
+    "pAl_richness": {"bounds": [1, 4], "scale": "lin", "discete_steps": 0},
+    
+    "Pg_f":  {"bounds": [2e5, 1.5e8], "scale": "log"},
+    "Tg_Tmax": {"bounds": [600, 7500], "scale": "log"}
+  },
+  
+  "initial_size": 100,
+
   "interest_region": {
     "Pg_f": [40e6, 56e6],
     "Tg_Tmax": [5800, 7000]
   },
-  "initial_size": 100
+
+  "run_condition":{
+    "run_until_max_size": false, 
+    "batch_size": 8,
+
+    "max_size": 200,
+    "n_interest_max": 50
+  }
 }

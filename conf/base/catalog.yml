@@ -7,7 +7,7 @@
 ###### prep ######
 initial_data:
   type: pandas.CSVDataSet
-  filepath: data/02_intermediate/100_initial_data.csv
+  filepath: data/02_intermediate/100_initial_data_input=3.csv
 
 scaler:
   type: pickle.PickleDataSet

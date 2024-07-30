@@ -28,9 +28,12 @@ RANDOM_STATE = 42
 def run_parego(
         data: pd.DataFrame, treatment: DataTreatment,
         features: List[str], targets: List[str], additional_values: List[str],
-        simulator_env: Dict, max_size: int, batch_size: int = 1, llambda_s: int=100,
+        simulator_env: Dict, run_condition: Dict, llambda_s: int=100,
         tent_slope: float=10, experience: str="parEGO_maxIpr"
 ):
+    max_size, n_interest_max, run_until_max_size, batch_size = run_condition['max_size'], run_condition['n_interest_max'], run_condition['run_until_max_size'], run_condition['batch_size']
+
+   
 
     res = initialize_dataset(
         data=data, features=features, targets=targets, treatment=treatment,
@@ -48,22 +51,21 @@ def run_parego(
         treatment=treatment, n_proc=batch_size, simulator_env=simulator_env
     )
 
-    # Initialize tqdm progress bar with estimated time remaining
-    progress_bar = tqdm(total=max_size, dynamic_ncols=True)
+
     size = 0
     iteration = 0
-    while size < max_size:
-        iteration += 1
-        print(f'Round {iteration:03} ' + '-'*80)
+    n_new_interest = 0
+    end_condition = size < max_size if run_until_max_size else n_new_interest < n_interest_max 
+    progress_bar = tqdm(total=max_size, dynamic_ncols=True) if run_until_max_size else tqdm(total=n_interest_max, dynamic_ncols=True) # Initialize tqdm progress bar with estimated time remaining
+    print(f"Iteration {iteration:03} - Size {size} - New interest {n_new_interest}")
+    while end_condition:
         x_pop = res[features].values
         y_pop = res[targets].values
         llambda = lambda_gen.choose_uniform_lambda()
-        # Prepare train data and train GP
-        dace.update_model(x_pop, y_pop, llambda)
-        # Search new candidates to add to res dataset
-        new_x = EvolAlg(dace, x_pop, batch_size=batch_size)
-        # Launch time expensive simulations
-        new_df, error_features = simulator.process_data(new_x, real_x=False, index=size)
+
+        dace.update_model(x_pop, y_pop, llambda) # Prepare train data and train GP
+        new_x = EvolAlg(dace, x_pop, batch_size=batch_size) # Search new candidates to add to res dataset
+        new_df, error_features = simulator.process_data(new_x, real_x=False, index=size) # Launch time expensive simulations
         dace.model.add_ignored_points(error_features)
 
         print(f'Round {iteration:03} (continued): simulation results' + '-'*49)
@@ -83,18 +85,27 @@ def run_parego(
         new_df['datetime'] = timenow
         new_df['iteration'] = iteration
 
-        # Concatenate new values to original results DataFrame
-        res = pd.concat([res, new_df], axis=0, ignore_index=True)
+        res = pd.concat([res, new_df], axis=0, ignore_index=True) # Concatenate new values to original results DataFrame
+        
         size += len(new_df)
+        n_new_interest += len(new_df[new_df['quality'] == 'interest'])
+        iteration+=1
 
-        # Print some informations
-        iter_interest_count = (new_df['quality']=='interest').sum()
-        total_interest_count = (res['quality']=='interest').sum()
-        print(f'run_parego -> Final batch data that wil be stored:\n {new_df}')
-        print(f'run_parego -> [batch  report] new points: {len(new_df)}, interesting points: {iter_interest_count}')
-        print(f'run_parego -> [global report] progress: {size}/{max_size}, interesting points: {total_interest_count}')
+        if run_until_max_size:
+            progress_bar.update(len(new_df))
+        else:
+            progress_bar.update(len(new_df[new_df['quality'] == 'interest']))
+
+        end_condition = size < max_size if run_until_max_size else n_new_interest < n_interest_max
+        print(f"Iteration {iteration} - Size {size} - New interest {n_new_interest}")
         yield results(res, size=len(new_df))
-        progress_bar.update(len(new_df))
+
+        # * Print some informations
+        # iter_interest_count = (new_df['quality']=='interest').sum()
+        # total_interest_count = (res['quality']=='interest').sum()
+        # print(f'run_parego -> Final batch data that wil be stored:\n {new_df}')
+        # print(f'run_parego -> [batch  report] new points: {len(new_df)}, interesting points: {iter_interest_count}')
+        # print(f'run_parego -> [global report] progress: {size}/{max_size}, interesting points: {total_interest_count}')
     progress_bar.close()
 
 

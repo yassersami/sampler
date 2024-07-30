@@ -20,9 +20,8 @@ def create_pipeline(**kwargs) -> Pipeline:
                 features='params:features',
                 targets='params:targets',
                 additional_values='params:additional_values', # 'sim_time', 'Y_O2', ...
-                max_size='params:parego_max_size', # 150 (16 pour les tests)
-                batch_size='params:parego_batch_size', # 4 (tourne avec un i5)
-                llambda_s='params:parego_llambda_s',  # number of subdivision of [0, 1] interval to chose lambda combinations
+                run_condition='params:run_condition',
+                llambda_s='params:parego_llambda_s', 
                 tent_slope='params:parego_tent_slope',
                 experience='params:parego_experience',
                 simulator_env='params:simulator_env',

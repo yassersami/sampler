@@ -1,6 +1,4 @@
 {
-  "irbs_max_size": 16,
-  "irbs_batch_size": 4,
   "irbs_opt_sampling_points": 1000,
   "irbs_opt_iters": 5,
   "irbs_error_round_decimals": 10,

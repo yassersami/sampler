@@ -1,6 +1,4 @@
 {
-    "parego_max_size": 50,
-    "parego_batch_size": 8,
     "parego_llambda_s": 1000,
     "parego_tent_slope": 10,
     "parego_experience": "parEGO_GP",
