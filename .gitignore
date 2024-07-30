@@ -15,10 +15,11 @@ conf/*
 !conf/base/
 data/*/**
 !data/**/
+docs/**
 src/simulator_0d/data/
-docs/
-logs/
+logs/**
 to_del/
+results/
 
 # except their sub-folders
 #!data/**/
