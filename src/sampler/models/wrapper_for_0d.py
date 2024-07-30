@@ -138,6 +138,9 @@ class SimulationProcessor:
         x_real = self._prepare_real_input(new_x, real_x)
         real_df = pd.DataFrame(x_real, columns=self.features)
 
+        if "r_ext_pMeO" not in self.features: # If r_ext_pMeO lack, I replace with the same value than r_ext_pAl # ? rs_inputs
+            real_df['r_ext_pMeO'] = real_df['r_ext_pAl']
+
         if self.use_simulator:
             results_df = run_simulation(
                 x=real_df, index=index, n_proc=self.n_proc, map_dir=self.map_dir

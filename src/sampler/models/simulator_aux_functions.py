@@ -9,19 +9,26 @@ from simulator_0d.src.pypp.launch import set_inputs_dic, adapt_inputs_dic  # com
 
 def map_creation(df: pd.DataFrame, map_dir: str = 'default'):
     df["workdir"] = df.apply(label, axis=1)
-    df["alpha_p"] = 0.3
-    df["th_Al2O3"] = 5.12281599140251e-08
-    df["heat_input_ths"] = 556000
-    df["power_input"] = 20000000
-    df["coeff_contact"] = 0.01
-    df["Ea_D_Ox"] = 50000
-    df["Ea_Al2O3_decomp"] = 400000
-    df["Ea_MeO_decomp"] = 50000
-    df["k0_D_Ox"] = 0.000008
-    df["k0_Al2O3_decomp"] = 1520000
-    df["k0_MeO_decomp"] = 30000000
-    df["bool_kin"] = 'false'
-    # Create new simulations folders with respective input files
+
+    constants = {
+        "alpha_p": 0.3,
+        "th_Al2O3": 5.12281599140251e-08,
+        "heat_input_ths": 556000,
+        "power_input": 20000000,
+        "coeff_contact": 0.01,
+        "Ea_D_Ox": 50000,
+        "Ea_Al2O3_decomp": 400000,
+        "Ea_MeO_decomp": 50000,
+        "k0_D_Ox": 0.000008,
+        "k0_Al2O3_decomp": 1520000,
+        "k0_MeO_decomp": 30000000,
+        "bool_kin": 'false'
+    }
+    
+    for col, val in constants.items(): # don't set a feature constant if it's an input # ? rs_inputs 
+        if col not in df.columns:
+            df[col] = val
+
     if map_dir == 'default':
         df.apply(map_generator, axis=1)
     else:
