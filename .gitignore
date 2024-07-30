@@ -13,11 +13,11 @@ conf/**/*credentials*
 .vscode/
 conf/*
 !conf/base/
-data/*
+data/*/**
+!data/**/
+docs/**
 src/simulator_0d/data/
-docs/
-logs/*
-src/sampler/todo.py
+logs/**
 to_del/
 results/
 
