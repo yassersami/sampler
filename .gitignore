@@ -11,12 +11,12 @@ conf/**/*credentials*
 
 # ignore everything in the following folders
 .vscode/
-conf/**
-!conf/base
-data/**
+conf/*
+!conf/base/
+data/*
 src/simulator_0d/data/
 docs/
-logs/**
+logs/*
 src/sampler/todo.py
 to_del/
 results/

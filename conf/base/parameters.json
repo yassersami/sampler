@@ -1,0 +1,17 @@
+{
+  "env_name": "base",
+  "simulator_env": {
+    "map_dir": "data/07_simulation/base",
+    "use": false
+  },
+  "sao_history_path": "data/07_model_output/base/sao_history",
+
+  "features": ["r_ext_pAl", "r_ext_pMeO", "pAl_richness"],
+  "targets": ["Pg_f", "Tg_Tmax"],
+  "additional_values": ["sim_time"],
+  "interest_region": {
+    "Pg_f": [40e6, 56e6],
+    "Tg_Tmax": [5800, 7000]
+  },
+  "initial_size": 100
+}

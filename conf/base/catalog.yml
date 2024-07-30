@@ -1,0 +1,65 @@
+# Here you can define all your data sets by using simple YAML syntax.
+#
+# Documentation for this file format can be found in "The Data Catalog"
+# Link: https://kedro.readthedocs.io/en/stable/data/data_catalog.html
+
+
+###### prep ######
+initial_data:
+  type: pandas.CSVDataSet
+  filepath: data/02_intermediate/100_initial_data.csv
+
+scaler:
+  type: pickle.PickleDataSet
+  filepath: data/04_feature/base/scaler.pkl
+
+treatment:
+  type: pickle.PickleDataSet
+  filepath: data/04_feature/base/treatment.pkl
+
+treated_data:
+  type: pandas.CSVDataSet
+  filepath: data/05_model_input/base/100_initial_data.csv
+
+###### IRBS (Interest Region Bayesian Sampling) ######
+irbs_history:
+  type: IncrementalDataSet
+  path: data/07_model_output/base/irbs_history
+  dataset: pandas.CSVDataSet
+  filename_suffix: .csv
+
+irbs_increased_data:
+  type: pandas.CSVDataSet
+  filepath: data/07_model_output/base/irbs_increased_data.csv
+
+
+###### ParEGO ######
+parego_history:
+  type: IncrementalDataSet
+  path: data/07_model_output/base/parego_history
+  dataset: pandas.CSVDataSet
+  filename_suffix: .csv
+
+parego_increased_data:
+  type: pandas.CSVDataSet
+  filepath: data/07_model_output/base/parego_increased_data.csv
+
+###### State Of the Art optimization ######
+sao_history:
+  type: IncrementalDataSet
+  path: data/07_model_output/base/sao_history
+  dataset: pandas.CSVDataSet
+  filename_suffix: .csv
+
+sao_increased_data:
+  type: pandas.CSVDataSet
+  filepath: data/07_model_output/base/sao_increased_data.csv
+
+sao_optim_res:
+  type: pandas.CSVDataSet
+  filepath: data/07_model_output/base/sao_optim_results.csv
+
+###### metrics ######
+metrics_plots:
+  type: kedro.extras.datasets.matplotlib.MatplotlibWriter
+  filepath: data/08_reporting/base
