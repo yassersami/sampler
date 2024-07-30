@@ -272,7 +272,7 @@ def tchebychev(y_pop: np.array, llambda: List[float]):
     return y_pop_tchebychev
 
 
-def EvolAlg(dace: DACEModel, x_pop: np.array, num_generations: int=5, population_size: int=20, batch_size: int=1):
+def EvolAlg(dace: DACEModel, x_pop: np.array, num_generations: int=10000, population_size: int=20, batch_size: int=1):
     dimensions = x_pop.shape[1]
 
     def fitness_function(x):
