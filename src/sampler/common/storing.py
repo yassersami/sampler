@@ -13,11 +13,26 @@ def results(res: pd.DataFrame, size: int, initialize: bool = False) -> Dict[str,
     return {f'[{ini_idx}-{idx}]': res[ini_idx: idx]}
 
 
-def join_history(history: Dict[str, pd.DataFrame]) -> pd.DataFrame:
+def join_history(history: Dict[str, pd.DataFrame], run_condition: Dict, initial_size: int) -> pd.DataFrame:
     """ Joins all checkpoints of a run into a single file """
     df_out = pd.DataFrame()
     for df in history.values():
         df_out = pd.concat([df_out, df], ignore_index=True)
+
+    # truncate increased_data to respect run_condition
+    if run_condition['run_until_max_size']:
+        df_out = df_out.iloc[-(initial_size+run_condition['max_size']):]
+    else:
+        interest_count = 0
+        index = initial_size
+        while interest_count<run_condition['n_interest_max'] and index<len(df_out):
+            if df_out.iloc[index]['quality']=='interest':
+                interest_count += 1
+            index+=1
+
+        df_out = df_out.iloc[:index]
+        assert interest_count==run_condition['n_interest_max'], "Not enough 'interest' rows in the dataset."
+    
     return df_out
 
 

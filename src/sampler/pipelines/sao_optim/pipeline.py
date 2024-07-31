@@ -33,6 +33,8 @@ def create_pipeline(**kwargs) -> Pipeline:
             func=join_history,
             inputs=dict(
                 history='sao_history',
+                run_condition='params:run_condition',
+                initial_size='params:initial_size'
             ),
             outputs='sao_increased_data',
             name='sao_retrieve_outputs',

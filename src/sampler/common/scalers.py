@@ -44,7 +44,10 @@ class MixedMinMaxScaler:
         else:
             x_lin_norm = np.empty(len(X))
         if self.log_on:
-            x_log_norm = self.scaler_log.transform(np.log(X[:, self.log_vars]))
+            # x_log_norm = self.scaler_log.transform(np.log(X[:, self.log_vars]))
+            X_log_safe = np.copy(X[:, self.log_vars])
+            X_log_safe[X_log_safe <= 0] = 1e-10
+            x_log_norm = self.scaler_log.transform(np.log(X_log_safe))
         else:
             x_log_norm = np.empty(len(X))
         return self._merge(x_lin_norm, x_log_norm)
