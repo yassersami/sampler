@@ -34,6 +34,7 @@ class ASVD:
         self.features = features
         self.targets = targets
         self.set_vertices(data, use_func, func)
+        self.set_simplices()
         self.compute_asvd()
 
     def set_vertices(self, data, use_func, func):
@@ -47,33 +48,38 @@ class ASVD:
         # New attributes
         self.vertices_x = vertices_x
         self.vertices_xy = vertices_xy
-        
-    def compute_asvd(self):
 
+    def set_simplices(self):
         # Create Delaunay triangulation
         tri = Delaunay(self.vertices_x)
         simplices_idx = tri.simplices
         
-        # Set original simplices coordinates
+        # Set original and augmented simplices coordinates
         simplices_x = self.vertices_x[simplices_idx]
-        # Set augmented simplices coordinates
         simplices_xy = self.vertices_xy[simplices_idx]
-
-        # Compute simplex volume
-        simplices_volumes_x = compute_simplices_volumes(simplices_x)
-        simplices_volumes_xy = compute_simplices_volumes(simplices_xy)
-
-        # Compute fractional vertex star volume
-        vertices_idx = np.arange(self.vertices_x.shape[0])
-        df_fvs_volumes_x = compute_stars_volumes(vertices_idx, simplices_idx, simplices_volumes_x)
-        df_fvs_volumes_xy = compute_stars_volumes(vertices_idx, simplices_idx, simplices_volumes_xy)
-        stars_volumes_x = df_fvs_volumes_x.values.ravel()
-        stars_volumes_xy = df_fvs_volumes_xy.values.ravel()
-
-        # New attributes at the end to avoid self prefixes for readability
+    
+        # New attributes
         self.simplices_idx = simplices_idx
         self.simplices_x = simplices_x
         self.simplices_xy = simplices_xy
+
+    def compute_asvd(self):
+        # Compute simplex volume
+        simplices_volumes_x = compute_simplices_volumes(self.simplices_x)
+        simplices_volumes_xy = compute_simplices_volumes(self.simplices_xy)
+
+        # Compute fractional vertex star volume
+        vertices_idx = np.arange(self.vertices_x.shape[0])
+        df_fvs_volumes_x = compute_stars_volumes(
+            vertices_idx, self.simplices_idx, self.simplices_volumes_x
+        )
+        df_fvs_volumes_xy = compute_stars_volumes(
+            vertices_idx, self.simplices_idx, self.simplices_volumes_xy
+        )
+        stars_volumes_x = df_fvs_volumes_x.values.ravel()
+        stars_volumes_xy = df_fvs_volumes_xy.values.ravel()
+
+        # New attributes
         self.simplices_volumes_x = simplices_volumes_x  # simplex volume
         self.simplices_volumes_xy = simplices_volumes_xy  # augmented simplex volume
         self.stars_volumes_x = stars_volumes_x  # fractional vertex star volume
