@@ -252,4 +252,3 @@ def plot_feat_tar(data: Dict, features: List[str], targets: List[str], only_inte
                title_fontsize='large')
     fig.subplots_adjust(top=0.85)
     return fig
-    labels = [*data]
