@@ -10,8 +10,9 @@ class ASVD:
     """
     Augmented (Space) Simplex Volume Distribution (ASVD) class.
 
-    This class handles the calculation and analysis of fractional vertex star volumes,
+    - This class handles the calculation and analysis of fractional vertex star volumes,
     also known as Voronoi volumes or Donald volumes in some contexts.
+    - _x or _xy suffix indicates wheter original or augmented space
     """
 
     def __init__(
@@ -32,46 +33,44 @@ class ASVD:
         """
         self.features = features
         self.targets = targets
-        self.data = data
-        self.use_func = use_func
-        self.func = func
+        self.set_vertices(data, use_func, func)
         self.compute_asvd()
 
-    def compute_asvd(self):
+    def set_vertices(self, data, use_func, func):
         # Set vertices
-        vertices_x = self.data[self.features].values
-        if not self.use_func:
-            vertices_y = self.data[self.targets].values
+        vertices_x = data[self.features].values
+        if not use_func:
+            vertices_y = data[self.targets].values
         else:
-            vertices_y = np.array([self.func(vertex).ravel() for vertex in vertices_x])
+            vertices_y = np.array([func(vertex).ravel() for vertex in vertices_x])
         vertices_xy = np.column_stack((vertices_x, vertices_y))
+        # New attributes
+        self.vertices_x = vertices_x
+        self.vertices_xy = vertices_xy
+        
+    def compute_asvd(self):
 
         # Create Delaunay triangulation
-        tri = Delaunay(vertices_x)
+        tri = Delaunay(self.vertices_x)
         simplices_idx = tri.simplices
-
-        # # Set original simplices coordinates
-        # simplices_x = np.array([vertices_x[simplex_idx] for simplex_idx in simplices_idx])
-        # # Set augmented simplices coordinates
-        # simplices_xy = np.array([vertices_xy[simplex_idx] for simplex_idx in simplices_idx])
         
         # Set original simplices coordinates
-        simplices_x = vertices_x[simplices_idx]
+        simplices_x = self.vertices_x[simplices_idx]
         # Set augmented simplices coordinates
-        simplices_xy = vertices_xy[simplices_idx]
+        simplices_xy = self.vertices_xy[simplices_idx]
 
         # Compute simplex volume
         simplices_volumes_x = compute_simplices_volumes(simplices_x)
         simplices_volumes_xy = compute_simplices_volumes(simplices_xy)
 
         # Compute fractional vertex star volume
-        vertices_idx = np.arange(vertices_x.shape[0])
-        df_fvs_volumes_x = compute_fvs_volumes(vertices_idx, simplices_idx, simplices_volumes_x)
-        df_fvs_volumes_xy = compute_fvs_volumes(vertices_idx, simplices_idx, simplices_volumes_xy)
+        vertices_idx = np.arange(self.vertices_x.shape[0])
+        df_fvs_volumes_x = compute_stars_volumes(vertices_idx, simplices_idx, simplices_volumes_x)
+        df_fvs_volumes_xy = compute_stars_volumes(vertices_idx, simplices_idx, simplices_volumes_xy)
         stars_volumes_x = df_fvs_volumes_x.values.ravel()
         stars_volumes_xy = df_fvs_volumes_xy.values.ravel()
 
-        # Set new attributes at the end to avoid self prefixes for readability
+        # New attributes at the end to avoid self prefixes for readability
         self.simplices_idx = simplices_idx
         self.simplices_x = simplices_x
         self.simplices_xy = simplices_xy
@@ -82,8 +81,8 @@ class ASVD:
 
     def compute_statistics(self):
         # Fractional Vertex Star Volume scores dicts
-        stars_scores_x = compute_asvd_scores(self.stars_volumes_x)
-        stars_scores_xy = compute_asvd_scores(self.stars_volumes_xy)
+        stars_scores_x = describe_volumes(self.stars_volumes_x)
+        stars_scores_xy = describe_volumes(self.stars_volumes_xy)
         stars_scores_xy["augmentation"] = self.stars_volumes_xy.sum() / self.stars_volumes_x.sum()
 
         df_scores = pd.DataFrame({
@@ -130,7 +129,7 @@ def compute_simplices_volumes(simplices):
     return volumes
 
 
-def compute_fvs_volumes(
+def compute_stars_volumes(
     vertices_idx: np.ndarray, simplices_idx: np.ndarray, volumes: np.ndarray
 ):
     """
@@ -152,7 +151,7 @@ def compute_fvs_volumes(
     >>> vertices_idx = np.array([0, 1, 2, 3])
     >>> simplices_idx = np.array([[0, 1, 2], [1, 2, 3], [0, 2, 3]])
     >>> volumes = np.array([1.0, 1.5, 2.0])
-    >>> result = compute_fvs_volumes(vertices_idx, simplices_idx, volumes)
+    >>> result = compute_stars_volumes(vertices_idx, simplices_idx, volumes)
     >>> print(result)
                  fractional_volume
     0                     1.000000
@@ -160,7 +159,7 @@ def compute_fvs_volumes(
     2                     1.500000
     3                     1.166667
     """
-    # Number of vertices per simplex
+    # Number of vertices per simplex (p+1)
     num_vertices = simplices_idx.shape[1]
 
     vertex_star_volumes = {vertex: 0.0 for vertex in vertices_idx}
@@ -176,7 +175,7 @@ def compute_fvs_volumes(
     return df_stars_volumes
 
 
-def compute_asvd_scores(volumes: np.ndarray) -> pd.DataFrame:
+def describe_volumes(volumes: np.ndarray) -> pd.DataFrame:
     """
     Calculate various metrics for the volumes of augmented and original simplices.
     """
@@ -228,13 +227,13 @@ if __name__ == "__main__":
     simplices_idx = np.array([[0, 1, 2], [1, 2, 3], [0, 2, 3]])
     volumes = np.array([1.0, 1.5, 2.0])
 
-    df_stars_volumes = compute_fvs_volumes(vertices_idx, simplices_idx, volumes)
+    df_stars_volumes = compute_stars_volumes(vertices_idx, simplices_idx, volumes)
     print(f'df_stars_volumes: \n{df_stars_volumes}')
 
     # Example usage
     volumes = np.random.rand(100)  # Example data
 
-    scores = compute_asvd_scores(volumes)
+    scores = describe_volumes(volumes)
     print(f'scores: \n{scores}')
 
     # Example of usage
@@ -253,8 +252,8 @@ if __name__ == "__main__":
     asvd = ASVD(data, features, targets)
 
     # Compute statistics
-    stats = asvd.compute_statistics()
-    print(f'stats: \n{stats}')
+    df_stats = asvd.compute_statistics()
+    print(f'df_stats: \n{df_stats}')
 
     # Using a custom function
     def f_expl(points):
@@ -263,5 +262,5 @@ if __name__ == "__main__":
         return np.sum(np.square(points), axis=1, keepdims=True)
 
     asvd_func = ASVD(data, features, targets, use_func=True, func=f_expl)
-    stats_func = asvd_func.compute_statistics()
-    print(f'stats_func: \n{stats_func}')
+    df_stats_func = asvd_func.compute_statistics()
+    print(f'df_stats_func: \n{df_stats_func}')
