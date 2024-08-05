@@ -71,10 +71,10 @@ class ASVD:
         # Compute fractional vertex star volume
         vertices_idx = np.arange(self.vertices_x.shape[0])
         df_fvs_volumes_x = compute_stars_volumes(
-            vertices_idx, self.simplices_idx, self.simplices_volumes_x
+            vertices_idx, self.simplices_idx, simplices_volumes_x
         )
         df_fvs_volumes_xy = compute_stars_volumes(
-            vertices_idx, self.simplices_idx, self.simplices_volumes_xy
+            vertices_idx, self.simplices_idx, simplices_volumes_xy
         )
         stars_volumes_x = df_fvs_volumes_x.values.ravel()
         stars_volumes_xy = df_fvs_volumes_xy.values.ravel()
