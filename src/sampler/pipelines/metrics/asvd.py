@@ -85,15 +85,56 @@ class ASVD:
         self.stars_volumes_x = stars_volumes_x  # fractional vertex star volume
         self.stars_volumes_xy = stars_volumes_xy  # augmented fractional vertex star volume
 
+    def compute_scores(self, extended=False):
+        """
+        Computes the following metrics:
+
+        1. Augmentation Ratio:
+            Measures the extent of captured variation by calculating the ratio of total
+            volume augmentation. This serves as an approximation of the generalized 1D
+            function arc length integral, given by:
+            
+                            ∫[a to b] √(1 + (dy/dx)²) dx
+
+        2. Relative Standard Deviation (RSD):
+            Quantifies the uniformity of sample distribution in:
+            a) The augmented space along the target function curve (rsd_xy)
+            b) The original feature space (rsd_x)
+    
+        If extended is True, additional metrics include Mean and Standard Deviation for
+        both augmented (_xy) and original (_x) spaces.
+        """
+        scores = {
+            "augmentation": self.simplices_volumes_xy.sum() / self.simplices_volumes_x.sum(),
+            "rsd_xy": self.simplices_volumes_xy.std() / self.simplices_volumes_xy.mean(),
+            "rsd_x": self.simplices_volumes_x.std() / self.simplices_volumes_x.mean(),
+        }
+
+        if extended:
+            scores.update({
+                "std_xy": self.simplices_volumes_xy.std(),
+                "mean_xy": self.simplices_volumes_xy.mean(),
+                "std_x": self.simplices_volumes_x.std(),
+                "mean_x": self.simplices_volumes_x.mean(),
+            })
+
+        return scores
+
     def compute_statistics(self):
+        # Simplex Volume scores dicts
+        simplices_scores_x = describe_volumes(self.simplices_volumes_x)
+        simplices_scores_xy = describe_volumes(self.simplices_volumes_xy)
+        simplices_scores_xy["augmentation"] = self.simplices_volumes_xy.sum() / self.simplices_volumes_x.sum()
         # Fractional Vertex Star Volume scores dicts
         stars_scores_x = describe_volumes(self.stars_volumes_x)
         stars_scores_xy = describe_volumes(self.stars_volumes_xy)
         stars_scores_xy["augmentation"] = self.stars_volumes_xy.sum() / self.stars_volumes_x.sum()
 
         df_scores = pd.DataFrame({
-            'volumes_x': stars_scores_x,
-            'volumes_xy': stars_scores_xy,
+            ('simplices', 'volumes_x'): simplices_scores_x,
+            ('simplices', 'volumes_xy'): simplices_scores_xy,
+            ('stars', 'volumes_x'): stars_scores_x,
+            ('stars', 'volumes_xy'): stars_scores_xy,
         })
         # Reorder rows
         df_scores = insert_row_in_order(df_scores, [("sum", 1), ("augmentation", 2)])
