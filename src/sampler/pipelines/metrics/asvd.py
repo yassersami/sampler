@@ -1,12 +1,10 @@
 import numpy as np
 import pandas as pd
-from typing import Union
-from tqdm import tqdm
 from scipy.spatial import Delaunay
 from scipy.special import factorial
 from scipy.stats import skew, kurtosis
 from scipy.integrate import nquad, IntegrationWarning
-from typing import List, Dict, Tuple, Callable
+from typing import Union, List, Dict, Tuple, Callable
 import warnings
 
 class ASVD:
