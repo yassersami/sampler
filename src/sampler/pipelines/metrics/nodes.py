@@ -11,18 +11,13 @@ from sklearn.metrics import r2_score
 from scipy.stats import norm
 
 from sampler.common.data_treatment import DataTreatment
-from sampler.models.fom import GPSampler
+from sampler.pipelines.metrics.asvd import ASVD
 from sampler.pipelines.metrics.postprocessing_functions import create_dict, prepare_new_data, prepare_benchmark, get_result
 from sampler.pipelines.metrics.volume import covered_space_bound
 import sampler.pipelines.metrics.graphics_metrics as gm
 
-def crps_norm(mu, sigma, y):
-    z = (y-mu)/sigma
-    crps = sigma*(z*(2*norm.cdf(z)-1) + 2*norm.pdf(z) - 1/np.sqrt(np.pi))
-    return np.mean(crps)
 
-
-def prepare_data_metrics( # the name is the same as analysis. Interpreter will not be able to distinguish between them (idk why)
+def prepare_data_metrics(
         experiments: Dict, names: Dict, features: List[str], targets: List[str],
         additional_values: List[str], treatment: DataTreatment
 ) -> Dict:
@@ -69,9 +64,7 @@ def get_metrics(
 
     n_interest = {} # for each experiment, number of interest points (dict of int)
     volume = {} # for each experiment, volume space covered (dict of float)
-    # for each experiment, r2 score according to train_set (data_init+80% new points) and test_set (20% last new points) 
-    r2 = {} # r2 score : r2_target1, r2_target2, ..., r_2_target_norm (dict of array (shape=(1, len(targets)+1)) of float)
-    crps = {}
+    asvd_scores = {}
 
     for key, value in data.items():
         # Get number of interesting samples
@@ -84,31 +77,13 @@ def get_metrics(
             volume[key] = covered_space_bound(scaled_data_interest, radius, params_volume, len(features))
         else:
             volume[key] = np.array([0,0])
+        # Get data distribution using ASVD
+        XY = value['df'][features+targets].values
+        scaled_data = pd.DataFrame(treatment.scaler.transform(XY), columns=treatment.features+treatment.targets)
+        asvd = ASVD(scaled_data, treatment.features, treatment.targets)
+        asvd_scores[key] = asvd.compute_scores()
 
-        # Train surrogate model
-        len_train = initial_size + int( 0.8*(len(value['df']) - initial_size) )  # so length of test_set : 20% of the new points 
-        train_set = value['df'][:len_train]
-        test_set = value['df'][len_train:]
-        X_train, Y_train = treatment.scaler.transform_features(train_set[features]),  treatment.scaler.transform_targets(train_set[targets])
-        X_test, Y_test =  treatment.scaler.transform_features(test_set[features]),  treatment.scaler.transform_targets(test_set[targets])
-        
-        gp = GPSampler(features=features, targets=targets)
-        gp.fit(X_train, Y_train)
-
-        # Get scores on targets prediction
-        Y_pred, sigma = gp.predict(X_test, return_std=True)
-
-        r2[key] = {}
-        for i, name_target in enumerate(targets):
-            r2[key][name_target] = r2_score(Y_test[:,i], Y_pred[:,i])
-        r2[key]['all_targets'] = r2_score(Y_test, Y_pred)
-
-        crps[key] = {}
-        for i, name_target in enumerate(targets):
-            crps[key][name_target] = crps_norm(Y_pred[:,i], sigma[:,i], Y_test[:,i])
-        # crps[key]['all_targets'] = np.mean([crps[key][e] for e in targets]) # Mean it's not the real CRPS for all targets
-
-    return dict(n_interest=n_interest, volume=volume, r2=r2, crps=crps)
+    return dict(n_interest=n_interest, volume=volume, asvd_scores=asvd_scores)
 
 def scale_data_for_plots(data: Dict, features: List[str], targets: List[str], targets_prediction: List[str], scales: Dict, interest_region: Dict):
     """Scales data in place for visualization purposes."""
@@ -131,6 +106,7 @@ def scale_data_for_plots(data: Dict, features: List[str], targets: List[str], ta
 def plot_metrics(
     data: Dict, names: Dict, region: Dict,
     ignition_points: Dict, volume: Dict,
+    asvd_scores: Dict[str, Dict[str, float]]
     # r2: Dict, crps: Dict
 ):
     features_dic = names['features']
@@ -149,10 +125,10 @@ def plot_metrics(
     feat_tar_dict["all_int"] = gm.plot_feat_tar(data, features, targets, only_interest=True, title_extension='(only interest)')
     for k in data.keys():
         feat_tar_dict[k] = gm.plot_feat_tar({k: data[k]}, features, targets, only_interest=False)
-
-    # Surrogate performance
-    # r2_plot = gm.r2_bar_plot(data, targets, r2, 'R2 Scores',  all_targets=True)
-    # r2_plot_crps = gm.r2_bar_plot(data, targets, crps, 'CRPS Scores', all_targets=False)
+    asvd_plot = gm.plot_asvd_scores(
+        asvd_scores,
+        metrics_to_plot=['augmentation', 'rsd_x', 'rsd_xy', 'rsd_augm'],
+    )
 
     # Saving dictionary of plots
     plots_dict = {
@@ -161,8 +137,7 @@ def plot_metrics(
         "targets_kde.png": kde_plot,
         # "pair_plot.png": pair_plot,
         **{f'features_targets_{k}.png': v for k, v in feat_tar_dict.items()},
-        # "bar_plot.png": r2_plot,
-        # "bar_plot_crps.png": r2_plot_crps,
+        "ASVD.png": asvd_plot
     }
     plots_dict = {f'{i+1:02d}_{k}': v for i, (k, v) in enumerate(plots_dict.items())}
     return plots_dict

@@ -2,7 +2,7 @@ import numpy as np
 import seaborn as sns
 import pandas as pd
 
-from typing import List, Dict
+from typing import List, Dict, Tuple, Union
 from itertools import combinations
 
 from matplotlib import pyplot as plt
@@ -251,4 +251,86 @@ def plot_feat_tar(data: Dict, features: List[str], targets: List[str], only_inte
                title=f'Targets(Features) {title_extension}',
                title_fontsize='large')
     fig.subplots_adjust(top=0.85)
+    return fig
+
+
+def plot_asvd_scores(
+    experiments: Dict[str, Dict[str, float]], 
+    metrics_to_plot: Union[List[str], None] = None,
+    figsize: Tuple[int, int] = (15, 10)
+):
+    """
+    Plot scores for different experiments using a grouped bar plot and display remaining metrics in a table.
+
+    Parameters:
+    experiments (Dict[str, Dict[str, float]]): A dictionary where keys are experiment names
+                                               and values are dictionaries of scores.
+    metrics_to_plot (List[str]): List of metric names to plot in the bar chart. If None, all metrics are plotted.
+    figsize (Tuple[int, int]): Size of the figure (width, height) in inches.
+
+    Returns:
+    matplotlib.figure.Figure: The created figure object.
+    """
+    exp_names = list(experiments.keys())
+    
+    # Get all unique metrics while preserving order
+    all_metrics = []
+    for exp in experiments.values():
+        all_metrics.extend(metric for metric in exp.keys() if metric not in all_metrics)
+
+    if metrics_to_plot is None:
+        metrics_to_plot = all_metrics.copy()
+    else:
+        metrics_to_plot = [metric for metric in metrics_to_plot if metric in all_metrics]
+
+    metrics_for_table = [metric for metric in all_metrics if metric not in metrics_to_plot]
+
+    n_experiments = len(exp_names)
+    n_metrics_plot = len(metrics_to_plot)
+
+    # Adjust figure size and subplot ratio based on whether we have a table
+    if metrics_for_table:
+        fig, (ax_bar, ax_table) = plt.subplots(nrows=2, ncols=1, figsize=figsize, 
+                                               gridspec_kw={'height_ratios': [3, 1]})
+    else:
+        fig, ax_bar = plt.subplots(figsize=figsize)
+
+    # Grouped Bar Plot
+    bar_width = 0.8 / n_experiments
+    index = np.arange(n_metrics_plot)
+
+    for i, exp_name in enumerate(exp_names):
+        values = [experiments[exp_name].get(metric, np.nan) for metric in metrics_to_plot]
+        position = index + i * bar_width
+        rects = ax_bar.bar(position, values, bar_width, label=exp_name, alpha=0.8)
+
+        # Add value labels on top of each bar
+        for rect in rects:
+            height = rect.get_height()
+            if np.isfinite(height):
+                ax_bar.text(rect.get_x() + rect.get_width()/2., height,
+                            f'{height:.2f}', ha='center', va='bottom', rotation=90)
+
+    ax_bar.set_ylabel('Values')
+    ax_bar.set_title('Comparison of Metrics Across Experiments')
+    ax_bar.set_xticks(index + bar_width * (n_experiments - 1) / 2)
+    ax_bar.set_xticklabels(metrics_to_plot, rotation=45, ha='right')
+    ax_bar.legend()
+
+    # Table (if there are metrics for the table)
+    if metrics_for_table:
+        table_data = []
+        for exp_name in exp_names:
+            row = [exp_name] + [f"{experiments[exp_name].get(metric, 'N/A'):.4f}" for metric in metrics_for_table]
+            table_data.append(row)
+
+        ax_table.axis('off')
+        table = ax_table.table(cellText=table_data, 
+                               colLabels=['Experiment'] + metrics_for_table,
+                               cellLoc='center', loc='center')
+        table.auto_set_font_size(False)
+        table.set_fontsize(10)
+        table.scale(1, 1.5)  # Adjust the scale to fit your needs
+
+    plt.tight_layout()
     return fig

@@ -95,53 +95,47 @@ class ASVD:
         self.stars_volumes_x = stars_volumes_x  # fractional vertex star volume
         self.stars_volumes_xy = stars_volumes_xy  # augmented fractional vertex star volume
 
-    def compute_scores(self, extended=False):
+    def compute_scores(self):
         """
-        Computes the following metrics:
+        Computes the following metrics for assessing the quality of simplicial complexes in representing response curves:
 
-        1. Augmentation Ratio:
-            Measures the extent of captured variation by calculating the ratio of total
-            volume augmentation. This serves as an approximation of the generalized 1D
-            function arc length integral, given by:
-            
-                            ∫[a to b] √(1 + (dy/dx)²) dx
-
-        2. Relative Standard Deviation (RSD):
-            This metric is well-defined because the normalization by the mean removes
-            the bias created by the varying number of simplices, even when the number
-            of vertices remains constant.
-            It quantifies the uniformity of sample distribution in:
-            a) The augmented space along the target function curve (rsd_xy)
-            b) The original feature space (rsd_x)
+        1. Volumetric Statistics:
+        Computes mean volume per vertex and total volume of the simplicial complex.
         
-        3. RSD augmentation:
-            A lower negative value indicates better uniformity on the response curve
-            relative to the feature space. A positive value suggests that the method has
-            less uniformity after the augmentation. rsd_augm = (rsd_xy - rsd_x). 
-    
-        If extended is True, additional metrics include Mean and Standard Deviation for
-        both augmented (_xy) and original (_x) spaces.
+        2. Augmentation Ratio (AR):
+        Quantifies the extent of captured variation by calculating the ratio of total volume augmentation. 
+        Higher values indicate better representation. This metric serves as a discrete approximation of 
+        the generalized 1D function arc length integral:
+
+        AR = 1/(b-a) * ∫[a to b] √(1 + (dy/dx)²) dx
+
+        3. Relative Standard Deviation (RSD):
+        Measures the uniformity of sample distribution, normalized by the mean to eliminate bias 
+        from varying simplex counts. Computed for:
+        a) Augmented space along the target function curve (RSD_xy)
+        b) Original feature space (RSD_x)
+        Lower values indicate more uniform distribution.
+
+        4. RSD Augmentation (RSDA):
+        Defined as RSDA = RSD_xy - RSD_x
+        Negative values indicate improved uniformity on the response curve relative to the feature space.
+        Positive values suggest decreased uniformity post-augmentation.
+
         """
         augmentation = self.simplices_volumes_xy.sum() / self.simplices_volumes_x.sum()
         rsd_xy = self.simplices_volumes_xy.std() / self.simplices_volumes_xy.mean()
         rsd_x = self.simplices_volumes_x.std() / self.simplices_volumes_x.mean()
         rsd_augm = rsd_xy - rsd_x
-        scores = {
+        return {
+            "sum_x": self.stars_volumes_x.mean(),
+            "sum_xy": self.stars_volumes_xy.mean(),
+            "mean_x": self.stars_volumes_x.mean(),  # Mean over number of vertices
+            "mean_xy": self.stars_volumes_xy.mean(),  # Mean over number of aumengted vertices
             "augmentation": augmentation,
-            "rsd_augm": rsd_augm,
-            "rsd_xy": rsd_xy,
             "rsd_x": rsd_x,
+            "rsd_xy": rsd_xy,
+            "rsd_augm": rsd_augm,
         }
-
-        if extended:
-            scores.update({
-                "std_xy": self.simplices_volumes_xy.std(),
-                "mean_xy": self.simplices_volumes_xy.mean(),
-                "std_x": self.simplices_volumes_x.std(),
-                "mean_x": self.simplices_volumes_x.mean(),
-            })
-
-        return scores
 
     def compute_statistics(self):
         # Simplex Volume scores dicts
@@ -185,6 +179,10 @@ def compute_simplex_volume(simplex):
     
     # Compute the volume using the square root of the determinant of the Gram matrix
     volume = np.sqrt(np.linalg.det(gram_matrix)) / factorial(p_plus_1 - 1)
+
+    if np.isnan(volume):
+        warnings.warn(f"NaN volume detected for simplex: {simplex}")
+        return 0
     
     return volume
 

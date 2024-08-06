@@ -32,7 +32,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             func=get_metrics,
             inputs=dict(
                 data='exp_data',
-                features='features',
+                features='features',  # These features and targets are not those of data columns
                 targets='targets',
                 treatment='treatment',
                 params_volume='params:params_volume',
@@ -41,8 +41,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             outputs=dict(
                 n_interest='n_interest',
                 volume='volume',
-                r2='r2',
-                crps='crps'
+                asvd_scores='asvd_scores',
             ),
             # name='get_metrics'
         ),
@@ -70,8 +69,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 region='scaled_region',
                 ignition_points='params:ignition_points',
                 volume='volume',
-                # r2='r2',
-                # crps='crps'
+                asvd_scores='asvd_scores',
             ),
             outputs='metrics_plots'
             # name='plot_metrics'
