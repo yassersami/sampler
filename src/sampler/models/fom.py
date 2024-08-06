@@ -271,7 +271,7 @@ class FigureOfMerit(GPSampler):
         if self.should_ignore_point(x):
             # This condition is necessary because GP do not update around failed samples
             print(f"FOM.target_function -> Point {x} was ignored.")
-            score = 1.0
+            score = np.array([1.0])
         else:
             score = self.calc_std(x) + self.calc_interest(x) + self.calc_coverage(x)
         return score.item()
