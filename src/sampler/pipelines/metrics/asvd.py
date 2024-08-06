@@ -1,10 +1,13 @@
 import numpy as np
 import pandas as pd
 from typing import Union
+from tqdm import tqdm
 from scipy.spatial import Delaunay
 from scipy.special import factorial
 from scipy.stats import skew, kurtosis
+from scipy.integrate import nquad, IntegrationWarning
 from typing import List, Dict, Tuple, Callable
+import warnings
 
 class ASVD:
     """
@@ -33,9 +36,12 @@ class ASVD:
         """
         self.features = features
         self.targets = targets
+        self.curve_volume = {}
+        self.curve_augmentation = {}
         self.set_vertices(data, use_func, func)
         self.set_simplices()
-        self.compute_asvd()
+        self.compute_simplices_volumes()
+        self.compute_stars_volumes()
 
     def set_vertices(self, data, use_func, func):
         # Set vertices
@@ -63,25 +69,31 @@ class ASVD:
         self.simplices_x = simplices_x
         self.simplices_xy = simplices_xy
 
-    def compute_asvd(self):
-        # Compute simplex volume
+    def compute_simplices_volumes(self):
+        # Compute original and augmented simplex volume
         simplices_volumes_x = compute_simplices_volumes(self.simplices_x)
         simplices_volumes_xy = compute_simplices_volumes(self.simplices_xy)
 
-        # Compute fractional vertex star volume
+        # New attributes
+        self.simplices_volumes_x = simplices_volumes_x
+        self.simplices_volumes_xy = simplices_volumes_xy
+        
+
+    def compute_stars_volumes(self):
+        # Set vertices for which to do computation
         vertices_idx = np.arange(self.vertices_x.shape[0])
+    
+        # Compute original and augmented fractional vertex star volume
         df_fvs_volumes_x = compute_stars_volumes(
-            vertices_idx, self.simplices_idx, simplices_volumes_x
+            vertices_idx, self.simplices_idx, self.simplices_volumes_x
         )
         df_fvs_volumes_xy = compute_stars_volumes(
-            vertices_idx, self.simplices_idx, simplices_volumes_xy
+            vertices_idx, self.simplices_idx, self.simplices_volumes_xy
         )
         stars_volumes_x = df_fvs_volumes_x.values.ravel()
         stars_volumes_xy = df_fvs_volumes_xy.values.ravel()
 
         # New attributes
-        self.simplices_volumes_x = simplices_volumes_x  # simplex volume
-        self.simplices_volumes_xy = simplices_volumes_xy  # augmented simplex volume
         self.stars_volumes_x = stars_volumes_x  # fractional vertex star volume
         self.stars_volumes_xy = stars_volumes_xy  # augmented fractional vertex star volume
 
@@ -97,17 +109,30 @@ class ASVD:
                             ∫[a to b] √(1 + (dy/dx)²) dx
 
         2. Relative Standard Deviation (RSD):
-            Quantifies the uniformity of sample distribution in:
+            This metric is well-defined because the normalization by the mean removes
+            the bias created by the varying number of simplices, even when the number
+            of vertices remains constant.
+            It quantifies the uniformity of sample distribution in:
             a) The augmented space along the target function curve (rsd_xy)
             b) The original feature space (rsd_x)
+        
+        3. RSD augmentation:
+            A lower negative value indicates better uniformity on the response curve
+            relative to the feature space. A positive value suggests that the method has
+            less uniformity after the augmentation. rsd_augm = (rsd_xy - rsd_x). 
     
         If extended is True, additional metrics include Mean and Standard Deviation for
         both augmented (_xy) and original (_x) spaces.
         """
+        augmentation = self.simplices_volumes_xy.sum() / self.simplices_volumes_x.sum()
+        rsd_xy = self.simplices_volumes_xy.std() / self.simplices_volumes_xy.mean()
+        rsd_x = self.simplices_volumes_x.std() / self.simplices_volumes_x.mean()
+        rsd_augm = rsd_xy - rsd_x
         scores = {
-            "augmentation": self.simplices_volumes_xy.sum() / self.simplices_volumes_x.sum(),
-            "rsd_xy": self.simplices_volumes_xy.std() / self.simplices_volumes_xy.mean(),
-            "rsd_x": self.simplices_volumes_x.std() / self.simplices_volumes_x.mean(),
+            "augmentation": augmentation,
+            "rsd_augm": rsd_augm,
+            "rsd_xy": rsd_xy,
+            "rsd_x": rsd_x,
         }
 
         if extended:
@@ -124,11 +149,13 @@ class ASVD:
         # Simplex Volume scores dicts
         simplices_scores_x = describe_volumes(self.simplices_volumes_x)
         simplices_scores_xy = describe_volumes(self.simplices_volumes_xy)
-        simplices_scores_xy["augmentation"] = self.simplices_volumes_xy.sum() / self.simplices_volumes_x.sum()
+        simplices_scores_xy["augmentation"] = simplices_scores_xy['sum'] / simplices_scores_x['sum']
+        simplices_scores_xy["rsd_augm"] = simplices_scores_xy['rsd'] - simplices_scores_x['rsd']
         # Fractional Vertex Star Volume scores dicts
         stars_scores_x = describe_volumes(self.stars_volumes_x)
         stars_scores_xy = describe_volumes(self.stars_volumes_xy)
-        stars_scores_xy["augmentation"] = self.stars_volumes_xy.sum() / self.stars_volumes_x.sum()
+        stars_scores_xy["augmentation"] = stars_scores_xy['sum'] / stars_scores_x['sum']
+        stars_scores_xy["rsd_augm"] = stars_scores_xy['rsd'] - stars_scores_x['rsd']
 
         df_scores = pd.DataFrame({
             ('simplices', 'volumes_x'): simplices_scores_x,
@@ -137,7 +164,7 @@ class ASVD:
             ('stars', 'volumes_xy'): stars_scores_xy,
         })
         # Reorder rows
-        df_scores = insert_row_in_order(df_scores, [("sum", 1), ("augmentation", 2)])
+        df_scores = insert_row_in_order(df_scores, [("augmentation", 2), ('rsd_augm', 6)])
     
         return df_scores
 
@@ -185,6 +212,10 @@ def compute_stars_volumes(
     This function computes what is also known as the Voronoi volume or Donald volume
     in some contexts. It allocates a fraction of each simplex's volume to its vertices.
 
+    Note: There is a known issue where the assigned star volumes can vary depending on
+    the layout of the simplices generated by the Delaunay function. This can result in
+    inconsistent volumes for the same vertex neighborhood.
+
     Parameters:
     vertices_idx (array-like): Array of vertices indices.
     simplices_idx (array-like): Array of simplices, each represented by a list of vertices indices.
@@ -193,28 +224,14 @@ def compute_stars_volumes(
 
     Returns:
     pd.DataFrame: DataFrame containing the fractional vertex star volumes for each given vertex.
-
-    Example:
-    >>> vertices_idx = np.array([0, 1, 2, 3])
-    >>> simplices_idx = np.array([[0, 1, 2], [1, 2, 3], [0, 2, 3]])
-    >>> volumes = np.array([1.0, 1.5, 2.0])
-    >>> result = compute_stars_volumes(vertices_idx, simplices_idx, volumes)
-    >>> print(result)
-                 fractional_volume
-    0                     1.000000
-    1                     0.833333
-    2                     1.500000
-    3                     1.166667
     """
-    # Number of vertices per simplex (p+1)
-    num_vertices = simplices_idx.shape[1]
-
     vertex_star_volumes = {vertex: 0.0 for vertex in vertices_idx}
 
+    # Distribute 1/(p+1) simplex volume to each vertex
+    fraction = 1 / simplices_idx.shape[1]  # p+1 vertices per simplex
     for simplex, volume in zip(simplices_idx, volumes):
-        volume_fraction = volume / num_vertices
         for vertex in simplex:
-            vertex_star_volumes[vertex] += volume_fraction
+            vertex_star_volumes[vertex] += volume * fraction
 
     df_stars_volumes = pd.DataFrame.from_dict(
         vertex_star_volumes, orient='index', columns=['fractional_volume']
@@ -235,7 +252,8 @@ def describe_volumes(volumes: np.ndarray) -> pd.DataFrame:
     df_scores.loc["iqr", 0] = np.percentile(volumes, 75) - np.percentile(volumes, 25)  #  interquartile range (IQR)
     df_scores.loc["skewness", 0] = skew(volumes)
     df_scores.loc["kurtosis", 0] = kurtosis(volumes)
-
+    
+    df_scores = insert_row_in_order(df_scores, [("sum", 1), ("rsd", 4)])
     dict_scores = df_scores.iloc[:, 0].to_dict()
     return dict_scores
 
@@ -267,9 +285,66 @@ def insert_row_in_order(
     return df.loc[current_order]
 
 
+def compute_response_curve_augmentation(
+    predictor: Callable[[np.ndarray], np.ndarray],
+    region: List[Tuple[float, float]],
+    n_points: int = 1000,
+    error_tolerance: float = 1e-3
+) -> Tuple[float, float]:
+    """
+    Compute the p-volume of the response curve in (p+k)-dimensional space and the augmentation ratio.
+
+    Parameters:
+    predictor (Callable): A callable function that takes a numpy array of shape (n_samples, n_features)
+                          and returns a numpy array of shape (n_samples, n_targets).
+    p, k (int): Size of features and targets dimensions respectively.
+    region (list of tuples): List of (min, max) tuples for each feature dimension.
+                             Defaults to [0, 1] for each dimension if not provided.
+    n_points (int): Number of points for progress bar estimation. Default is 1000.
+
+    Returns:
+    Tuple[float, float]: The computed p-volume of the response curve and the augmentation ratio.
+    """
+    p = len(region)
+    k = predictor(np.array(region)[:, [0]].T).size
+
+    def _integrand(*args):
+        """
+        Compute the integrand for volume calculation.
+        """
+        x = np.array(args).reshape(1, -1)
+        y = predictor(x).flatten()
+        
+        # Compute the Jacobian matrix
+        jacobian = np.zeros((k, p))
+        epsilon = 1e-6
+        for i in range(p):
+            x_plus = x.copy()
+            x_plus[0, i] += epsilon
+            y_plus = predictor(x_plus).flatten()
+            jacobian[:, i] = (y_plus - y) / epsilon
+        
+        # Compute the Gram determinant
+        gram_matrix = np.dot(jacobian.T, jacobian)
+        return np.sqrt(np.linalg.det(np.eye(p) + gram_matrix))
+
+    # Compute the volume using numerical integration with custom options
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=IntegrationWarning)
+        volume, _ = nquad(_integrand, region, opts={
+            'limit': n_points,
+            'epsabs': error_tolerance,
+            'epsrel': error_tolerance
+        })
+    # Compute the augmentation ratio
+    region_volume = np.prod([r[1] - r[0] for r in region])
+    augmentation = volume / region_volume
+    
+    return augmentation
+
 
 if __name__ == "__main__":
-    # Example usage
+    # Example usage: compute_stars_volumes
     vertices_idx = np.array([0, 1, 2, 3])
     simplices_idx = np.array([[0, 1, 2], [1, 2, 3], [0, 2, 3]])
     volumes = np.array([1.0, 1.5, 2.0])
@@ -277,13 +352,7 @@ if __name__ == "__main__":
     df_stars_volumes = compute_stars_volumes(vertices_idx, simplices_idx, volumes)
     print(f'df_stars_volumes: \n{df_stars_volumes}')
 
-    # Example usage
-    volumes = np.random.rand(100)  # Example data
-
-    scores = describe_volumes(volumes)
-    print(f'scores: \n{scores}')
-
-    # Example of usage
+    # Example of usage: ASVD
     np.random.seed(42)
     data = pd.DataFrame({
         'x1': np.random.rand(100),
@@ -295,12 +364,10 @@ if __name__ == "__main__":
     features = ['x1', 'x2', 'x3']
     targets = ['y1', 'y2']
 
-    # Initialize ASVD object
-    asvd = ASVD(data, features, targets)
-
-    # Compute statistics
-    df_stats = asvd.compute_statistics()
-    print(f'df_stats: \n{df_stats}')
+    # Using only data
+    asvd_data = ASVD(data, features, targets)
+    df_stats_data = asvd_data.compute_statistics()
+    print(f'df_stats_data: \n{df_stats_data}')
 
     # Using a custom function
     def f_expl(points):
@@ -311,3 +378,19 @@ if __name__ == "__main__":
     asvd_func = ASVD(data, features, targets, use_func=True, func=f_expl)
     df_stats_func = asvd_func.compute_statistics()
     print(f'df_stats_func: \n{df_stats_func}')
+    
+    # Example of usage: compute_response_curve_augmentation
+    from sklearn.linear_model import LinearRegression
+    
+    # Create a simple linear model
+    X = np.array([[1, 2], [2, 3], [3, 4]])
+    y = np.array([[1, 2], [2, 4], [3, 6]])
+    model = LinearRegression().fit(X, y)
+    
+    # Compute response curve volume
+    volume = compute_response_curve_augmentation(
+        predictor=model.predict,
+        region=[(0, 3), (1, 4)]
+    )
+    
+    print(f"The response curve volume is: {volume}")
