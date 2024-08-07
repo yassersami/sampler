@@ -248,8 +248,7 @@ def linear_tent(x, L, U, slope: float=1.0):
     ------
     y: shaped(n, p)
     """
-    if not isinstance(x, np.ndarray) or x.ndim != 2:
-        raise ValueError(f'x should be 2D array shaped (n, p) \nx: \n{x}')
+    x = np.atleast_2d(x)
     if np.any(L >= U):
         raise ValueError(f'L should be less than U \nL: \n{L} \nU: \n{U}')
 

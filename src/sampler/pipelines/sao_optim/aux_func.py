@@ -44,23 +44,6 @@ def sao_run_simulator(
     return y_sim, y_doi
 
 
-def get_history_path() -> str:
-    '''
-    TODO yasser:
-    This function works but only on base.
-    It needs to have acces to the name of session environement 
-    '''
-    conf_loader = ConfigLoader(conf_source="conf")
-    conf_catalog = conf_loader.get("catalog.yml")
-    history_path = conf_catalog["fom_history"]["path"]
-    print(f'get_history_path -> history_path: \n{history_path}')
-    # from kedro.framework.session.session import get_current_session
-    # session = get_current_session()
-    # context = session.load_context()
-    # context.params
-    return history_path
-
-
 def store_df(df: pd.DataFrame, history_path: str, file_name: str):
     
     # Check if file name ends with tile extension
@@ -90,8 +73,7 @@ def linear_tent(x: np.ndarray, L: np.ndarray, U: np.ndarray, slope: float=1.0):
     ------
     y: shaped(n, p)
     """
-    if x.ndim != 2:
-        raise ValueError(f'x should be 2D array shaped (n, p) \nx: \n{x}')
+    x = np.atleast_2d(x)
     if np.any(L >= U):
         raise ValueError(f'L should be less than U \nL: \n{L} \nU: \n{U}')
 

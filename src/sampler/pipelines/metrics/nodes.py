@@ -125,11 +125,11 @@ def plot_metrics(
     targets = names['targets']['str']
     asvd_metrics_to_plot = ['augmentation', 'rsd_x', 'rsd_xy', 'rsd_augm']
 
-    area_targets = None  # TODO yasser: compute covered area on targets space
-    # area_targets = {k: 10000 for k in data}
+    targets_volume = None  # TODO yasser: compute covered area on targets space
+    # targets_volume = {k: 10000 for k in data.columns}
     # Space distribution
     features_2d = gm.plot_2d(data, features_dic, ignition_points, volume)
-    violin_plot = gm.plot_violin_distribution(data, targets, region, area_targets)
+    violin_plot = gm.plot_violin_distribution(data, targets, region, targets_volume)
     kde_plot = gm.targets_kde(data, targets, region)
     # pair_plot = gm.pair_grid_for_all_variables(data, features, targets)
     feat_tar_dict = {}

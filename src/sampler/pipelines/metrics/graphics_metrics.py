@@ -15,7 +15,7 @@ def get_colors_legend(data):
     return [mlines.Line2D([], [], color=vals['color'], label=vals['name']) for vals in data.values()]
 
 
-def plot_violin_distribution(data: Dict, targets: List[str], desired_region: Dict, area: Dict = None):
+def plot_violin_distribution(data: Dict, targets: List[str], desired_region: Dict, volume: Dict = None):
     fig, axs = plt.subplots(1, len(targets), figsize=(10, 5))
 
     for col, target in enumerate(targets):
@@ -36,11 +36,11 @@ def plot_violin_distribution(data: Dict, targets: List[str], desired_region: Dic
     axs[0].text(-0.03, 1.03, 'a)', transform=axs[0].transAxes, size=20, weight='bold', ha='right', va='bottom')
     axs[1].text(-0.03, 1.03, 'b)', transform=axs[1].transAxes, size=20, weight='bold', ha='right', va='bottom')
     
-    # Add legend if area is provided
-    if area is not None:
+    # Add legend if volume is provided
+    if volume is not None:
         handles = []
         labels = []
-        for key, value in area.items():
+        for key, value in volume.items():
             handle = Rectangle((0,0), 1, 1, color=data[key]['color'])
             handles.append(handle)
             labels.append(f'{value:.2e}')

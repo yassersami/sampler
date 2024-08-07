@@ -27,8 +27,7 @@ class GPSampler:
         self.max_std = 1
 
     def get_std(self, x: np.ndarray):
-        if x.ndim == 1:
-            x = x.reshape(1, -1)
+        x = np.atleast_2d(x)
         _, y_std = self.model.predict(x, return_std=True)
 
         return y_std
@@ -76,7 +75,7 @@ class GPSampler:
         """
         if len(self.ignored) == 0:
             return False
-
+        # TODO yasser: instead of a cube of 1eself.decimals why not set a sphere where r=(gp_std_relative > 20% or 5%)
         point_rounded = np.round(point.ravel(), self.decimals)
         ignored_rounded = np.round(np.array([*self.ignored]), self.decimals)
 
@@ -148,8 +147,7 @@ class FigureOfMerit(GPSampler):
                 Computes the mean standard deviation over all target dimensions for a given input x
                 and stretches it to reach the entire range of [0, 1].
                 """
-                if x.ndim == 1:
-                    x = x.reshape(1, -1)
+                x = np.atleast_2d(x)
 
                 _, y_std = self.model.predict(x, return_std=True)
 
@@ -159,8 +157,7 @@ class FigureOfMerit(GPSampler):
                 return score
         else:
             def std(x):
-                if x.ndim == 1:
-                    x = x.reshape(1, -1)
+                x = np.atleast_2d(x)
                 return np.zeros(x.shape[0])
         return std
 
@@ -173,8 +170,7 @@ class FigureOfMerit(GPSampler):
                 """
                 Given an n-dimensional x returns the sum of the probabilities to be in the interest region
                 """
-                if x.ndim == 1:
-                    x = x.reshape(1, -1)
+                x = np.atleast_2d(x)
 
                 y_hat, y_std = self.model.predict(x, return_std=True)
 
@@ -188,8 +184,7 @@ class FigureOfMerit(GPSampler):
                 return score
         else:
             def interest(x):
-                if x.ndim == 1:
-                    x = x.reshape(1, -1)
+                x = np.atleast_2d(x)
                 return np.zeros(x.shape[0])
 
         return interest
@@ -201,10 +196,10 @@ class FigureOfMerit(GPSampler):
         """
         if c["apply"] and c["mode"] == "euclidean":
             def space_coverage_one(x: np.ndarray):
-                if x.ndim != 1:
-                    assert False, "The input x must be a single point!"
+                x = np.atleast_2d(x)
+                assert x.shape[0] == 1, "Input x must be a single point!"
 
-                gp_x_data = self.model.X_train_
+                gp_x_data = self.model.X_train_  # TODO yasser: this way only fitted are considered. Why not take all data so that errors are included ?
                 distances = np.linalg.norm(gp_x_data - x, axis=1)
 
                 # TODO: Add these to kedro catalog parameters
@@ -220,8 +215,7 @@ class FigureOfMerit(GPSampler):
 
             def space_coverage(x: np.ndarray):
                 # Launch multiple space_coverage_one
-                if x.ndim == 1:
-                    x = x.reshape(1, -1)
+                x = np.atleast_2d(x)
                 score = []
                 for x_row in x:
                     score.append(space_coverage_one(x_row))
@@ -229,8 +223,7 @@ class FigureOfMerit(GPSampler):
                 return score
         else:
             def space_coverage(x: np.ndarray):
-                if x.ndim == 1:
-                    x = x.reshape(1, -1)
+                x = np.atleast_2d(x)
                 return np.zeros(x.shape[0])
         return space_coverage
 
@@ -258,15 +251,13 @@ class FigureOfMerit(GPSampler):
         else:
             return self.choose_min(size, unique_min)
 
-    def target_function(self, x):
+    def target_function(self, x: np.ndarray):
         """
         Acquisition function.
         Each term can be independently turned on or off from conf file.
         """
-        if x.ndim == 1:
-            x = x.reshape(1, -1)
-        else:
-            assert False, "The input x must be a single point!"
+        x = np.atleast_2d(x)
+        assert x.shape[0] == 1, "Input x must be a single point!"
 
         if self.should_ignore_point(x):
             # This condition is necessary because GP do not update around failed samples
