@@ -127,8 +127,9 @@ class ASVD:
         rsd_x = self.simplices_volumes_x.std() / self.simplices_volumes_x.mean()
         rsd_augm = rsd_xy - rsd_x
         return {
-            "sum_x": self.stars_volumes_x.mean(),
-            "sum_xy": self.stars_volumes_xy.mean(),
+            "count": self.vertices_x.shape[0],
+            "sum_x": self.stars_volumes_x.sum(),
+            "sum_xy": self.stars_volumes_xy.sum(),
             "mean_x": self.stars_volumes_x.mean(),  # Mean over number of vertices
             "mean_xy": self.stars_volumes_xy.mean(),  # Mean over number of aumengted vertices
             "augmentation": augmentation,
@@ -181,7 +182,7 @@ def compute_simplex_volume(simplex):
     volume = np.sqrt(np.linalg.det(gram_matrix)) / factorial(p_plus_1 - 1)
 
     if np.isnan(volume):
-        warnings.warn(f"NaN volume detected for simplex: {simplex}")
+        warnings.warn(f"NaN volume detected for simplex: \n{simplex}")
         return 0
     
     return volume

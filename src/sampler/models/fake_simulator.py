@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from scipy.stats import qmc
 from sklearn.neighbors import NearestNeighbors
 
 from typing import List, Dict, Tuple
@@ -55,7 +56,7 @@ def get_big_data(treatment: DataTreatment, features: List[str], targets: List[st
     return big_data
 
 
-def get_lhs_points(treatment, features, random_state=42):
+def get_lhs_points(treatment, features, seed=42):
     '''
     Use to directly sample new points without using the fom as follow:
         next_points = get_lhs_points(treatment, features)
@@ -66,29 +67,29 @@ def get_lhs_points(treatment, features, random_state=42):
                 break
             constraints_array = np.zeros((batch_size, len(cons_names)))
     '''
-    #from pyDOE import lhs
-    from smt.sampling_methods import LHS
 
     # Number of samples
     num_samples = 300
 
     # Get bounds from treatment
     bounds = np.array([treatment.variables_ranges[f]["bounds"] for f in features])
-
-    sampling = LHS(xlimits=bounds, random_state=random_state)
+    n_dimensions = len(bounds)
+    
+    # Create the Latin Hypercube sampler
+    sampler = qmc.LatinHypercube(d=n_dimensions, seed=seed)
     
     # Generate Latin Hypercube Samples
-    #samples = lhs(n=len(features), samples=num_samples)
-    samples = sampling(num_samples)
+    samples_0_1 = sampler.random(n=num_samples)
+    
+    # Scale the samples to the specified bounds
+    lower_bounds = np.array([b[0] for b in bounds])
+    upper_bounds = np.array([b[1] for b in bounds])
+    samples_L_U = qmc.scale(samples_0_1, lower_bounds, upper_bounds)
 
-    warnings.warn("Using LHS for sampling! Sampling points of dim {}".format(samples.shape))
+    warnings.warn(f"Using LHS for sampling! Sampling points of dim {samples_L_U.shape}")
 
-    # Scale samples to the specified bounds for each dimension
-    #samples = np.zeros(samples.shape)
-    #for i in range(len(bounds)):
-    #    samples[:, i] = bounds[i, 0] + samples[:, i] * (bounds[i, 1] - bounds[i, 0])
 
     # Scale samples down again using the treatment scaler (some variables may be log-scaled)
-    samples = treatment.scaler.transform_features(samples)
+    scaled_samples = treatment.scaler.transform_features(samples_L_U)
     
-    return samples
+    return scaled_samples

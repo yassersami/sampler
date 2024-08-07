@@ -321,7 +321,15 @@ def plot_asvd_scores(
     if metrics_for_table:
         table_data = []
         for exp_name in exp_names:
-            row = [exp_name] + [f"{experiments[exp_name].get(metric, 'N/A'):.4f}" for metric in metrics_for_table]
+            row = [exp_name]
+            for metric in metrics_for_table:
+                value = experiments[exp_name].get(metric, 'N/A')
+                if isinstance(value, int):
+                    row.append(f"{value}")
+                elif isinstance(value, float):
+                    row.append(f"{value:.2e}")
+                else:
+                    row.append(str(value))
             table_data.append(row)
 
         ax_table.axis('off')

@@ -64,11 +64,13 @@ def get_metrics(
 
     n_interest = {} # for each experiment, number of interest points (dict of int)
     volume = {} # for each experiment, volume space covered (dict of float)
-    asvd_scores = {}
+    total_asvd_scores = {}
+    interest_asvd_scores = {}
 
     for key, value in data.items():
         # Get number of interesting samples
         n_interest[key] = len(value['interest'])
+        
         # Get volume of interesting samples
         if key in params_volume["default"]:
             volume[key] = params_volume["default"][key]
@@ -77,13 +79,21 @@ def get_metrics(
             volume[key] = covered_space_bound(scaled_data_interest, radius, params_volume, len(features))
         else:
             volume[key] = np.array([0,0])
-        # Get data distribution using ASVD
+        
+        # Get all data distribution using ASVD
         XY = value['df'][features+targets].values
-        scaled_data = pd.DataFrame(treatment.scaler.transform(XY), columns=treatment.features+treatment.targets)
-        asvd = ASVD(scaled_data, treatment.features, treatment.targets)
-        asvd_scores[key] = asvd.compute_scores()
+        scaled_data = pd.DataFrame(treatment.scaler.transform(XY), columns=features+targets)
+        total_asvd = ASVD(scaled_data, features, targets)
+        total_asvd_scores[key] = total_asvd.compute_scores()
+        
+        # Get only interest data distribution using ASVD
+        XY = value['interest'][features+targets].values
+        scaled_data = pd.DataFrame(treatment.scaler.transform(XY), columns=features+targets)
+        interest_asvd = ASVD(scaled_data, features, targets)
+        interest_asvd_scores[key] = interest_asvd.compute_scores()
 
-    return dict(n_interest=n_interest, volume=volume, asvd_scores=asvd_scores)
+    return dict(n_interest=n_interest, volume=volume, total_asvd_scores=total_asvd_scores, interest_asvd_scores=interest_asvd_scores)
+
 
 def scale_data_for_plots(data: Dict, features: List[str], targets: List[str], targets_prediction: List[str], scales: Dict, interest_region: Dict):
     """Scales data in place for visualization purposes."""
@@ -106,12 +116,14 @@ def scale_data_for_plots(data: Dict, features: List[str], targets: List[str], ta
 def plot_metrics(
     data: Dict, names: Dict, region: Dict,
     ignition_points: Dict, volume: Dict,
-    asvd_scores: Dict[str, Dict[str, float]]
+    total_asvd_scores: Dict[str, Dict[str, float]],
+    interest_asvd_scores: Dict[str, Dict[str, float]],
     # r2: Dict, crps: Dict
 ):
     features_dic = names['features']
     features = features_dic['str']
     targets = names['targets']['str']
+    asvd_metrics_to_plot = ['augmentation', 'rsd_x', 'rsd_xy', 'rsd_augm']
 
     area_targets = None  # TODO yasser: compute covered area on targets space
     # area_targets = {k: 10000 for k in data}
@@ -125,10 +137,8 @@ def plot_metrics(
     feat_tar_dict["all_int"] = gm.plot_feat_tar(data, features, targets, only_interest=True, title_extension='(only interest)')
     for k in data.keys():
         feat_tar_dict[k] = gm.plot_feat_tar({k: data[k]}, features, targets, only_interest=False)
-    asvd_plot = gm.plot_asvd_scores(
-        asvd_scores,
-        metrics_to_plot=['augmentation', 'rsd_x', 'rsd_xy', 'rsd_augm'],
-    )
+    total_asvd_plot = gm.plot_asvd_scores(total_asvd_scores, asvd_metrics_to_plot)
+    interest_asvd_plot = gm.plot_asvd_scores(interest_asvd_scores, asvd_metrics_to_plot)
 
     # Saving dictionary of plots
     plots_dict = {
@@ -137,7 +147,8 @@ def plot_metrics(
         "targets_kde.png": kde_plot,
         # "pair_plot.png": pair_plot,
         **{f'features_targets_{k}.png': v for k, v in feat_tar_dict.items()},
-        "ASVD.png": asvd_plot
+        "ASVD_all.png": total_asvd_plot,
+        "ASVD_interest.png": interest_asvd_plot,
     }
     plots_dict = {f'{i+1:02d}_{k}': v for i, (k, v) in enumerate(plots_dict.items())}
     return plots_dict

@@ -41,7 +41,8 @@ def create_pipeline(**kwargs) -> Pipeline:
             outputs=dict(
                 n_interest='n_interest',
                 volume='volume',
-                asvd_scores='asvd_scores',
+                total_asvd_scores='total_asvd_scores',
+                interest_asvd_scores='interest_asvd_scores',
             ),
             # name='get_metrics'
         ),
@@ -69,7 +70,8 @@ def create_pipeline(**kwargs) -> Pipeline:
                 region='scaled_region',
                 ignition_points='params:ignition_points',
                 volume='volume',
-                asvd_scores='asvd_scores',
+                total_asvd_scores='total_asvd_scores',
+                interest_asvd_scores='interest_asvd_scores',
             ),
             outputs='metrics_plots'
             # name='plot_metrics'
