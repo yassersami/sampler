@@ -39,7 +39,7 @@ def irbs_sampling(
     simulator = SimulationProcessor(
         features=features, targets=targets, additional_values=additional_values,
         treatment=treatment, n_proc=batch_size, simulator_env=simulator_env
-    )
+    )  # TODO yasser: when not simulator_env["use"], reset targets using data["targets"]=simulator.process_data(data["features"].values)
 
     size = 0
     iteration = 0
@@ -80,8 +80,8 @@ def irbs_sampling(
         new_df['datetime'] = timenow
         new_df['iteration'] = iteration
 
-
-        res = pd.concat([res, new_df], axis=0, ignore_index=True) # Concatenate new values to original results DataFrame
+        # Concatenate new values to original results DataFrame
+        res = pd.concat([res, new_df], axis=0, ignore_index=True)
         size += len(new_df)
         n_new_interest += len(new_df[new_df['quality'] == 'interest'])
         iteration+=1
