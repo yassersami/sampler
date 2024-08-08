@@ -58,10 +58,16 @@ class GPSampler:
         self.max_std = min(1.0, max_std * (1 + search_error))
         print(f"GPsampler.update_max_std -> Maximum GP std: {self.max_std:.3f}")
         print(f"GPsampler.update_max_std -> Data std: {self.model.X_train_.std():.3f}")
+        
+    def add_ignored_points(self, df: pd.DataFrame):
+        """Add bad points (in feature space) to the set of ignored points."""
+        # Identify rows where any target column has NaN
+        ignored_rows = df[df[self.targets].isna().any(axis=1)]
 
-    def add_ignored_points(self, points: set):
-        """Add points (in feature space) to the set of ignored points."""
-        features_set = set(tuple(row) for row in points[self.features].values)
+        # Extract feature values from these rows and convert to a set of tuples
+        features_set = set(tuple(row) for row in ignored_rows[self.features].values)
+
+        # Add these feature points to the set of ignored points
         self.ignored = self.ignored.union(features_set)
 
     def should_ignore_point(self, point: np.ndarray) -> bool:

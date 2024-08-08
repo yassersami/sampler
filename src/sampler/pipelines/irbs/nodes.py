@@ -57,6 +57,7 @@ def irbs_sampling(
         new_x, scores = model.optimize(batch_size=batch_size, iters=opt_iters, n=opt_points) # Search new candidates to add to res dataset
 
         new_df = simulator.process_data(new_x, real_x=False, index=size) # Launch time expensive simulations
+        model.add_ignored_points(new_df)
 
         print(f'Round {iteration:03} (continued): simulation results' + '-'*49)
         print(f'irbs_sampling -> Got {len(new_df)} new samples after simulation:\n {new_df}')
