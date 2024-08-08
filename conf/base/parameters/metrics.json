@@ -2,7 +2,7 @@
   "names": {
     "features": {
       "str": ["Al radius [micron]", "r_ext_pMeO", "Al richness"],
-      "latex": ["$r_{Al} //, [//mu m]$", "$r_{CuO} //, [//mu m]$", "$//phi$"]
+      "latex": ["$r_{Al}, [/mu m]$", "$r_{CuO}, [/mu m]$", "$/phi$"]
     },
     "targets": {
       "str": ["Final Pressure [MPa]", "Combustion Temperature [K]"],
@@ -25,12 +25,28 @@
       "env_name": [-1, 4.5e-6] 
     }
   },
+  "params_voronoi": {
+    "compute_voronoi": {
+      "features": true,
+      "features_targets": false
+    },
+    
+    "tol": 1e-3,
+    "isFilter": true
+  },
+
   "experiments": {
     "exp0": {
-      "color": "darkolivegreen",
-      "name": "name_exp [reg_itr]",
+      "color": "blue",
+      "name": "name_exp0 [reg_itr]",
       "path": "PATH/history",
       "scale": "real-inverse"
+    },
+    "exp1": {
+      "color": "red",
+      "name": "name_exp1 [reg_itr]",
+      "path": "PATH/name.csv",
+      "scale": "read"
     }
   }
 }

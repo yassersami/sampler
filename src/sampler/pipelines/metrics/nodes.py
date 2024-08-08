@@ -14,7 +14,9 @@ from sampler.common.data_treatment import DataTreatment
 from sampler.pipelines.metrics.asvd import ASVD
 from sampler.pipelines.metrics.postprocessing_functions import create_dict, prepare_new_data, prepare_benchmark, get_result
 from sampler.pipelines.metrics.volume import covered_space_bound
+from sampler.pipelines.metrics.voronoi import get_volume_voronoi
 import sampler.pipelines.metrics.graphics_metrics as gm
+
 
 
 def prepare_data_metrics(
@@ -48,6 +50,12 @@ def prepare_data_metrics(
             df = prepare_new_data(
                 df=history, treatment=treatment, f=features, t=targets, t_c=targets_prediction
             ).rename(columns=renaming_cols)
+        elif value['scale'] == 'read': # TODO : Rewrite properly this part and "classify"
+            df_read = pd.read_csv(value["path"], sep='[; ,]', usecols=features+targets+additional_values+['quality'])
+            df = prepare_new_data(
+                df=df_read, treatment=treatment, f=features, t=targets, t_c=targets_prediction
+            ).rename(columns=renaming_cols)
+
         else:
             print(f"{value['scale']} is not a valid scaler for the data. Exiting program")
             sys.exit(1)
@@ -58,7 +66,7 @@ def prepare_data_metrics(
 def get_metrics(
         data: Dict, features: List[str], targets: List[str],
         treatment: DataTreatment,
-        params_volume: Dict, initial_size: int
+        params_volume: Dict, params_voronoi: Dict
 ) -> Dict:
     radius = 0.025 # Sphere radius
 
@@ -66,8 +74,12 @@ def get_metrics(
     volume = {} # for each experiment, volume space covered (dict of float)
     total_asvd_scores = {}
     interest_asvd_scores = {}
-
+    volume_voronoi = {} # for each experiment, volumes of the Voronoi regions (clipped by the unit hypercube) : in feature space and feature+target space
+    
     for key, value in data.items():
+        scaled_data_interest_f = treatment.scaler.transform_features(value['interest'][features].values)
+        scaled_data_interest_t = treatment.scaler.transform_targets(value['interest'][targets].values)
+
         # Get number of interesting samples
         n_interest[key] = len(value['interest'])
         
@@ -75,8 +87,7 @@ def get_metrics(
         if key in params_volume["default"]:
             volume[key] = params_volume["default"][key]
         elif params_volume["compute_volume"]:
-            scaled_data_interest = treatment.scaler.transform_features(value['interest'][features].values)
-            volume[key] = covered_space_bound(scaled_data_interest, radius, params_volume, len(features))
+            volume[key] = covered_space_bound(scaled_data_interest_f, radius, params_volume, len(features))
         else:
             volume[key] = np.array([0,0])
         
@@ -91,8 +102,23 @@ def get_metrics(
         scaled_data = pd.DataFrame(treatment.scaler.transform(XY), columns=features+targets)
         interest_asvd = ASVD(scaled_data, features, targets)
         interest_asvd_scores[key] = interest_asvd.compute_scores()
+        # Get Voronoi volume
+        volume_voronoi[key] = {
+            "features": np.array([0]*n_interest[key]),
+            "features_targets": np.array([0]*n_interest[key])
+        }
+        if params_voronoi['compute_voronoi']['features']:
+            volume_voronoi[key]['features'] = get_volume_voronoi(
+                    scaled_data_interest_f,
+                    len(features),tol=params_voronoi['tol'], isFilter=params_voronoi['isFilter']
+                )
+        if params_voronoi['compute_voronoi']['features_targets']:
+            volume_voronoi[key]['features_targets'] = get_volume_voronoi(
+                    np.hstack([scaled_data_interest_f, scaled_data_interest_t]),
+                    len(features+targets),tol=params_voronoi['tol'], isFilter=params_voronoi['isFilter']
+                )
 
-    return dict(n_interest=n_interest, volume=volume, total_asvd_scores=total_asvd_scores, interest_asvd_scores=interest_asvd_scores)
+    return dict(n_interest=n_interest, volume=volume, total_asvd_scores=total_asvd_scores, interest_asvd_scores=interest_asvd_scores, volume_voronoi=volume_voronoi)
 
 
 def scale_data_for_plots(data: Dict, features: List[str], targets: List[str], targets_prediction: List[str], scales: Dict, interest_region: Dict):
@@ -118,6 +144,8 @@ def plot_metrics(
     ignition_points: Dict, volume: Dict,
     total_asvd_scores: Dict[str, Dict[str, float]],
     interest_asvd_scores: Dict[str, Dict[str, float]],
+    volume_voronoi: Dict
+
     # r2: Dict, crps: Dict
 ):
     features_dic = names['features']
@@ -139,6 +167,7 @@ def plot_metrics(
         feat_tar_dict[k] = gm.plot_feat_tar({k: data[k]}, features, targets, only_interest=False)
     total_asvd_plot = gm.plot_asvd_scores(total_asvd_scores, asvd_metrics_to_plot)
     interest_asvd_plot = gm.plot_asvd_scores(interest_asvd_scores, asvd_metrics_to_plot)
+    voronoi_plot = gm.dist_volume_voronoi(data, volume_voronoi)
 
     # Saving dictionary of plots
     plots_dict = {
