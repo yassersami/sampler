@@ -49,46 +49,6 @@ class DataTreatment:
         scaled_data[scaler_cols] = self.scaler.transform_with_nans(real_data[scaler_cols].values)
         return scaled_data
 
-    def treat_outliers(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        """
-        Treats outliers in the input DataFrame following these steps:
-        1. Drop rows with out-of-bounds features
-        2. Split rows with time_out or sim_error from the rest
-        3. Fill out-of-bounds targets with fixed values
-
-        Parameters:
-        - df (pd.DataFrame): Input DataFrame containing simulation data with at least
-        features and targets both in the real space (not scaled one)
-
-        Returns:
-        tuple: (res, error_res)
-            - res: DataFrame with treated data
-            - error_res: DataFrame with time_out and sim_error rows
-        """
-        outliers = self.get_outliers(df=df)
-        res = df.copy()
-
-        # Step 1: Drop rows with out-of-bounds features
-        if outliers["out_of_bounds_feat"].any():
-            warnings.warn(f"There are samples with features out of design space bounds: \n{res[outliers['out_of_bounds_feat']]}")
-            res = res[~outliers["out_of_bounds_feat"]]
-        
-        if len(res) == 0:
-            return res, pd.DataFrame()
-
-        # Step 2: Split rows with time_out or sim_error
-        error_mask = outliers["time_out"] | outliers["sim_error"]
-        error_res = res[error_mask]
-        res = res[~error_mask]
-
-        # Step 3: Fill out-of-bounds targets with fixed values
-        res = self.fill_outliers_with_fixed_value(  # TODO yasser: why fill outliers with minimums instead of removing.
-            outliers_mask=outliers["out_of_bounds_tar"],
-            df=res
-        )
-
-        return res, error_res
-
     def fill_outliers_with_nans(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Treats outliers in the input DataFrame by replacing non-feature values with NaNs for non-clean data:
@@ -145,6 +105,46 @@ class DataTreatment:
         masks['sim_error'] = df[self.targets].isna().any(axis=1)
         
         return masks
+
+    def split_inliers_outliers(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """
+        Treats outliers in the input DataFrame following these steps:
+        1. Drop rows with out-of-bounds features
+        2. Split rows with time_out or sim_error from the rest
+        3. Fill out-of-bounds targets with fixed values
+
+        Parameters:
+        - df (pd.DataFrame): Input DataFrame containing simulation data with at least
+        features and targets both in the real space (not scaled one)
+
+        Returns:
+        tuple: (res, error_res)
+            - res: DataFrame with treated data
+            - error_res: DataFrame with time_out and sim_error rows
+        """
+        outliers = self.get_outliers(df=df)
+        res = df.copy()
+
+        # Step 1: Drop rows with out-of-bounds features
+        if outliers["out_of_bounds_feat"].any():
+            warnings.warn(f"There are samples with features out of design space bounds: \n{res[outliers['out_of_bounds_feat']]}")
+            res = res[~outliers["out_of_bounds_feat"]]
+        
+        if len(res) == 0:
+            return res, pd.DataFrame()
+
+        # Step 2: Split rows with time_out or sim_error
+        error_mask = outliers["time_out"] | outliers["sim_error"]
+        error_res = res[error_mask]
+        res = res[~error_mask]
+
+        # Step 3: Fill out-of-bounds targets with fixed values
+        res = self.fill_outliers_with_fixed_value(  # TODO yasser: why fill outliers with minimums instead of removing.
+            outliers_mask=outliers["out_of_bounds_tar"],
+            df=res
+        )
+
+        return res, error_res
 
     def fill_outliers_with_fixed_value(self, outliers_mask: np.ndarray, df: pd.DataFrame):
         # Create a DataFrame with default values for all targets
