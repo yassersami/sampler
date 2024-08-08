@@ -26,9 +26,6 @@ def irbs_sampling(
 ):
     max_size, n_interest_max, run_until_max_size, batch_size = run_condition['max_size'], run_condition['n_interest_max'], run_condition['run_until_max_size'], run_condition['batch_size']
     
-    res = initialize_dataset(data=data, features=features, targets=targets, treatment=treatment) # Set dataset to complete with adaptive sampling
-    yield results(res, size=len(res), initialize=True)
-
     # Set figure of merite (acquisition function)
     model = FigureOfMerit(
         features=features, targets=targets, coefficients=coefficients,
@@ -39,7 +36,11 @@ def irbs_sampling(
     simulator = SimulationProcessor(
         features=features, targets=targets, additional_values=additional_values,
         treatment=treatment, n_proc=batch_size, simulator_env=simulator_env
-    )  # TODO yasser: when not simulator_env["use"], reset targets using data["targets"]=simulator.process_data(data["features"].values)
+    )
+    data = simulator.adapt_targets(data)
+
+    res = initialize_dataset(data=data, treatment=treatment) # Set dataset to complete with adaptive sampling
+    yield results(res, size=len(res), initialize=True)
 
     size = 0
     iteration = 0
@@ -48,18 +49,17 @@ def irbs_sampling(
     progress_bar = tqdm(total=max_size, dynamic_ncols=True) if run_until_max_size else tqdm(total=n_interest_max, dynamic_ncols=True) # Initialize tqdm progress bar with estimated time remaining
     print(f"Iteration {iteration:03} - Size {size} - New interest {n_new_interest}")
     while end_condition:
-        model.fit(x_train=res[features].values, y_train=res[targets].values) # Set the new model that will be used in next iteration
+        # Filter out rows with NaN target values for GP training
+        clean_res = res.dropna(subset=targets)
+
+        model.fit(x_train=clean_res[features].values, y_train=clean_res[targets].values) # Set the new model that will be used in next iteration
 
         new_x, scores = model.optimize(batch_size=batch_size, iters=opt_iters, n=opt_points) # Search new candidates to add to res dataset
 
-        new_df, error_features = simulator.process_data(new_x, real_x=False, index=size) # Launch time expensive simulations
-        model.add_ignored_points(error_features)
+        new_df = simulator.process_data(new_x, real_x=False, index=size) # Launch time expensive simulations
 
         print(f'Round {iteration:03} (continued): simulation results' + '-'*49)
         print(f'irbs_sampling -> Got {len(new_df)} new samples after simulation:\n {new_df}')
-        if len(new_df) == 0:
-            warnings.warn("irbs_sampling -> No new data was obtained from simulator !")
-            continue
 
         # % Add more data than features, targets and additional_values -----------------
 

@@ -33,13 +33,6 @@ def run_parego(
 ):
     max_size, n_interest_max, run_until_max_size, batch_size = run_condition['max_size'], run_condition['n_interest_max'], run_condition['run_until_max_size'], run_condition['batch_size']
 
-   
-
-    res = initialize_dataset(
-        data=data, features=features, targets=targets, treatment=treatment,
-    )
-    yield results(res, size=len(res), initialize=True)
-
     lambda_gen = LambdaGenerator(k=len(targets), s=llambda_s)
     dace = DACEModel(
         features=features, targets=targets,
@@ -51,6 +44,8 @@ def run_parego(
         treatment=treatment, n_proc=batch_size, simulator_env=simulator_env
     )
 
+    res = initialize_dataset(data=data, treatment=treatment)
+    yield results(res, size=len(res), initialize=True)
 
     size = 0
     iteration = 0

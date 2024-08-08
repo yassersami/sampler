@@ -46,7 +46,7 @@ class GPSampler:
 
         def get_opposite_std(x):
             """Opposite of std to be minimized."""
-            y_std = self.get_std(x)[0][0]
+            y_std = self.get_std(x).max()
             return -1 * y_std
 
         bounds = [(0, 1) for _ in self.features]
@@ -56,7 +56,8 @@ class GPSampler:
 
         max_std = -1 * result.fun
         self.max_std = min(1.0, max_std * (1 + search_error))
-        print("GPsampler.update_max_std -> Maximum standard deviation found:", round(self.max_std, 3))
+        print(f"GPsampler.update_max_std -> Maximum GP std: {self.max_std:.3f}")
+        print(f"GPsampler.update_max_std -> Data std: {self.model.X_train_.std():.3f}")
 
     def add_ignored_points(self, points: set):
         """Add points (in feature space) to the set of ignored points."""

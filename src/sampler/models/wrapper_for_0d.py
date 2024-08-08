@@ -80,7 +80,7 @@ def run_simulation(x: pd.DataFrame, n_proc: int, index: int, map_dir: str):
     return new_df
 
 
-def run_fake_simulator(x_real, features, targets, additional_values, scaler):
+def run_fake_simulator(x_real, features, targets, additional_values, scaler, spice_on):
     """ Set a fake results df. All outputs are in real space (not scaled one)"""
     x_scaled = scaler.transform_features(x_real)
     # As if y_sim = ["Pg_f", "Tg_Tmax"] with values in [0, 1]
@@ -94,11 +94,12 @@ def run_fake_simulator(x_real, features, targets, additional_values, scaler):
     )
     # Get targets in real space (not in sclaed one)
     new_points[features + targets] = scaler.inverse_transform(new_points[features + targets].values)
-    # # Add some spice to check how outliers and errors are handled
-    # new_points.loc[0, features[0]] = 10  # feature out of bounds
-    # new_points.loc[1, targets] = [45e6, 6000]  # inlier targets
-    # new_points.loc[2, targets[0]] = 1e20  # target out of bounds
-    # new_points.loc[3, targets[0]] = np.nan  # failed simulation causing error (missing value)
+    if spice_on:
+        # * Add some spice to check how outliers and errors are handled
+        new_points.loc[0, features[0]] = 1e-3  # feature out of bounds
+        new_points.loc[1, targets] = [45e6, 6000]  # inlier targets
+        new_points.loc[2, targets[0]] = 1e20  # target out of bounds
+        new_points.loc[3, targets[0]] = np.nan  # failed simulation causing error (missing value)
     return new_points
 
 
@@ -149,12 +150,19 @@ class SimulationProcessor:
         else:
             new_points = run_fake_simulator(
                 x_real, self.features, self.targets, self.additional_values,
-                self.treatment.scaler
+                self.treatment.scaler, spice_on=(index==0)
             )
 
-        scaled_data, scaled_errors = self.treatment.treat_data(df_real=new_points, scale=True)
+        scaled_data = self.treatment.treat_data(df_real=new_points, scale=True)
         scaled_data = scaled_data[self.features + self.targets + self.additional_values]
-        return scaled_data, scaled_errors
+        return scaled_data
+
+    def adapt_targets(self, data: pd.DataFrame) -> pd.DataFrame:
+        # If using fake simulator change targets values
+        if not self.use_simulator:
+            scaled_data = self.process_data(data[self.features].values, real_x=False, index=0)
+            data[self.targets] = scaled_data[self.targets].values
+        return data
 
 
 # def get_values_from_simulator(

@@ -20,7 +20,7 @@ def prepare_initial_data(
         features=features, targets=targets, scaler=scaler, interest_region=interest_region,
         variables_ranges=variables_ranges, sim_time_cutoff=sim_time_cutoff, outliers_filling=outliers_filling,
     )
-    res, _ = treatment.treat_data(df_real=initial_data, scale=True)
+    res = treatment.treat_data(df_real=initial_data, scale=True)
     res[additional_values] = initial_data[additional_values]
     res = res[(res[features].isna().sum(axis=1) == 0)]
     return dict(
