@@ -178,6 +178,7 @@ def plot_metrics(
         **{f'features_targets_{k}.png': v for k, v in feat_tar_dict.items()},
         "ASVD_all.png": total_asvd_plot,
         "ASVD_interest.png": interest_asvd_plot,
+        "volume_voronoi.png": voronoi_plot
     }
     plots_dict = {f'{i+1:02d}_{k}': v for i, (k, v) in enumerate(plots_dict.items())}
     return plots_dict

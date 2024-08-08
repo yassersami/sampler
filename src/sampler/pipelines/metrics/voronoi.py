@@ -36,16 +36,16 @@ def is_arr_include(arr_check, arr_ref):
 @njit(fastmath=True)
 def distance(p1, p2):
     return np.linalg.norm(p1 - p2)
-
 @njit
 def filter(points, threshold, dim):
     num_points = len(points)
     filtered_points = np.empty((num_points, dim), dtype=np.float64)
     count = 0
-    threshold_power = int(-np.log10(threshold))
+    threshold_power = -np.log10(threshold)
+    factor = 10 ** threshold_power
 
     for i in range(num_points):
-        point = np.round(points[i], threshold_power)
+        point = np.floor(points[i] * factor + 0.5) / factor
         add_point = True
         for j in range(count):
             if distance(point, filtered_points[j]) < threshold:

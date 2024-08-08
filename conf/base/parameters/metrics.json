@@ -20,6 +20,7 @@
     "compute_volume": false,
     "same_sphere_tol":1e-3,
     "max_depth":3,
+    "n_subdivision": 128,
     
     "default": {
       "env_name": [-1, 4.5e-6] 

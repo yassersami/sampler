@@ -441,7 +441,7 @@ def dist_volume_voronoi(data, volume_voronoi):
 
     axes[0, 1].axis('off')  # Hide the empty subplot for the legend
     axes[1, 1].axis('off')  # Hide the empty subplot for the legend
-    fig.legend(legend_info_features, loc='center', bbox_to_anchor=(0.85, 0.8), title='Features')
+    fig.legend(legend_info_features, loc='center', bbox_to_anchor=(0.85, 0.75), title='Features')
     fig.legend(legend_info_targets, loc='center', bbox_to_anchor=(0.85, 0.3), title='Features_Targets')
 
     return fig
