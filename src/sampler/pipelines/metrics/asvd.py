@@ -126,6 +126,8 @@ class ASVD:
         rsd_xy = self.simplices_volumes_xy.std() / self.simplices_volumes_xy.mean()
         rsd_x = self.simplices_volumes_x.std() / self.simplices_volumes_x.mean()
         rsd_augm = rsd_xy - rsd_x
+        riqr_x = (np.percentile(self.simplices_volumes_x, 75) - np.percentile(self.simplices_volumes_x, 25))/self.simplices_volumes_x.mean()
+        riqr_xy = (np.percentile(self.simplices_volumes_xy, 75) - np.percentile(self.simplices_volumes_xy, 25))/self.simplices_volumes_xy.mean()
         return {
             "count": self.vertices_x.shape[0],
             "sum_x": self.stars_volumes_x.sum(),
@@ -136,6 +138,8 @@ class ASVD:
             "rsd_x": rsd_x,
             "rsd_xy": rsd_xy,
             "rsd_augm": rsd_augm,
+            "riqr_x": riqr_x,
+            "riqr_xy": riqr_xy,
         }
 
     def compute_statistics(self):

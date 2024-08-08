@@ -127,7 +127,6 @@ def targets_kde(data: Dict, targets: List[str], region: Dict):
     return fig
 
 
-
 def plot_2d(data: Dict, features_dic: Dict, points: Dict, volume: Dict):
     features = features_dic["str"]
     features_latex = features_dic["latex"]
@@ -198,30 +197,6 @@ def plot_2d(data: Dict, features_dic: Dict, points: Dict, volume: Dict):
     fig.subplots_adjust(top=0.85)
     return fig
 
-def r2_bar_plot(data: Dict, targets: List[str], r2: Dict, title: str, all_targets=False):
-    n_groups = len(data)
-    fig, ax = plt.subplots()
-    index = range(n_groups)
-    bar_width = 0.2
-
-    for i, target in enumerate(targets):
-        scores = [r2[key][target] for key in data]
-        bar_position = [j + i * bar_width for j in index]
-        ax.bar(bar_position, scores, bar_width, label=target)
-
-    bar_position = [j + len(targets) * bar_width for j in index]
-    if all_targets:
-        all_target_scores = [r2[key]['all_targets'] for key in data]
-        ax.bar(bar_position, all_target_scores, bar_width, label='all_targets')
-    
-    ax.set_ylabel(title)
-
-    ax.set_xticks([r + bar_width for r in range(n_groups)])
-    ax.set_xticklabels(list([data[key]['name'] for key in data.keys()]), rotation=15)
-    
-    ax.legend(bbox_to_anchor=(1.05, 0.5), loc="center left", borderaxespad=0)
-    plt.tight_layout()
-    return fig
 
 def plot_feat_tar(data: Dict, features: List[str], targets: List[str], only_interest: bool = True, title_extension: str=''):
     n_col = len(features)
@@ -354,6 +329,12 @@ def dist_volume_voronoi(data, volume_voronoi):
         all_features_data.extend(val['features'])
         all_targets_data.extend(val['features_targets'])
 
+    # Check if all experiments have same number of interest samples
+    first_exp_dict = next(iter(volume_voronoi.values()))['features']
+    first_interest_size = first_exp_dict.shape[0]
+    is_same_size_interest = all(exp_dict['features'].shape[0] == first_interest_size for exp_dict in volume_voronoi.values())
+    x_ratio_zoom = 0.75 if is_same_size_interest else 1.
+
     print("Voronoi Volume is interpretable only if run_until_max_size==False (same number of interest points)")
 
     fig, axes = plt.subplots(2, 2, figsize=(14, 10), gridspec_kw={'height_ratios': [0.5, 0.5], 'width_ratios': [0.9, 0.1]})
@@ -383,11 +364,27 @@ def dist_volume_voronoi(data, volume_voronoi):
         median_targets = np.median(features_targets)
         std_targets = np.std(features_targets)
 
-        axes[0, 0].bar(range(len(sorted_features)), sorted_features, color=data[data_keys]['color'], alpha=0.25, label=data[data_keys]['name'])
-        axes[1, 0].bar(range(len(sorted_features_targets)), sorted_features_targets, color=data[data_keys]['color'], alpha=0.25, label=data[data_keys]['name'])
+        axes[0, 0].bar(
+            x=range(len(sorted_features)),
+            height=sorted_features,
+            color=data[data_keys]['color'], alpha=0.25, label=data[data_keys]['name']
+        )
+        axes[1, 0].bar(
+            x=range(len(sorted_features_targets)),
+            height=sorted_features_targets,
+            color=data[data_keys]['color'], alpha=0.25, label=data[data_keys]['name']
+        )
 
-        inset_ax_features.bar(range(int(0.75 * len(sorted_features))), sorted_features[:int(0.75 * len(sorted_features))], color=data[data_keys]['color'], alpha=0.25)
-        inset_ax_targets.bar(range(int(0.75 * len(sorted_features_targets))), sorted_features_targets[:int(0.75 * len(sorted_features_targets))], color=data[data_keys]['color'], alpha=0.25)
+        inset_ax_features.bar(
+            x=range(int(x_ratio_zoom * len(sorted_features))),
+            height=sorted_features[:int(x_ratio_zoom * len(sorted_features))],
+            color=data[data_keys]['color'], alpha=0.25
+        )
+        inset_ax_targets.bar(
+            x=range(int(x_ratio_zoom * len(sorted_features_targets))),
+            height=sorted_features_targets[:int(x_ratio_zoom * len(sorted_features_targets))],
+            color=data[data_keys]['color'], alpha=0.25
+        )
 
         feature_data_list.append(features)
         target_data_list.append(features_targets)
@@ -411,13 +408,13 @@ def dist_volume_voronoi(data, volume_voronoi):
         legend_info_features.append(f"{data[data_keys]['name']}\n  median: {median_features:.3e}\n  std: {std_features:.3e}\n  n_outliers: {n_outliers_features}")
         legend_info_targets.append(f"{data[data_keys]['name']}\n  median: {median_targets:.3e}\n  std: {std_targets:.3e}\n  n_outliers: {n_outliers_targets}")
 
-    def customize_boxplot(ax, data_list, labels, colors):
-        boxplots = ax.boxplot(data_list, labels=labels, patch_artist=True, medianprops=dict(color='black'))
+    def customize_boxplot(ax, data_list, colors):
+        boxplots = ax.boxplot(data_list, patch_artist=True, medianprops=dict(color='black'))
         for patch, color in zip(boxplots['boxes'], colors):
             patch.set_facecolor(color)
             patch.set_alpha(0.5)
+        ax.set_xticks([])
         ax.grid(True)
-        ax.set_xticklabels(labels, rotation=45)
 
         # Determine the ylim to show IQR and highest whisker
         data_concat = np.concatenate(data_list)
@@ -430,8 +427,13 @@ def dist_volume_voronoi(data, volume_voronoi):
     feature_colors = [data[data_keys]['color'] for data_keys in data.keys()]
     target_colors = [data[data_keys]['color'] for data_keys in data.keys()]
 
-    customize_boxplot(inset_ax_features_box, feature_data_list, feature_labels, feature_colors)
-    customize_boxplot(inset_ax_targets_box, target_data_list, target_labels, target_colors)
+    customize_boxplot(inset_ax_features_box, feature_data_list, feature_colors)
+    customize_boxplot(inset_ax_targets_box, target_data_list, target_colors)
+    
+    # Set y-axis lim for inset bar plot
+    if not is_same_size_interest:
+        inset_ax_features.set_ylim(0, max(all_features_data) * 0.01)
+        inset_ax_targets.set_ylim(0, max(all_targets_data) * 0.01)
 
     axes[0, 0].set_title('Volume of Voronoï Cell in Features Space (Interest Points)')
     axes[0, 0].legend().set_visible(False)

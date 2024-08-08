@@ -86,7 +86,7 @@ class DataTreatment:
         res = res[~error_mask]
 
         # Step 3: Fill out-of-bounds targets with fixed values
-        res = self.fill_outliers_with_fixed_value(
+        res = self.fill_outliers_with_fixed_value(  # TODO yasser: why fill outliers with minimums instead of removing.
             outliers_mask=outliers["out_of_bounds_tar"],
             df=res
         )

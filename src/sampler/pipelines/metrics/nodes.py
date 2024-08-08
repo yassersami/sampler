@@ -102,6 +102,7 @@ def get_metrics(
         scaled_data = pd.DataFrame(treatment.scaler.transform(XY), columns=features+targets)
         interest_asvd = ASVD(scaled_data, features, targets)
         interest_asvd_scores[key] = interest_asvd.compute_scores()
+
         # Get Voronoi volume
         volume_voronoi[key] = {
             "features": np.array([0]*n_interest[key]),
@@ -109,14 +110,14 @@ def get_metrics(
         }
         if params_voronoi['compute_voronoi']['features']:
             volume_voronoi[key]['features'] = get_volume_voronoi(
-                    scaled_data_interest_f,
-                    len(features),tol=params_voronoi['tol'], isFilter=params_voronoi['isFilter']
-                )
+                scaled_data_interest_f,
+                len(features),tol=params_voronoi['tol'], isFilter=params_voronoi['isFilter']
+            )
         if params_voronoi['compute_voronoi']['features_targets']:
             volume_voronoi[key]['features_targets'] = get_volume_voronoi(
-                    np.hstack([scaled_data_interest_f, scaled_data_interest_t]),
-                    len(features+targets),tol=params_voronoi['tol'], isFilter=params_voronoi['isFilter']
-                )
+                np.hstack([scaled_data_interest_f, scaled_data_interest_t]),
+                len(features+targets),tol=params_voronoi['tol'], isFilter=params_voronoi['isFilter']
+            )
 
     return dict(n_interest=n_interest, volume=volume, total_asvd_scores=total_asvd_scores, interest_asvd_scores=interest_asvd_scores, volume_voronoi=volume_voronoi)
 
@@ -151,7 +152,7 @@ def plot_metrics(
     features_dic = names['features']
     features = features_dic['str']
     targets = names['targets']['str']
-    asvd_metrics_to_plot = ['augmentation', 'rsd_x', 'rsd_xy', 'rsd_augm']
+    asvd_metrics_to_plot = ['augmentation', 'rsd_x', 'rsd_xy', 'rsd_augm', 'riqr_x', 'riqr_xy']
 
     targets_volume = None  # TODO yasser: compute covered area on targets space
     # targets_volume = {k: 10000 for k in data.columns}

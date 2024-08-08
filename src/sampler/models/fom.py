@@ -75,7 +75,7 @@ class GPSampler:
         """
         if len(self.ignored) == 0:
             return False
-        # TODO yasser: instead of a cube of 1eself.decimals why not set a sphere where r=(gp_std_relative > 20% or 5%)
+        # TODO yasser: instead of a cube of 1e(-self.decimals) why not set a sphere where r=(gp_std_relative > 20% or 5%)
         point_rounded = np.round(point.ravel(), self.decimals)
         ignored_rounded = np.round(np.array([*self.ignored]), self.decimals)
 
