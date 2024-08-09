@@ -67,6 +67,7 @@ def create_pipeline(**kwargs) -> Pipeline:
         node(
             func=plot_metrics,
             inputs=dict(
+                env_name='params:env_name',
                 data='scaled_exp_data',
                 names='params:names',
                 region='scaled_region',
@@ -76,7 +77,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 interest_asvd_scores='interest_asvd_scores',
                 volume_voronoi='volume_voronoi',
             ),
-            outputs='metrics_plots'
+            outputs=None,
             # name='plot_metrics'
         )
     ])

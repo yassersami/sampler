@@ -17,6 +17,9 @@ from sampler.pipelines.metrics.volume import covered_space_bound
 from sampler.pipelines.metrics.voronoi import get_volume_voronoi
 import sampler.pipelines.metrics.graphics_metrics as gm
 
+import os
+import matplotlib.pyplot as plt
+
 
 
 def prepare_data_metrics(
@@ -141,6 +144,7 @@ def scale_data_for_plots(data: Dict, features: List[str], targets: List[str], ta
 
 
 def plot_metrics(
+    env_name: str,
     data: Dict, names: Dict, region: Dict,
     ignition_points: Dict, volume: Dict,
     total_asvd_scores: Dict[str, Dict[str, float]],
@@ -170,16 +174,36 @@ def plot_metrics(
     interest_asvd_plot = gm.plot_asvd_scores(interest_asvd_scores, asvd_metrics_to_plot)
     voronoi_plot = gm.dist_volume_voronoi(data, volume_voronoi)
 
-    # Saving dictionary of plots
     plots_dict = {
-        "features_2d.png": features_2d,
-        "violin_plot.png": violin_plot,
-        "targets_kde.png": kde_plot,
-        # "pair_plot.png": pair_plot,
-        **{f'features_targets_{k}.png': v for k, v in feat_tar_dict.items()},
-        "ASVD_all.png": total_asvd_plot,
-        "ASVD_interest.png": interest_asvd_plot,
-        "volume_voronoi.png": voronoi_plot
+        "features_2d": features_2d,
+        "violin_plot": violin_plot,
+        "targets_kde": kde_plot,
+        # "pair_plot": pair_plot,
+        **{f'features_targets_{k}': v for k, v in feat_tar_dict.items()},
+        "ASVD_all": total_asvd_plot,
+        "ASVD_interest": interest_asvd_plot,
+        "volume_voronoi": voronoi_plot
     }
     plots_dict = {f'{i+1:02d}_{k}': v for i, (k, v) in enumerate(plots_dict.items())}
-    return plots_dict
+
+    plots_paths_png = {}
+    plots_paths_svg = {}
+
+    output_dir_png = f"data/08_reporting/{env_name}/png_outputs/"
+    output_dir_svg = f"data/08_reporting/{env_name}/svg_outputs/"
+    os.makedirs(output_dir_png, exist_ok=True)
+    os.makedirs(output_dir_svg, exist_ok=True)
+    
+    for plot_name, plot in plots_dict.items():
+        png_path = os.path.join(output_dir_png, f"{plot_name}.png")
+        svg_path = os.path.join(output_dir_svg, f"{plot_name}.svg")
+
+        plot.savefig(png_path, format='png')
+        plot.savefig(svg_path, format='svg')
+        
+        plots_paths_png[plot_name] = png_path
+        plots_paths_svg[plot_name] = svg_path
+        
+        plt.close(plot)
+    
+    return None
