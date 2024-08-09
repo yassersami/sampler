@@ -6,13 +6,14 @@ from datetime import datetime
 import pandas as pd
 import numpy as np
 from multiprocessing import Queue
-from typing import List, Dict, Tuple, Callable
+from typing import List, Dict, Tuple, Callable, Union
 
 import optuna
 
 from sampler.common.data_treatment import DataTreatment
+from sampler.models.wrapper_for_0d import SimulationProcessor
 from sampler.common.storing import set_history_folder
-import sampler.pipelines.sao_optim.aux_func as aux
+from sampler.pipelines.sao_optim.aux_func import linear_tent, store_df
 
 
 RANDOM_STATE = 42
@@ -25,8 +26,7 @@ def sao_optim_from_simulator(
         features: List[str],
         targets: List[str],
         additional_values: List[str],
-        max_size: int,
-        batch_size: int,
+        run_condition: Dict[str, Union[bool, int]],
         sao_history_path: str,
         simulator_env: Dict
 ):
@@ -35,12 +35,18 @@ def sao_optim_from_simulator(
     for optimizer to search.
 
     '''
+    max_size, batch_size = run_condition['max_size'], run_condition['batch_size']
+
     # Chose the simulation function that will be adapted for optimizer
-    f_sim = set_f_sim(treatment, features, targets, additional_values, batch_size, simulator_env)
+    simulator = SimulationProcessor(
+        features=features, targets=targets, additional_values=additional_values,
+        treatment=treatment, n_proc=batch_size, simulator_env=simulator_env
+    )
+    f_sim = set_f_sim(simulator)
     # Set filter function (score function) that will be optimizer objective
     f_filter = set_filter(treatment)
     # Set folder where to store explored samples during optimization
-    set_history_folder(sao_history_path, should_rename=True)
+    set_history_folder(sao_history_path, should_rename=False)
     # Set the objective function for the optimizer
     objective = set_objective_optuna(
         f_sim, f_filter, features, targets, additional_values, treatment, sao_history_path
@@ -61,18 +67,37 @@ def sao_optim_from_simulator(
 
 
 def set_f_sim(
-    treatment: DataTreatment, features: List[str], targets: List[str],
-    additional_values: List[str], batch_size: int, simulator_env: Dict
+    simulator: SimulationProcessor
 ) -> Callable[[np.ndarray, float], Tuple[np.ndarray, np.ndarray]]:
-    '''
-    Simulation function must return y_sim (targets) and additional interesting values
-    y_doi (doi = data of interest). Both 2D arrays.
-    '''
-    def f_sim(x, size_optim): return aux.sao_run_simulator(
-        new_x=x, features=features, targets=targets,
-        additional_values=additional_values, treatment=treatment, real_x=False,
-        simulator_env=simulator_env, index=size_optim, n_proc=batch_size
-    )
+    """
+    Create a simulation function that processes data and handles NaN values. 
+    As study.direction is 'minimize', in case of an error, set the value to a large value
+    to indicate failure.
+    There is also the possibility to fill NaN values with scaled default values using:
+        default_target_values = scaler.transfrom(simulator.treatment.defaults)
+
+    Parameters:
+    - simulator (SimulationProcessor): The simulation processor instance.
+
+    Returns:
+    - Callable[[np.ndarray, float], Tuple[np.ndarray, np.ndarray]]: A function that takes
+    input data and size, runs the simulation, and returns processed target and additional
+    values.
+    """
+    def f_sim(x: np.ndarray, size_optim: float) -> Tuple[np.ndarray, np.ndarray]:
+        # Run simulation, new_df is now scaled
+        new_df = simulator.process_data(x, real_x=False, index=size_optim)
+
+        # Fill NaN values in targets with large default values for error handling
+        large_scaled_target_value = 10
+        new_df = new_df.fillna({k: large_scaled_target_value for k in simulator.targets})
+
+        # Return scaled targets and additional_values
+        y_sim = new_df[simulator.targets].values
+        y_doi = new_df[simulator.additional_values].values
+
+        return y_sim, y_doi
+
     return f_sim
 
 
@@ -91,7 +116,7 @@ def set_filter(
 
     def f_filter(y: np.ndarray) -> np.ndarray:
         # Best value is =1
-        y_multi_obj = aux.linear_tent(y, L_normalized, U_normalized, slope=direction * 2.0)
+        y_multi_obj = linear_tent(y, L_normalized, U_normalized, slope=direction * 10)
         y_obj = y_multi_obj.sum(axis=1)/y.shape[1]
         return y_obj
 
@@ -146,7 +171,7 @@ def set_objective_optuna(
             f'[{str(size_optim).zfill(3)}-{str(size_optim+1).zfill(3)}]'
             # + '_' + datetime.now().strftime("%m-%d_%H-%M-%S")
         )
-        aux.store_df(
+        store_df(
             df=new_df,
             history_path=sao_history_path,
             file_name=file_name

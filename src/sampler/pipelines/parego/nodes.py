@@ -15,7 +15,7 @@ import numpy as np
 from sampler.common.data_treatment import DataTreatment, initialize_dataset
 from sampler.common.storing import parse_results
 from sampler.models.fom import SurrogateGP
-from sampler.models.wrapper_for_0d import SimulationProcessor  # get_values_from_simulator
+from sampler.models.wrapper_for_0d import SimulationProcessor
 
 from scipy.stats import norm
 from sko.GA import GA
@@ -81,20 +81,20 @@ def run_parego(
         new_df['iteration'] = iteration
 
         res = pd.concat([res, new_df], axis=0, ignore_index=True) # Concatenate new values to original results DataFrame
-        yield parse_results(res, n_new_samples=len(new_df))
+        yield parse_results(res, n_new_samples=new_df.shape[0])
         
         # Update stopping conditions
         n_new_samples = new_df.shape[0]
         n_new_inliers = new_df.dropna(subset=targets).shape[0]
         n_new_interest = new_df[new_df['quality'] == 'interest'].shape[0]
     
-        n_total += new_df.shape[0]
+        n_total += n_new_samples
         n_inliers += n_new_inliers
         n_interest += n_new_interest
         iteration += 1
 
         # Update progress bar based on the condition
-        progress_bar.update(n_new_samples if run_until_max_size else n_new_interest)
+        progress_bar.update(n_new_inliers if run_until_max_size else n_new_interest)
 
         # Determine the end condition
         end_condition = (n_inliers < max_size) if run_until_max_size else (n_interest < n_interest_max)

@@ -159,17 +159,17 @@ class DataTreatment:
         
         return df
 
-    def define_interest(self, data: pd.DataFrame):
+    def classify_scaled_interest(self, data: pd.DataFrame):
         aux_df = pd.DataFrame()
-        for key, val in self.interest_region.items():
+        for key, val in self.scaled_interest_region.items():
             aux_df[key] = (val[0] < data[key]) & (data[key] < val[1])
         interest_cond = aux_df.all(axis=1)
         data["quality"] = np.where(interest_cond, "interest", "not_interesting")
         return data
 
-    def classify_scaled_interest(self, data: pd.DataFrame):
+    def define_interest(self, data: pd.DataFrame):
         aux_df = pd.DataFrame()
-        for key, val in self.scaled_interest_region.items():
+        for key, val in self.interest_region.items():
             aux_df[key] = (val[0] < data[key]) & (data[key] < val[1])
         interest_cond = aux_df.all(axis=1)
         data["quality"] = np.where(interest_cond, "interest", "not_interesting")

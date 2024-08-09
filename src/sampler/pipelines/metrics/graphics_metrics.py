@@ -233,21 +233,21 @@ def plot_feat_tar(data: Dict, features: List[str], targets: List[str], only_inte
 
 
 def plot_asvd_scores(
+    data: Dict[str, Dict[str, Union[str, pd.DataFrame]]],
     experiments: Dict[str, Dict[str, float]], 
     metrics_to_plot: Union[List[str], None] = None,
     figsize: Tuple[int, int] = (15, 10)
 ):
     """
-    Plot scores for different experiments using a grouped bar plot and display remaining metrics in a table.
+    Plot scores for different experiments using a grouped bar plot and display remaining
+    metrics in a table.
 
     Parameters:
-    experiments (Dict[str, Dict[str, float]]): A dictionary where keys are experiment names
-                                               and values are dictionaries of scores.
-    metrics_to_plot (List[str]): List of metric names to plot in the bar chart. If None, all metrics are plotted.
-    figsize (Tuple[int, int]): Size of the figure (width, height) in inches.
-
-    Returns:
-    matplotlib.figure.Figure: The created figure object.
+    - experiments (Dict[str, Dict[str, float]]): A dictionary where keys are experiment
+    names and values are dictionaries of scores.
+    - metrics_to_plot (List[str]): List of metric names to plot in the bar chart.
+    If None, all metrics are plotted.
+    - figsize (Tuple[int, int]): Size of the figure (width, height) in inches.
     """
     exp_names = list(experiments.keys())
     
@@ -280,7 +280,10 @@ def plot_asvd_scores(
     for i, exp_name in enumerate(exp_names):
         values = [experiments[exp_name].get(metric, np.nan) for metric in metrics_to_plot]
         position = index + i * bar_width
-        rects = ax_bar.bar(position, values, bar_width, label=exp_name, alpha=0.8)
+        rects = ax_bar.bar(
+            position, values, bar_width, label=exp_name, alpha=0.8,
+            color=data[exp_name]['color']
+        )
 
         # Add value labels on top of each bar
         for rect in rects:

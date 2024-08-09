@@ -94,12 +94,14 @@ def run_fake_simulator(x_real, features, targets, additional_values, scaler, spi
     )
     # Get targets in real space (not in sclaed one)
     new_points[features + targets] = scaler.inverse_transform(new_points[features + targets].values)
-    if spice_on:
-        # * Add some spice to check how outliers and errors are handled
+
+    # Add some spice to check how outliers and errors are handled
+    if spice_on and new_points.shape[0] >= 4:
         new_points.loc[0, features[0]] = 1e-3  # feature out of bounds
         new_points.loc[1, targets] = [45e6, 6000]  # inlier targets
         new_points.loc[2, targets[0]] = 1e20  # target out of bounds
         new_points.loc[3, targets[0]] = np.nan  # failed simulation causing error (missing value)
+
     return new_points
 
 

@@ -63,8 +63,8 @@ def irbs_sampling(
         # % Add more data than features, targets and additional_values -----------------
 
         # Add multi_objective optimization scores
-        # ignore_index=False to keep columns names 
-        # join='inner' because scores can have more rows than new_df
+        # * ignore_index=False to keep columns names 
+        # * join='inner' because scores can have more rows than new_df
         new_df = pd.concat([new_df, scores], axis=1, join='inner', ignore_index=False)
 
         # Add model prediction to selected (already simulated) points
@@ -81,20 +81,20 @@ def irbs_sampling(
 
         # Concatenate new values to original results DataFrame
         res = pd.concat([res, new_df], axis=0, ignore_index=True)
-        yield parse_results(res, n_new_samples=len(new_df))
+        yield parse_results(res, n_new_samples=new_df.shape[0])
         
         # Update stopping conditions
         n_new_samples = new_df.shape[0]
         n_new_inliers = new_df.dropna(subset=targets).shape[0]
         n_new_interest = new_df[new_df['quality'] == 'interest'].shape[0]
     
-        n_total += new_df.shape[0]
+        n_total += n_new_samples
         n_inliers += n_new_inliers
         n_interest += n_new_interest
         iteration += 1
 
         # Update progress bar based on the condition
-        progress_bar.update(n_new_samples if run_until_max_size else n_new_interest)
+        progress_bar.update(n_new_inliers if run_until_max_size else n_new_interest)
 
         # Determine the end condition
         end_condition = (n_inliers < max_size) if run_until_max_size else (n_interest < n_interest_max)

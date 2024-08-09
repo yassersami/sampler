@@ -18,7 +18,6 @@ from sampler.pipelines.metrics.voronoi import get_volume_voronoi
 import sampler.pipelines.metrics.graphics_metrics as gm
 
 
-
 def prepare_data_metrics(
         experiments: Dict, names: Dict, features: List[str], targets: List[str],
         additional_values: List[str], treatment: DataTreatment
@@ -28,21 +27,24 @@ def prepare_data_metrics(
     t_r = names["targets"]["str"]
     targets_prediction = [f'{t}_hat' for t in targets]
     renaming_cols = {v1: v2 for v1, v2 in zip(features + targets, f_r + t_r)}
+    # * TODO: Don't use magic number 1e6, find a way to generalize
     # region = {
-    #     # TODO: Don't use magic number 1e6, find a way to generalize
     #     t_r[0]: [v/1e6 for v in interest_region[targets[0]]],
     #     t_r[1]: interest_region[targets[1]]
     # }
     for key, value in experiments.items():
         if value["scale"] == "classify":
+            # * TODO: Solve this:
+            #  ParserWarning: Falling back to the 'python' engine because the 'c' engine                
+            #  does not support regex separators (separators > 1 char and different from                
+            #  '\s+' are interpreted as regex); you can avoid this warning by specifying                
+            #  engine='python'.
+            # TODO yasser: prepare_benchmark is now replaced by case of value["scale"] == "read"
             df = prepare_benchmark(
-                df=pd.read_csv(value["path"],
-                               sep='[; ,]', # TODO: Solve this:
-                                            #  ParserWarning: Falling back to the 'python' engine because the 'c' engine                
-                                            #  does not support regex separators (separators > 1 char and different from                
-                                            #  '\s+' are interpreted as regex); you can avoid this warning by specifying                
-                                            #  engine='python'.
-                               usecols=features+targets+additional_values),
+                df=pd.read_csv(
+                    value["path"], sep='[; ,]',
+                    usecols=features + targets + additional_values
+                ),
                 f=features, t=targets, treatment=treatment
             ).rename(columns=renaming_cols)
         elif value["scale"] == "real-inverse":
@@ -61,7 +63,13 @@ def prepare_data_metrics(
             sys.exit(1)
 
         data[key] = create_dict(df=df, name=value["name"], color=value["color"])
-    return dict(exp_data=data, features=f_r, targets=t_r, targets_prediction=targets_prediction)
+    return dict(
+        exp_data=data,
+        features=f_r,
+        targets=t_r,
+        targets_prediction=targets_prediction
+    )
+
 
 def get_metrics(
         data: Dict, features: List[str], targets: List[str],
@@ -119,7 +127,13 @@ def get_metrics(
                 len(features+targets),tol=params_voronoi["tol"], isFilter=params_voronoi["isFilter"]
             )
 
-    return dict(n_interest=n_interest, volume=volume, total_asvd_scores=total_asvd_scores, interest_asvd_scores=interest_asvd_scores, volume_voronoi=volume_voronoi)
+    return dict(
+        n_interest=n_interest,
+        volume=volume,
+        total_asvd_scores=total_asvd_scores,
+        interest_asvd_scores=interest_asvd_scores,
+        volume_voronoi=volume_voronoi
+    )
 
 
 def scale_data_for_plots(data: Dict, features: List[str], targets: List[str], targets_prediction: List[str], scales: Dict, interest_region: Dict):
@@ -137,7 +151,10 @@ def scale_data_for_plots(data: Dict, features: List[str], targets: List[str], ta
     for region, target, target_scale in zip(interest_region.values(), targets, scales["targets"]):
         scaled_interest_region[target] = [v / target_scale for v in region]
 
-    return dict(scaled_data=data, scaled_region=scaled_interest_region)
+    return dict(
+        scaled_data=data,
+        scaled_region=scaled_interest_region
+    )
 
 
 def plot_metrics(
@@ -166,8 +183,8 @@ def plot_metrics(
     feat_tar_dict["all_int"] = gm.plot_feat_tar(data, features, targets, only_interest=True, title_extension='(only interest)')
     for k in data.keys():
         feat_tar_dict[k] = gm.plot_feat_tar({k: data[k]}, features, targets, only_interest=False)
-    total_asvd_plot = gm.plot_asvd_scores(total_asvd_scores, asvd_metrics_to_plot)
-    interest_asvd_plot = gm.plot_asvd_scores(interest_asvd_scores, asvd_metrics_to_plot)
+    total_asvd_plot = gm.plot_asvd_scores(data, total_asvd_scores, asvd_metrics_to_plot)
+    interest_asvd_plot = gm.plot_asvd_scores(data, interest_asvd_scores, asvd_metrics_to_plot)
     voronoi_plot = gm.dist_volume_voronoi(data, volume_voronoi)
 
     # Saving dictionary of plots

@@ -1,5 +1,5 @@
 import glob
-from typing import Dict, List
+from typing import Dict, List, Union
 
 import numpy as np
 import pandas as pd
@@ -26,15 +26,16 @@ def prepare_benchmark(df: pd.DataFrame, f: List[str], t: List[str], treatment: D
     return res
 
 
-def create_dict(df: pd.DataFrame, name: str, color: str) -> Dict:
+def create_dict(df: pd.DataFrame, name: str, color: str) -> Dict[str, Union[str, pd.DataFrame]]:
     return {
-            'name': name, 'color': color,
-            'interest': df[(df.quality == 'interest')],
-            'not_interesting': df[(df.quality == 'not_interesting')],
-            'inliers': df[(df.quality == 'interest') | (df.quality == 'not_interesting')],
-            'outliers': df[(df.quality != 'interest') & (df.quality != 'not_interesting')],
-            'df': df
-        }
+        'name': name,
+        'color': color,
+        'interest': df[(df.quality == 'interest')],
+        'not_interesting': df[(df.quality == 'not_interesting')],
+        'inliers': df[(df.quality == 'interest') | (df.quality == 'not_interesting')],
+        'outliers': df[(df.quality != 'interest') & (df.quality != 'not_interesting')],
+        'df': df
+    }
 
 
 def prepare_new_data(

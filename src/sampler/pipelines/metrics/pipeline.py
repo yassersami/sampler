@@ -33,7 +33,6 @@ def create_pipeline(**kwargs) -> Pipeline:
             func=get_metrics,
             inputs=dict(
                 data='exp_data',
-                
                 features='features',  # These features and targets are not those of data columns
                 targets='targets',
                 treatment='treatment',

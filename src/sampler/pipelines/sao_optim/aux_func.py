@@ -1,47 +1,7 @@
 import pandas as pd
 import numpy as np
 import os
-from kedro.config import ConfigLoader
 from typing import List, Dict, Tuple
-
-from sampler.common.data_treatment import DataTreatment
-from sampler.common.storing import set_history_folder
-from sampler.models.wrapper_for_0d import run_simulation, run_fake_simulator
-
-
-def sao_run_simulator(
-        new_x: np.ndarray, features: List[str], targets: List[str], additional_values: List[str],
-        treatment: DataTreatment, real_x: bool, simulator_env: Dict, index: int , n_proc: int = 1
-) -> Tuple[np.ndarray, np.ndarray]:
-
-    if real_x:
-        x_real = new_x
-    else:
-        new_xy = np.column_stack((new_x, np.zeros((new_x.shape[0], len(targets)))))
-        x_real = treatment.scaler.inverse_transform(new_xy)[:, :len(features)]
-    real_df = pd.DataFrame(x_real[:, :len(features)], columns=features)
-
-    # Create map_dir where the simulation files are stored
-    set_history_folder(simulator_env['map_dir'], should_rename=False)
-
-    if simulator_env['use']:
-        results_df = run_simulation(
-            x=real_df, n_proc=n_proc, index=index, map_dir=simulator_env['map_dir']
-        )
-        new_points = pd.concat([real_df, results_df], axis=1)
-    else:
-        new_points = run_fake_simulator(
-            x_real, features, targets, additional_values, treatment.scaler
-        )
-    
-    default_target_values = treatment.defaults  # dict of default values for targets
-    new_points = new_points.fillna({k: v for k, v in default_target_values.items() if k in targets})
-
-    y_sim = new_points[targets].values
-    y_sim = treatment.scaler.transform_targets(y_sim.reshape(-1, len(targets)))
-
-    y_doi = new_points[additional_values].values
-    return y_sim, y_doi
 
 
 def store_df(df: pd.DataFrame, history_path: str, file_name: str):
