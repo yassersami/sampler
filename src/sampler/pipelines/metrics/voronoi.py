@@ -157,8 +157,17 @@ def get_volume_voronoi(points: np.ndarray, dim: int, tol: float=1e-3, isFilter: 
         for i, region in enumerate(vertices_regions_inside):
             vertices_regions_inside[i] = filter(region, tol, dim)
 
-
-    l_volume = np.array([ConvexHull(reg, qhull_options='Q12 Qc Qs').volume for reg in vertices_regions_inside]) # Add some parameters to compute volume and avoid errors
+    # l_volume = np.array([ConvexHull(reg, qhull_options='Q12 Qc Qs').volume for reg in vertices_regions_inside]) # ? Add some parameters to compute volume and avoid errors
+    l_volume = np.zeros(len(vertices_regions_inside))
+    for i, reg in enumerate(vertices_regions_inside):
+        if len(reg) > dim:
+            try:
+                l_volume[i] = ConvexHull(reg, qhull_options='Q12 Qc Qs').volume
+            except Exception as e:
+                print(f"Error in computing volume of region {i} : {e}")
+                l_volume[i] = 0
+        else:
+            l_volume[i] = 0
     print("Quantity of error volume : ", 1-np.sum(l_volume) )
     return l_volume
 
