@@ -1,13 +1,14 @@
 from datetime import datetime
 import json
 import os
+import numpy as np
 import pathlib
 from pandas.api.types import is_float_dtype
-import PIL
-import plotly.express as px
 import plotly.graph_objects as go
 # from plotly.subplots import make_subplots
 # from pprint import pprint
+# import PIL
+# import plotly.express as px
 
 
 def join_path(a, *p): return os.path.abspath(os.path.join(a, *p))
@@ -375,66 +376,55 @@ def plot_line(df, **kwargs):
     return fig
 
 
-def plot_image(path):
-    # Create figure
-    fig = go.Figure()
+def plot_gp_std_2d(model, X_train: np.ndarray, target_idx=0, z_value=None, plot_type='surface'):
+    """
+    Plot the standard deviation of the Gaussian Process for a grid of points between 0 and 1.
 
-    # Constants
-    img_width = 300*3  # 1600
-    img_height = 300*3  # 900
-    scale_factor = 0.5
+    Parameters:
+    - model: Trained Gaussian Process model.
+    - X_train (np.ndarray): Training data.
+    - target_idx (int): Index of the target variable to plot.
+    - z_value (float): Fixed value for the third dimension. If None, defaults to the mean of the first two training points.
+    - plot_type (str): Type of plot ('surface' or 'contour').
+    """
+    n = 100
+    x = np.linspace(0, 1, n)
+    y = np.linspace(0, 1, n)
+    X, Y = np.meshgrid(x, y)
+    Z = np.zeros((n, n))
 
-    # Add invisible scatter trace.
-    # This trace is added to help the autoresize logic work.
-    fig.add_trace(
-        go.Scatter(
-            x=[0, img_width * scale_factor],
-            y=[0, img_height * scale_factor],
-            mode="markers",
-            marker_opacity=0
-        )
-    )
+    # Determine z_value if not provided
+    if z_value is None:
+        z_value = X_train[:, 2].mean()
 
-    # Configure axes
-    fig.update_xaxes(
-        visible=False,
-        range=[0, img_width * scale_factor]
-    )
+    # Calculate standard deviation for each grid point
+    for i in range(n):
+        for j in range(n):
+            _, y_std = model.predict(np.array([[X[i, j], Y[i, j], z_value]]), return_std=True)
+            Z[i, j] = y_std[0, target_idx]
 
-    fig.update_yaxes(
-        visible=False,
-        range=[0, img_height * scale_factor],
-        # the scaleanchor attribute ensures that the aspect ratio stays
-        # constant
-        scaleanchor="x"
-    )
+    # Create the plot
+    if plot_type == 'surface':
+        fig = go.Figure(data=[go.Surface(z=Z, x=x, y=y)])
+        # Add training points
+        x_train_2d = X_train[:, :2]
+        dummy_train = np.hstack((x_train_2d, np.full((x_train_2d.shape[0], 1), z_value)))
+        _, y_std_train = model.predict(dummy_train, return_std=True)
+        z_train = y_std_train[:, target_idx]
+        fig.add_trace(go.Scatter3d(
+            x=x_train_2d[:, 0], y=x_train_2d[:, 1], z=z_train, mode='markers',
+            marker=dict(color='green', size=3), name='Training Points'
+        ))
+        fig.update_layout(scene=dict(xaxis_title='X', yaxis_title='Y', zaxis_title='Standard Deviation'))
+    elif plot_type == 'contour':
+        fig = go.Figure(data=go.Contour(z=Z, x=x, y=y, contours=dict(coloring='heatmap')))
+        fig.update_layout(coloraxis=dict(colorscale='Viridis'))
 
-    # Add image
-    pyLogo = PIL.Image.open(path)
-    fig.add_layout_image(
-        dict(
-            x=0,
-            sizex=img_width * scale_factor,
-            y=img_height * scale_factor,
-            sizey=img_height * scale_factor,
-            xref="x",
-            yref="y",
-            opacity=1.0,
-            layer="below",
-            sizing="stretch",
-            # source="https://raw.githubusercontent.com/michaelbabyn/plot_data/master/bridge.jpg",
-            source=pyLogo
-        )
-    )
+    fig.update_layout(legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01))
+    fig.update_layout(height=800, margin=dict(l=0, r=0, b=0, t=0))
+    fig.show()
 
-    # Configure other layout
-    fig.update_layout(
-        width=img_width * scale_factor,
-        height=img_height * scale_factor,
-        margin={"l": 0, "r": 0, "t": 0, "b": 0},
-    )
-    # fig.show()
-    return fig
+    print("Done plotting.")
 
 
 # if __name__ == "__main__":

@@ -13,8 +13,8 @@ import pandas as pd
 import numpy as np
 
 from sampler.common.data_treatment import DataTreatment, initialize_dataset
-from sampler.common.storing import results
-from sampler.models.fom import GPSampler
+from sampler.common.storing import parse_results
+from sampler.models.fom import SurrogateGP
 from sampler.models.wrapper_for_0d import SimulationProcessor  # get_values_from_simulator
 
 from scipy.stats import norm
@@ -28,7 +28,7 @@ RANDOM_STATE = 42
 def run_parego(
         data: pd.DataFrame, treatment: DataTreatment,
         features: List[str], targets: List[str], additional_values: List[str],
-        simulator_env: Dict, run_condition: Dict, llambda_s: int=100,
+        simulator_env: Dict, run_condition: Dict, llambda_s: int, num_generations: int, 
         tent_slope: float=10, experience: str="parEGO_maxIpr"
 ):
     max_size, n_interest_max, run_until_max_size, batch_size = run_condition['max_size'], run_condition['n_interest_max'], run_condition['run_until_max_size'], run_condition['batch_size']
@@ -43,31 +43,31 @@ def run_parego(
         features=features, targets=targets, additional_values=additional_values,
         treatment=treatment, n_proc=batch_size, simulator_env=simulator_env
     )
+    data = simulator.adapt_targets(data)
 
     res = initialize_dataset(data=data, treatment=treatment)
-    yield results(res, size=len(res), initialize=True)
+    yield parse_results(res, n_new_samples=len(res))
 
-    size = 0
+    n_total = 0  # counting all simulations
+    n_inliers = 0  # counting only inliers
+    n_interest = 0  # counting only interesting inliers
     iteration = 0
-    n_new_interest = 0
-    end_condition = size < max_size if run_until_max_size else n_new_interest < n_interest_max 
+    end_condition = n_inliers < max_size if run_until_max_size else n_interest < n_interest_max
     progress_bar = tqdm(total=max_size, dynamic_ncols=True) if run_until_max_size else tqdm(total=n_interest_max, dynamic_ncols=True) # Initialize tqdm progress bar with estimated time remaining
-    print(f"Iteration {iteration:03} - Size {size} - New interest {n_new_interest}")
+    print(f"Iteration {iteration:03} - Total size {n_total} - Inliers size {n_inliers} - Interest count {n_interest}")
     while end_condition:
-        x_pop = res[features].values
-        y_pop = res[targets].values
+        clean_res = res.dropna(subset=targets)
+        x_pop = clean_res[features].values
+        y_pop = clean_res[targets].values
         llambda = lambda_gen.choose_uniform_lambda()
 
         dace.update_model(x_pop, y_pop, llambda) # Prepare train data and train GP
-        new_x = EvolAlg(dace, x_pop, batch_size=batch_size) # Search new candidates to add to res dataset
-        new_df = simulator.process_data(new_x, real_x=False, index=size) # Launch time expensive simulations
+        new_x = EvolAlg(dace, x_pop, num_generations=num_generations, batch_size=batch_size) # Search new candidates to add to res dataset
+        new_df = simulator.process_data(new_x, real_x=False, index=n_total) # Launch time expensive simulations
         dace.model.add_ignored_points(new_df)
 
         print(f'Round {iteration:03} (continued): simulation results' + '-'*49)
-        print(f'run_parego -> Got {len(new_df)} new samples after simulation:\n {new_df}')
-        if len(new_df) == 0:
-            warnings.warn("run_parego -> No new data was obtained from simulator !")
-            continue
+        print(f'run_parego -> New samples after simulation:\n {new_df}')
 
         # Add interesting informations about samples choice
         prediction = dace.model.predict(new_df[features].values)
@@ -81,27 +81,33 @@ def run_parego(
         new_df['iteration'] = iteration
 
         res = pd.concat([res, new_df], axis=0, ignore_index=True) # Concatenate new values to original results DataFrame
+        yield parse_results(res, n_new_samples=len(new_df))
         
-        size += len(new_df)
-        n_new_interest += len(new_df[new_df['quality'] == 'interest'])
-        iteration+=1
+        # Update stopping conditions
+        n_new_samples = new_df.shape[0]
+        n_new_inliers = new_df.dropna(subset=targets).shape[0]
+        n_new_interest = new_df[new_df['quality'] == 'interest'].shape[0]
+    
+        n_total += new_df.shape[0]
+        n_inliers += n_new_inliers
+        n_interest += n_new_interest
+        iteration += 1
 
-        if run_until_max_size:
-            progress_bar.update(len(new_df))
-        else:
-            progress_bar.update(len(new_df[new_df['quality'] == 'interest']))
+        # Update progress bar based on the condition
+        progress_bar.update(n_new_samples if run_until_max_size else n_new_interest)
 
-        end_condition = size < max_size if run_until_max_size else n_new_interest < n_interest_max
-        print(f"Iteration {iteration} - Size {size} - New interest {n_new_interest}")
-        yield results(res, size=len(new_df))
+        # Determine the end condition
+        end_condition = (n_inliers < max_size) if run_until_max_size else (n_interest < n_interest_max)
+
+        # Print iteration details
+        print(f"Iteration {iteration:03} - Total size {n_total} - Inliers size {n_inliers} - Interest count {n_interest}")
 
         # * Print some informations
         # iter_interest_count = (new_df['quality']=='interest').sum()
         # total_interest_count = (res['quality']=='interest').sum()
-        # print(f'run_parego -> Final batch data that wil be stored:\n {new_df}')
-        # print(f'run_parego -> [batch  report] new points: {len(new_df)}, interesting points: {iter_interest_count}')
-        # print(f'run_parego -> [global report] progress: {size}/{max_size}, interesting points: {total_interest_count}')
-    progress_bar.close()
+        # print(f'irbs_sampling -> Final batch data that wil be stored:\n {new_df}')
+        # print(f'irbs_sampling -> [batch  report] new points: {n_new_samples}, interesting points: {iter_interest_count}')
+        # print(f'irbs_sampling -> [global report] progress: {n_inliers}/{max_size}, interesting points: {total_interest_count}')
 
 
 class DACEModel:
@@ -155,8 +161,8 @@ class DACEModel:
             self.model_targets = self.targets
 
         # Train GP model
-        self.model = GPSampler(features=self.features, targets=self.model_targets)
-        self.model.fit(x_train=x_pop, y_train=y_pop)
+        self.model = SurrogateGP(features=self.features, targets=self.model_targets)
+        self.model.fit(X_train=x_pop, y_train=y_pop)
 
         # Set y_max if maximizing improvement
         if self.use_maxIpr:
@@ -266,7 +272,7 @@ def tchebychev(y_pop: np.array, llambda: List[float]):
     return y_pop_tchebychev
 
 
-def EvolAlg(dace: DACEModel, x_pop: np.array, num_generations: int=10000, population_size: int=20, batch_size: int=1):
+def EvolAlg(dace: DACEModel, x_pop: np.array, num_generations: int=1000, population_size: int=20, batch_size: int=1):
     dimensions = x_pop.shape[1]
 
     def fitness_function(x):
@@ -287,6 +293,7 @@ def EvolAlg(dace: DACEModel, x_pop: np.array, num_generations: int=10000, popula
             lb=[0] * dimensions,  # Lower bounds
             ub=[1] * dimensions)  # Upper bounds
 
+    print(f'EvolAlg -> Searching for good candidates using the fitness function through {num_generations} generations...')
     ga.run()
     population = ga.chrom2x(ga.Chrom)
     fitness = np.array([fitness_function(ind) for ind in population])
@@ -295,7 +302,7 @@ def EvolAlg(dace: DACEModel, x_pop: np.array, num_generations: int=10000, popula
     best_indices = sorted_indices[:batch_size]
     best_solutions = population[best_indices]
     
-    print("EvolAlg -> Selected points to be input to the simulator:\n", best_solutions)
+    print('EvolAlg -> Selected points to be input to the simulator:\n', best_solutions)
 
     return best_solutions
 

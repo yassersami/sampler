@@ -7,6 +7,7 @@ from kedro.pipeline import Pipeline, node, pipeline
 
 from sampler.pipelines.metrics.nodes import prepare_data_metrics, get_metrics, scale_data_for_plots, plot_metrics
 
+# TODO yasser: Now that irbs stores also outliers with NaNs on targets pipeline should consider cleaning rows with target NaN values.
 
 def create_pipeline(**kwargs) -> Pipeline:
     return pipeline([

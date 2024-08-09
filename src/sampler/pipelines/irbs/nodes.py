@@ -10,7 +10,7 @@ import warnings
 import pandas as pd
 
 from sampler.common.data_treatment import DataTreatment, initialize_dataset
-from sampler.common.storing import results
+from sampler.common.storing import parse_results
 from sampler.models.wrapper_for_0d import SimulationProcessor  # get_values_from_simulator
 from sampler.models.fom import FigureOfMerit
 
@@ -40,27 +40,25 @@ def irbs_sampling(
     data = simulator.adapt_targets(data)
 
     res = initialize_dataset(data=data, treatment=treatment) # Set dataset to complete with adaptive sampling
-    yield results(res, size=len(res), initialize=True)
+    yield parse_results(res, n_new_samples=len(res))
 
-    size = 0
+    n_total = 0  # counting all simulations
+    n_inliers = 0  # counting only inliers
+    n_interest = 0  # counting only interesting inliers
     iteration = 0
-    n_new_interest = 0
-    end_condition = size < max_size if run_until_max_size else n_new_interest < n_interest_max 
-    progress_bar = tqdm(total=max_size, dynamic_ncols=True) if run_until_max_size else tqdm(total=n_interest_max, dynamic_ncols=True) # Initialize tqdm progress bar with estimated time remaining
-    print(f"Iteration {iteration:03} - Size {size} - New interest {n_new_interest}")
+    end_condition = n_inliers < max_size if run_until_max_size else n_interest < n_interest_max 
+    progress_bar = tqdm(total=max_size, dynamic_ncols=True) if run_until_max_size else tqdm(total=n_interest_max, dynamic_ncols=True)  # Initialize tqdm progress bar with estimated time remaining
+    print(f"Iteration {iteration:03} - Total size {n_total} - Inliers size {n_inliers} - Interest count {n_interest}")
     while end_condition:
-        # Filter out rows with NaN target values for GP training
-        clean_res = res.dropna(subset=targets)
+        model.update(res)  # Set the new model that will be used in next iteration
 
-        model.fit(x_train=clean_res[features].values, y_train=clean_res[targets].values) # Set the new model that will be used in next iteration
+        new_x, scores = model.optimize(batch_size=batch_size, iters=opt_iters, n=opt_points)  # Search new candidates to add to res dataset
 
-        new_x, scores = model.optimize(batch_size=batch_size, iters=opt_iters, n=opt_points) # Search new candidates to add to res dataset
-
-        new_df = simulator.process_data(new_x, real_x=False, index=size) # Launch time expensive simulations
-        model.add_ignored_points(new_df)
+        new_df = simulator.process_data(new_x, real_x=False, index=n_total)  # Launch time expensive simulations
+        model.gp_surrogate.add_ignored_points(new_df)
 
         print(f'Round {iteration:03} (continued): simulation results' + '-'*49)
-        print(f'irbs_sampling -> Got {len(new_df)} new samples after simulation:\n {new_df}')
+        print(f'irbs_sampling -> New samples after simulation:\n {new_df}')
 
         # % Add more data than features, targets and additional_values -----------------
 
@@ -70,7 +68,7 @@ def irbs_sampling(
         new_df = pd.concat([new_df, scores], axis=1, join='inner', ignore_index=False)
 
         # Add model prediction to selected (already simulated) points
-        prediction = model.predict(new_df[features].values)
+        prediction = model.gp_surrogate.predict(new_df[features].values)
         prediction_cols = [f"pred_{t}" for t in targets]
         new_df[prediction_cols] = prediction if len(targets) > 1 else prediction.reshape(-1, 1)
 
@@ -83,24 +81,32 @@ def irbs_sampling(
 
         # Concatenate new values to original results DataFrame
         res = pd.concat([res, new_df], axis=0, ignore_index=True)
-        size += len(new_df)
-        n_new_interest += len(new_df[new_df['quality'] == 'interest'])
-        iteration+=1
+        yield parse_results(res, n_new_samples=len(new_df))
+        
+        # Update stopping conditions
+        n_new_samples = new_df.shape[0]
+        n_new_inliers = new_df.dropna(subset=targets).shape[0]
+        n_new_interest = new_df[new_df['quality'] == 'interest'].shape[0]
+    
+        n_total += new_df.shape[0]
+        n_inliers += n_new_inliers
+        n_interest += n_new_interest
+        iteration += 1
 
-        if run_until_max_size:
-            progress_bar.update(len(new_df))
-        else:
-            progress_bar.update(len(new_df[new_df['quality'] == 'interest']))
+        # Update progress bar based on the condition
+        progress_bar.update(n_new_samples if run_until_max_size else n_new_interest)
 
-        end_condition = size < max_size if run_until_max_size else n_new_interest < n_interest_max
-        print(f"Iteration {iteration} - Size {size} - New interest {n_new_interest}")
-        yield results(res, size=len(new_df))
+        # Determine the end condition
+        end_condition = (n_inliers < max_size) if run_until_max_size else (n_interest < n_interest_max)
+
+        # Print iteration details
+        print(f"Iteration {iteration:03} - Total size {n_total} - Inliers size {n_inliers} - Interest count {n_interest}")
 
         # * Print some informations
         # iter_interest_count = (new_df['quality']=='interest').sum()
         # total_interest_count = (res['quality']=='interest').sum()
         # print(f'irbs_sampling -> Final batch data that wil be stored:\n {new_df}')
-        # print(f'irbs_sampling -> [batch  report] new points: {len(new_df)}, interesting points: {iter_interest_count}')
-        # print(f'irbs_sampling -> [global report] progress: {size}/{max_size}, interesting points: {total_interest_count}')
+        # print(f'irbs_sampling -> [batch  report] new points: {n_new_samples}, interesting points: {iter_interest_count}')
+        # print(f'irbs_sampling -> [global report] progress: {n_inliers}/{max_size}, interesting points: {total_interest_count}')
     progress_bar.close()
 

@@ -24,8 +24,8 @@ def prepare_data_metrics(
         additional_values: List[str], treatment: DataTreatment
 ) -> Dict:
     data = {}
-    f_r = names['features']['str']
-    t_r = names['targets']['str']
+    f_r = names["features"]["str"]
+    t_r = names["targets"]["str"]
     targets_prediction = [f'{t}_hat' for t in targets]
     renaming_cols = {v1: v2 for v1, v2 in zip(features + targets, f_r + t_r)}
     # region = {
@@ -34,7 +34,7 @@ def prepare_data_metrics(
     #     t_r[1]: interest_region[targets[1]]
     # }
     for key, value in experiments.items():
-        if value['scale'] == 'classify':
+        if value["scale"] == "classify":
             df = prepare_benchmark(
                 df=pd.read_csv(value["path"],
                                sep='[; ,]', # TODO: Solve this:
@@ -45,22 +45,22 @@ def prepare_data_metrics(
                                usecols=features+targets+additional_values),
                 f=features, t=targets, treatment=treatment
             ).rename(columns=renaming_cols)
-        elif value['scale'] == 'real-inverse':
-            history = get_result(value['path'])
+        elif value["scale"] == "real-inverse":
+            history = get_result(value["path"])
             df = prepare_new_data(
                 df=history, treatment=treatment, f=features, t=targets, t_c=targets_prediction
             ).rename(columns=renaming_cols)
-        elif value['scale'] == 'read': # TODO : Rewrite properly this part and "classify"
-            df_read = pd.read_csv(value["path"], sep='[; ,]', usecols=features+targets+additional_values+['quality'])
+        elif value["scale"] == "read": # TODO : Rewrite properly this part and "classify"
+            df_read = pd.read_csv(value["path"], sep='[; ,]', usecols=features+targets+additional_values+["quality"])
             df = prepare_new_data(
                 df=df_read, treatment=treatment, f=features, t=targets, t_c=targets_prediction
             ).rename(columns=renaming_cols)
 
         else:
-            print(f"{value['scale']} is not a valid scaler for the data. Exiting program")
+            print(f'{value["scale"]} is not a valid scaler for the data. Exiting program')
             sys.exit(1)
 
-        data[key] = create_dict(df=df, name=value['name'], color=value['color'])
+        data[key] = create_dict(df=df, name=value["name"], color=value["color"])
     return dict(exp_data=data, features=f_r, targets=t_r, targets_prediction=targets_prediction)
 
 def get_metrics(
@@ -77,11 +77,11 @@ def get_metrics(
     volume_voronoi = {} # for each experiment, volumes of the Voronoi regions (clipped by the unit hypercube) : in feature space and feature+target space
     
     for key, value in data.items():
-        scaled_data_interest_f = treatment.scaler.transform_features(value['interest'][features].values)
-        scaled_data_interest_t = treatment.scaler.transform_targets(value['interest'][targets].values)
+        scaled_data_interest_f = treatment.scaler.transform_features(value["interest"][features].values)
+        scaled_data_interest_t = treatment.scaler.transform_targets(value["interest"][targets].values)
 
         # Get number of interesting samples
-        n_interest[key] = len(value['interest'])
+        n_interest[key] = len(value["interest"])
         
         # Get volume of interesting samples
         if key in params_volume["default"]:
@@ -92,13 +92,13 @@ def get_metrics(
             volume[key] = np.array([0,0])
         
         # Get all data distribution using ASVD
-        XY = value['df'][features+targets].values
+        XY = value["df"][features+targets].values
         scaled_data = pd.DataFrame(treatment.scaler.transform(XY), columns=features+targets)
         total_asvd = ASVD(scaled_data, features, targets)
         total_asvd_scores[key] = total_asvd.compute_scores()
         
         # Get only interest data distribution using ASVD
-        XY = value['interest'][features+targets].values
+        XY = value["interest"][features+targets].values
         scaled_data = pd.DataFrame(treatment.scaler.transform(XY), columns=features+targets)
         interest_asvd = ASVD(scaled_data, features, targets)
         interest_asvd_scores[key] = interest_asvd.compute_scores()
@@ -108,15 +108,15 @@ def get_metrics(
             "features": np.array([0]*n_interest[key]),
             "features_targets": np.array([0]*n_interest[key])
         }
-        if params_voronoi['compute_voronoi']['features']:
-            volume_voronoi[key]['features'] = get_volume_voronoi(
+        if params_voronoi["compute_voronoi"]["features"]:
+            volume_voronoi[key]["features"] = get_volume_voronoi(
                 scaled_data_interest_f,
-                len(features),tol=params_voronoi['tol'], isFilter=params_voronoi['isFilter']
+                len(features),tol=params_voronoi["tol"], isFilter=params_voronoi["isFilter"]
             )
-        if params_voronoi['compute_voronoi']['features_targets']:
-            volume_voronoi[key]['features_targets'] = get_volume_voronoi(
+        if params_voronoi["compute_voronoi"]["features_targets"]:
+            volume_voronoi[key]["features_targets"] = get_volume_voronoi(
                 np.hstack([scaled_data_interest_f, scaled_data_interest_t]),
-                len(features+targets),tol=params_voronoi['tol'], isFilter=params_voronoi['isFilter']
+                len(features+targets),tol=params_voronoi["tol"], isFilter=params_voronoi["isFilter"]
             )
 
     return dict(n_interest=n_interest, volume=volume, total_asvd_scores=total_asvd_scores, interest_asvd_scores=interest_asvd_scores, volume_voronoi=volume_voronoi)
@@ -124,7 +124,7 @@ def get_metrics(
 
 def scale_data_for_plots(data: Dict, features: List[str], targets: List[str], targets_prediction: List[str], scales: Dict, interest_region: Dict):
     """Scales data in place for visualization purposes."""
-    df_names = ['interest', 'not_interesting', 'inliers', 'outliers', 'df']
+    df_names = ["interest", "not_interesting", "inliers", "outliers", "df"]
     for v in data.values():
         for name in df_names:
             v[name][features] /= scales["features"]
@@ -149,10 +149,10 @@ def plot_metrics(
 
     # r2: Dict, crps: Dict
 ):
-    features_dic = names['features']
-    features = features_dic['str']
-    targets = names['targets']['str']
-    asvd_metrics_to_plot = ['augmentation', 'rsd_x', 'rsd_xy', 'rsd_augm', 'riqr_x', 'riqr_xy']
+    features_dic = names["features"]
+    features = features_dic["str"]
+    targets = names["targets"]["str"]
+    asvd_metrics_to_plot = ["sum_augm", "rsd_x", "rsd_xy", "rsd_augm", "riqr_x", "riqr_xy"]
 
     targets_volume = None  # TODO yasser: compute covered area on targets space
     # targets_volume = {k: 10000 for k in data.columns}

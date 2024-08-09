@@ -3,14 +3,11 @@ import os
 import pandas as pd
 
 
-def results(res: pd.DataFrame, size: int, initialize: bool = False) -> Dict[str, pd.DataFrame]:
-    """ Create Incremental DataSet named according to index"""
-    idx = res.shape[0]
-    if initialize:
-        ini_idx = 0
-    else:
-        ini_idx = (idx - size)
-    return {f'[{ini_idx}-{idx}]': res[ini_idx: idx]}
+def parse_results(results_df: pd.DataFrame, n_new_samples: int) -> Dict[str, pd.DataFrame]:
+    """ Create an Incremental DataSet named according to the index range. """
+    last_idx = results_df.shape[0]
+    start_idx = last_idx - n_new_samples
+    return {f'[{start_idx}-{last_idx}]': results_df[start_idx: last_idx]}
 
 
 def join_history(history: Dict[str, pd.DataFrame], run_condition: Dict, initial_size: int) -> pd.DataFrame:

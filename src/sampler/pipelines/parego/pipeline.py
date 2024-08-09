@@ -21,7 +21,8 @@ def create_pipeline(**kwargs) -> Pipeline:
                 targets='params:targets',
                 additional_values='params:additional_values', # 'sim_time', 'Y_O2', ...
                 run_condition='params:run_condition',
-                llambda_s='params:parego_llambda_s', 
+                llambda_s='params:parego_llambda_s',
+                num_generations='params:parego_num_generations',
                 tent_slope='params:parego_tent_slope',
                 experience='params:parego_experience',
                 simulator_env='params:simulator_env',

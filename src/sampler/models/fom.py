@@ -1,24 +1,24 @@
-from typing import List, Dict
+from typing import List, Tuple, Dict
 
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
 from scipy.stats import norm
-from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import RationalQuadratic
+from sklearn.gaussian_process import GaussianProcessRegressor, GaussianProcessClassifier
+from sklearn.gaussian_process.kernels import RationalQuadratic, RBF
 from scipy.optimize import shgo
 
 RANDOM_STATE = 42
 
 
-class GPSampler:
+class SurrogateGP:
     def __init__(self, features: List[str], targets: List[str], decimals: int=10):
 
         self.features = features
         self.targets = targets
         kernel = RationalQuadratic(length_scale_bounds=(1e-7, 100000))
-        self.model = GaussianProcessRegressor(kernel=kernel, random_state=RANDOM_STATE)
+        self.gp = GaussianProcessRegressor(kernel=kernel, random_state=RANDOM_STATE)
         
         # Points to be ignored as they result in erroneous simulations
         self.ignored = set()
@@ -26,28 +26,23 @@ class GPSampler:
         # To normalize std of coverage function to be between 0 and 1
         self.max_std = 1
 
-    def get_std(self, x: np.ndarray):
-        x = np.atleast_2d(x)
-        _, y_std = self.model.predict(x, return_std=True)
-
-        return y_std
-
-    def fit(self, x_train: np.ndarray, y_train: np.ndarray):
-        self.model.fit(x_train, y_train)
+    def fit(self, X_train: np.ndarray, y_train: np.ndarray):
+        self.gp.fit(X_train, y_train)
 
     def predict(self, x: np.ndarray, return_std=False, return_cov=False):
-        return self.model.predict(x, return_std, return_cov)
+        return self.gp.predict(x, return_std, return_cov)
 
     def update_max_std(self, iters, n):
         """ Returns the maximum standard deviation of the Gaussian Process for points between 0 and 1."""
 
-        print("GPsampler.update_max_std -> Searching for the maximum standard deviation of the surrogate...")
+        print("SurrogateGP.update_max_std -> Searching for the maximum standard deviation of the surrogate...")
         search_error = 0.01
 
         def get_opposite_std(x):
             """Opposite of std to be minimized."""
-            y_std = self.get_std(x).max()
-            return -1 * y_std
+            x = np.atleast_2d(x)
+            _, y_std = self.gp.predict(x, return_std=True)
+            return -1 * y_std.max()
 
         bounds = [(0, 1) for _ in self.features]
         result = shgo(
@@ -56,8 +51,8 @@ class GPSampler:
 
         max_std = -1 * result.fun
         self.max_std = min(1.0, max_std * (1 + search_error))
-        print(f"GPsampler.update_max_std -> Maximum GP std: {self.max_std:.3f}")
-        print(f"GPsampler.update_max_std -> Data std: {self.model.X_train_.std():.3f}")
+        print(f"SurrogateGP.update_max_std -> Maximum GP std: {self.max_std:.3f}")
+        print(f"SurrogateGP.update_max_std -> Training data std: (X, {self.gp.X_train_.std():.3f}), (y, {self.gp.y_train_.std():.3f})")
         
     def add_ignored_points(self, df: pd.DataFrame):
         """Add bad points (in feature space) to the set of ignored points."""
@@ -88,61 +83,145 @@ class GPSampler:
 
         return np.any(np.all(point_rounded == ignored_rounded, axis=1))
 
-    def plot_std(self, z_value=0.913):
-        """Plot the standard deviation of the Gaussian Process for a grid of points between 0 and 1."""
-        # Note: Useful for debugging calling it inside fit method with z_value = mean(fixed_feature)
-        n = 100
-        x = np.linspace(0, 1, n)
-        y = np.linspace(0, 1, n)
-        X, Y = np.meshgrid(x, y)
-        Z = np.zeros((n, n))
 
-        for i in range(n):
-            for j in range(n):
-                _, y_std = self.model.predict(np.array([[X[i, j], Y[i, j], z_value]]), return_std=True)
-                std0, std1 = y_std[0]
-                Z[i, j] = std0
+class InlierOutlierGP:
+    def __init__(self, threshold=0.8):
+        """
+        Initializes the InlierOutlierGP class.
 
-        plot_type = 'surface' # surface or contour
-        if plot_type == 'surface':
-            fig = go.Figure(data=[go.Surface(z=Z, x=x, y=y)])
+        Parameters:
+        - threshold (float): Probability threshold for considering a point as an inlier.
+        """
+        self.threshold = threshold
+        self.kernel = 1.0 * RBF(length_scale=1.0)
+        self.gp = GaussianProcessClassifier(kernel=self.kernel)
+        self.max_std = 1  # To normalize std of coverage function to be between 0 and 1
 
-            # Add training points as scatter plot
-            x_train = self.x_train[:, 0]
-            y_train = self.x_train[:, 1]
-            dummy_train = self.x_train.copy()
-            dummy_train[:, 2] = 0
-            _, y_std = self.model.predict(dummy_train, return_std=True)
-            z_train = y_std[:, 0]
-            fig.add_trace(go.Scatter3d(
-                x=x_train, y=y_train, z=z_train, mode='markers', marker=dict(color='green', size=3),
-                name='Training Points', showlegend=True
-            ))
+    def fit(self, X_train, y_train):
+        """
+        Fits the Gaussian Process model.
 
-            fig.update_layout(scene=dict(xaxis_title='X', yaxis_title='Y', zaxis_title='Standard Deviation'))
-        elif plot_type == 'contour':
-            fig = go.Figure(data=go.Contour(z=Z, x=x, y=y, contours=dict(coloring='heatmap')))
-            fig.update_layout(coloraxis=dict(colorscale='Viridis'))
+        Parameters:
+        - X_train (np.ndarray): Feature matrix.
+        - y_train (np.ndarray): Target values, where NaN indicates an error (outlier).
+        """
+        # Determine inlier or outlier status based on NaN presence in y_train
+        y = np.where(np.isnan(y_train).any(axis=1), 0, 1)
 
-        fig.update_layout(legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01))
-        fig.update_layout(height=800, margin=dict(l=0, r=0, b=0, t=0))
-        fig.show()
+        # Fit the Gaussian Process Classifier with the modified target values
+        self.gp.fit(X_train, y)
 
-        print("Done plotting.")
+    def predict_inlier_proba(self, X: np.ndarray):
+        """
+        Predicts the probability of being an inlier.
+
+        Parameters:
+        - X (np.ndarray): Feature matrix.
+
+        Returns:
+        - np.ndarray: Probability of each point being an inlier.
+        """
+        return self.gp.predict_proba(X)[:, 1]
+
+    def score_points(self, X):
+        """
+        Scores points based on inlier probability and standard deviation.
+
+        Parameters:
+        - X (np.ndarray): Feature matrix.
+
+        Returns:
+        - np.ndarray: Scores for each point, with a maximum value of 1.
+        """
+        proba = self.predict_inlier_proba(X)
+        _, std_dev = self.gp.predict(X, return_std=True)
+
+        # Normalize the standard deviation
+        normalized_std = std_dev / self.max_std
+
+        # Initialize scores to zero
+        score = np.zeros_like(proba)
+
+        # Calculate scores only for points with high inlier probability
+        high_proba_indices = proba > self.threshold
+        score[high_proba_indices] = proba[high_proba_indices] * normalized_std[high_proba_indices]
+
+        return score
 
 
-class FigureOfMerit(GPSampler):
+class FigureOfMerit:
+    """
+    The FigureOfMerit class is responsible for evaluating and selecting
+    interesting candidates for simulation in the adaptive sampling process.
+
+    This class uses a Gaussian Process model to assess the potential value
+    of sampling points based on criteria such as standard deviation, interest,
+    and coverage. The evaluation is guided by specified coefficients and
+    regions of interest, allowing for dynamic and informed decision-making
+    in the sampling strategy.
+
+    Attributes:
+        - gp_surrogate (SurrogateGP): A surrogate model used to identify unexplored areas
+        by evaluating the standard deviation, focusing on interesting points for further
+        exploration. This model does not train on outliers or errors, necessitating an
+        alternative method for avoiding poor regions.
+        - gp_filter (InlierOutlierGP): A classifier designed to detect unexplored inlier
+        regions by assessing the standard deviation. It aids in identifying promising
+        areas while ensuring that regions with potential errors or outliers are avoided.
+    """
+
     def __init__(
-            self, features: List[str], targets: List[str],
-            coefficients: Dict, interest_region: Dict, decimals: int
+        self, features: List[str], targets: List[str],
+        coefficients: Dict[str, Dict], interest_region: Dict[str, Tuple[float, float]],
+        decimals: int
     ):
-        super().__init__(features, targets, decimals)
+        """
+        Initializes the FigureOfMerit class.
 
+        Parameters:
+        - features: List of feature column names.
+        - targets: List of target column names.
+        - coefficients: Coefficients for standard deviation, interest,
+          and coverage calculations.
+        - interest_region: Parameters defining the region of interest.
+        - decimals: Number of decimal places for rounding.
+        """
+        # Initialize GP surrogate model
+        self.gp_surrogate = SurrogateGP(features, targets, decimals)
+        
+        # Initialize GP fitted on 0|1 values
+        self.gp_filter = InlierOutlierGP()
+        
+        # Data attributes
+        self.features = features
+        self.targets = targets
+        self.data = None
+
+        # Store coefficients and initialize calculation methods
         self.coefficients = coefficients
-
         self.calc_std = self.set_std(c=coefficients["std"])
         self.calc_interest = self.set_interest(c=coefficients["interest"], interest_region=interest_region)
         self.calc_coverage = self.set_coverage(c=coefficients["coverage"])
+        
+    def update(self, data):
+        """
+        Updates the Gaussian Process model with new data, excluding rows with NaN target values.
+
+        Parameters:
+        - data (DataFrame): Total available data to update the model with.
+        """
+        self.data = data
+        # Filter out rows with NaN target values for GP training
+        clean_data = data.dropna(subset=self.targets)
+        self.gp_surrogate.fit(
+            X_train=clean_data[self.features].values,
+            y_train=clean_data[self.targets].values
+        )
+        # Train another GP to find unexplored inlier regions
+        # self.gp_filter.fit(
+        #     X_train=data[self.features].values,
+        #     y_train=data[self.targets].values
+        # )
 
     def set_std(self, c: Dict):
         """
@@ -156,11 +235,11 @@ class FigureOfMerit(GPSampler):
                 """
                 x = np.atleast_2d(x)
 
-                _, y_std = self.model.predict(x, return_std=True)
+                _, y_std = self.gp_surrogate.predict(x, return_std=True)
 
                 y_std_mean = y_std.mean(axis=1)
 
-                score = 1 - y_std_mean / self.max_std
+                score = 1 - y_std_mean / self.gp_surrogate.max_std
                 return score
         else:
             def std(x):
@@ -179,7 +258,7 @@ class FigureOfMerit(GPSampler):
                 """
                 x = np.atleast_2d(x)
 
-                y_hat, y_std = self.model.predict(x, return_std=True)
+                y_hat, y_std = self.gp_surrogate.predict(x, return_std=True)
 
                 point_norm = norm(loc=y_hat, scale=y_std)
 
@@ -206,8 +285,7 @@ class FigureOfMerit(GPSampler):
                 x = np.atleast_2d(x)
                 assert x.shape[0] == 1, "Input x must be a single point!"
 
-                gp_x_data = self.model.X_train_  # TODO yasser: this way only fitted are considered. Why not take all data so that errors are included ?
-                distances = np.linalg.norm(gp_x_data - x, axis=1)
+                distances = np.linalg.norm(self.data[self.features].values - x, axis=1)
 
                 # TODO: Add these to kedro catalog parameters
                 decay = 25         # 20 or lower for including farther points
@@ -266,7 +344,7 @@ class FigureOfMerit(GPSampler):
         x = np.atleast_2d(x)
         assert x.shape[0] == 1, "Input x must be a single point!"
 
-        if self.should_ignore_point(x):
+        if self.gp_surrogate.should_ignore_point(x):
             # This condition is necessary because GP do not update around failed samples
             print(f"FOM.target_function -> Point {x} was ignored.")
             score = np.array([1.0])
@@ -299,7 +377,8 @@ class FigureOfMerit(GPSampler):
             Tuple[np.ndarray, pd.DataFrame]: Selected points and their scores.
         """
         
-        self.update_max_std(iters, n)
+        self.gp_surrogate.update_max_std(iters, n)
+        # self.gp_filter.max_std = self.gp_surrogate.max_std
 
         print("FOM.optimize -> Searching for good candidates using the acquisition function...")
 

@@ -122,19 +122,24 @@ class ASVD:
         Positive values suggest decreased uniformity post-augmentation.
 
         """
-        augmentation = self.simplices_volumes_xy.sum() / self.simplices_volumes_x.sum()
-        rsd_xy = self.simplices_volumes_xy.std() / self.simplices_volumes_xy.mean()
-        rsd_x = self.simplices_volumes_x.std() / self.simplices_volumes_x.mean()
-        rsd_augm = rsd_xy - rsd_x
-        riqr_x = (np.percentile(self.simplices_volumes_x, 75) - np.percentile(self.simplices_volumes_x, 25))/self.simplices_volumes_x.mean()
-        riqr_xy = (np.percentile(self.simplices_volumes_xy, 75) - np.percentile(self.simplices_volumes_xy, 25))/self.simplices_volumes_xy.mean()
+        simplices_sum_x = self.simplices_volumes_xy.sum()
+        simplices_sum_xy = self.simplices_volumes_x.sum()
+        simplices_mean_x = self.simplices_volumes_x.mean()
+        simplices_mean_xy = self.simplices_volumes_xy.mean()
+        sum_augm = np.nan if simplices_sum_x==0 else simplices_sum_xy / simplices_sum_x
+        rsd_x = self.simplices_volumes_x.std() / simplices_mean_x
+        rsd_xy = self.simplices_volumes_xy.std() / simplices_mean_xy
+        rsd_augm = np.zeros_like(rsd_x)
+        rsd_augm = np.where(rsd_x != 0, rsd_xy / rsd_x, np.nan)
+        riqr_x = (np.percentile(self.simplices_volumes_x, 75) - np.percentile(self.simplices_volumes_x, 25))/simplices_mean_x
+        riqr_xy = (np.percentile(self.simplices_volumes_xy, 75) - np.percentile(self.simplices_volumes_xy, 25))/simplices_mean_xy
         return {
             "count": self.vertices_x.shape[0],
-            "sum_x": self.stars_volumes_x.sum(),
-            "sum_xy": self.stars_volumes_xy.sum(),
+            "sum_x": simplices_sum_x,
+            "sum_xy": simplices_sum_xy,
             "mean_x": self.stars_volumes_x.mean(),  # Mean over number of vertices
             "mean_xy": self.stars_volumes_xy.mean(),  # Mean over number of aumengted vertices
-            "augmentation": augmentation,
+            "sum_augm": sum_augm,
             "rsd_x": rsd_x,
             "rsd_xy": rsd_xy,
             "rsd_augm": rsd_augm,
@@ -146,12 +151,12 @@ class ASVD:
         # Simplex Volume scores dicts
         simplices_scores_x = describe_volumes(self.simplices_volumes_x)
         simplices_scores_xy = describe_volumes(self.simplices_volumes_xy)
-        simplices_scores_xy["augmentation"] = simplices_scores_xy['sum'] / simplices_scores_x['sum']
+        simplices_scores_xy["sum_augm"] = simplices_scores_xy['sum'] / simplices_scores_x['sum']
         simplices_scores_xy["rsd_augm"] = simplices_scores_xy['rsd'] - simplices_scores_x['rsd']
         # Fractional Vertex Star Volume scores dicts
         stars_scores_x = describe_volumes(self.stars_volumes_x)
         stars_scores_xy = describe_volumes(self.stars_volumes_xy)
-        stars_scores_xy["augmentation"] = stars_scores_xy['sum'] / stars_scores_x['sum']
+        stars_scores_xy["sum_augm"] = stars_scores_xy['sum'] / stars_scores_x['sum']
         stars_scores_xy["rsd_augm"] = stars_scores_xy['rsd'] - stars_scores_x['rsd']
 
         df_scores = pd.DataFrame({
@@ -161,7 +166,7 @@ class ASVD:
             ('stars', 'volumes_xy'): stars_scores_xy,
         })
         # Reorder rows
-        df_scores = insert_row_in_order(df_scores, [("augmentation", 2), ('rsd_augm', 6)])
+        df_scores = insert_row_in_order(df_scores, [("sum_augm", 2), ('rsd_augm', 6)])
     
         return df_scores
 
