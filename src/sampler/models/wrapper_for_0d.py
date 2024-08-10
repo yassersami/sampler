@@ -126,7 +126,9 @@ class SimulationProcessor:
         new_xy = np.column_stack((new_x, np.zeros((new_x.shape[0], len(self.targets)))))
         return self.treatment.scaler.inverse_transform(new_xy)[:, :len(self.features)]
 
-    def process_data(self, new_x: np.ndarray, real_x: bool, index: int) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    def process_data(
+        self, new_x: np.ndarray, real_x: bool, index: int, treat_output=False
+    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
         Process simulation data, either from real or scaled input features.
 
@@ -154,7 +156,10 @@ class SimulationProcessor:
                 x_real, self.features, self.targets, self.additional_values,
                 self.treatment.scaler, spice_on=(index==0)
             )
-
+        # Return data as outputed from simulator
+        if not treat_output:
+            return new_points
+        # Scale and clean data
         scaled_data = self.treatment.treat_data(df_real=new_points, scale=True)
         scaled_data = scaled_data[self.features + self.targets + self.additional_values]
         return scaled_data

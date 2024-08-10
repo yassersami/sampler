@@ -32,7 +32,6 @@ irbs_increased_data:
   type: pandas.CSVDataSet
   filepath: data/07_model_output/base/irbs_increased_data.csv
 
-
 ###### ParEGO ######
 parego_history:
   type: IncrementalDataSet
@@ -63,3 +62,8 @@ sao_optim_res:
 metrics_plots:
   type: kedro.extras.datasets.matplotlib.MatplotlibWriter
   filepath: data/08_reporting/base
+
+###### init_lhs ######
+initLHS_output_data:
+  type: pandas.CSVDataSet
+  filepath: data/07_model_output/base/initLHS_output_data.csv

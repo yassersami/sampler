@@ -60,7 +60,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             outputs=dict(
                 scaled_data='scaled_exp_data',
                 scaled_region='scaled_region'
-                ),
+            ),
             # name='scale_data_for_plots'
         ),
         node(

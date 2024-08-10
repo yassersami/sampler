@@ -5,56 +5,81 @@ import numpy as np
 import pandas as pd
 from scipy.stats import qmc
 
-from sampler.common.scalers import MixedMinMaxScaler
-
-from sampler.models.wrapper_for_0d import run_simulation
+from sampler.common.data_treatment import DataTreatment
+from sampler.models.wrapper_for_0d import SimulationProcessor
 
 RANDOM_STATE = 42
 
-def generate_LHS_inputs(
-        n_input: int, features: List[str], variables_ranges: Dict,
-    )-> pd.DataFrame:
 
-    
-    # Create the Latin Hypercube sampler
-    sampler = qmc.LatinHypercube(d=len(features), seed=RANDOM_STATE)
-    
-    # Generate Latin Hypercube Samples
-    samples_0_1 = sampler.random(n=n_input)
-    
-    # Scale the samples to the specified bounds
-    bounds = np.array([variables_ranges[f]['bounds'] for f in features]) # features boundaries 
-    lower_bounds = np.array([b[0] for b in bounds])
-    upper_bounds = np.array([b[1] for b in bounds])
-    samples_L_U = qmc.scale(samples_0_1, lower_bounds, upper_bounds)
-    
-    # ? If you want scale data but simulator doesn't accept scaled data
-    # scale = [variables_ranges[f]['scale'] for f in features]
-    # scaler = MixedMinMaxScaler(features=features, targets=[], scale=scale) 
-    # scaler.fit(bounds.T) # fit the scaler to the boundaries
-    # samples = scaler.transform_features(samples) # normalize the samples
+def prepare_simulator_inputs(
+    treatment: DataTreatment, features: List[str], targets: List[str],
+    use_lhs: bool, num_samples: int, variables_ranges: Dict[str, Dict],
+    csv_file: str, csv_is_real: bool,
+) -> pd.DataFrame:
+    """
+    Prepare a scaled (not real) DataFrame for simulator inputs either by generating LHS
+    samples or reading from a CSV file.
 
-    df_lhs = pd.DataFrame(samples_L_U, columns=features)
+    Parameters:
+    - use_lhs (bool): Whether to generate LHS samples. If False, data will be read from a CSV file.
+    - num_samples (int): Number of LHS samples to generate. Required if use_lhs is True.
+    - csv_file (str): Path to a CSV file containing existing data. Required if use_lhs is False.
+    - csv_is_real (str): True if data in csv are in real (not scaled/normalized) scale.
+
+    Returns:
+    - pd.DataFrame: Only feature columns with real (not scaled/normalized) values.
+    """
+
+    if use_lhs:
+        
+        # Generate LHS samples using scipy.stats.qmc
+        num_features = len(features)
+        sampler = qmc.LatinHypercube(d=num_features)
+        samples_0_1 = sampler.random(n=num_samples)
+        
+        # Scale the samples to the specified bounds
+        l_bounds = [variables_ranges[feature]["bounds"][0] for feature in features]
+        u_bounds = [variables_ranges[feature]["bounds"][1] for feature in features]
+        samples_real = qmc.scale(samples_0_1, l_bounds, u_bounds)
+        
+        df_real = pd.DataFrame(samples_real, columns=features)
+        
+        # Handle discretes values 
+        for feature in features:
+            discrete_steps = variables_ranges[feature]['discete_steps']
+            if discrete_steps:  # not 0
+                df_real[feature] = df_real[feature].apply(
+                    lambda x: round(x/discrete_steps)*discrete_steps
+                )
+    else:
+        # Load data from CSV file
+        df_csv = pd.read_csv(csv_file)
+        # Inverse transform in case of scaled data
+        if not csv_is_real:
+            df_csv[targets] = 10  # Dummy value, avoid 0 in case of log scaling
+            xy_real = treatment.scaler.inverse_transform(df_csv[features + targets].values)
+            df_real = pd.DataFrame(xy_real[:, :len(features)], columns=features)
+
+    return df_real
 
 
-    # Handle discretes values 
-    for f in variables_ranges:
-        discrete_steps = variables_ranges[f]['discete_steps']
-        if discrete_steps: # not 0
-            df_lhs[f] = df_lhs[f].apply(lambda x: round(x/discrete_steps)*discrete_steps)
-
-    return df_lhs
-    
-
-def evaluate_LHS(df_lhs: pd.DataFrame, features: List['str'], targets: List['str'], additional_values: List['str'], n_proc: int) -> pd.DataFrame:
-    assert all(f in df_lhs.columns for f in features), f"Error! Features {features} not in df_lhs columns!"
-    assert len(df_lhs) > 0, "Error! df_lhs is empty!"
+def evaluate_inputs(
+    df_inputs: pd.DataFrame, treatment: DataTreatment,
+    features: List['str'], targets: List['str'], additional_values: List['str'],
+    simulator_env: Dict, n_proc: int, output_is_real: bool
+) -> Dict[str, pd.DataFrame]:
 
     if "r_ext_pMeO" not in features:
-        df_lhs['r_ext_pMeO'] = df_lhs['r_ext_pAl']
-
-    df_result = run_simulation(x=df_lhs, n_proc=n_proc, size=0) 
-    df_evaluated = pd.concat([df_lhs, df_result], axis=1)
+        df_inputs['r_ext_pMeO'] = df_inputs['r_ext_pAl']
     
-    return df_evaluated
-
+    # Set simulator environement
+    simulator = SimulationProcessor(
+        features=features, targets=targets, additional_values=additional_values,
+        treatment=treatment, n_proc=n_proc, simulator_env=simulator_env
+    )
+    # Run simulation with possibility of treating output or not
+    df_results = simulator.process_data(
+        new_x=df_inputs.values, real_x=True, index=0, treat_output=(not output_is_real)
+    )
+    
+    return df_results
