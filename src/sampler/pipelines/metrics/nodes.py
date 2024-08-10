@@ -112,20 +112,20 @@ def get_metrics(
         interest_asvd_scores[key] = interest_asvd.compute_scores()
 
         # Get Voronoi volume
-        # volume_voronoi[key] = {
-        #     "features": np.array([0]*n_interest[key]),
-        #     "features_targets": np.array([0]*n_interest[key])
-        # }
-        # if params_voronoi["compute_voronoi"]["features"]:
-        #     volume_voronoi[key]["features"] = get_volume_voronoi(
-        #         scaled_data_interest_f,
-        #         len(features),tol=params_voronoi["tol"], isFilter=params_voronoi["isFilter"]
-        #     )
-        # if params_voronoi["compute_voronoi"]["features_targets"]:
-        #     volume_voronoi[key]["features_targets"] = get_volume_voronoi(
-        #         np.hstack([scaled_data_interest_f, scaled_data_interest_t]),
-        #         len(features+targets),tol=params_voronoi["tol"], isFilter=params_voronoi["isFilter"]
-        #     )
+        volume_voronoi[key] = {
+            "features": np.array([0]*n_interest[key]),
+            "features_targets": np.array([0]*n_interest[key])
+        }
+        if params_voronoi["compute_voronoi"]["features"]:
+            volume_voronoi[key]["features"] = get_volume_voronoi(
+                scaled_data_interest_f,
+                len(features),tol=params_voronoi["tol"], isFilter=params_voronoi["isFilter"]
+            )
+        if params_voronoi["compute_voronoi"]["features_targets"]:
+            volume_voronoi[key]["features_targets"] = get_volume_voronoi(
+                np.hstack([scaled_data_interest_f, scaled_data_interest_t]),
+                len(features+targets),tol=params_voronoi["tol"], isFilter=params_voronoi["isFilter"]
+            )
 
     return dict(
         n_interest=n_interest,
@@ -158,13 +158,13 @@ def scale_data_for_plots(data: Dict, features: List[str], targets: List[str], ta
 
 
 def plot_metrics(
-    data: Dict, names: Dict, region: Dict,
-    ignition_points: Dict, volume: Dict,
+    data: Dict,
+    names: Dict,
+    region: Dict,
+    volume: Dict,
     total_asvd_scores: Dict[str, Dict[str, float]],
     interest_asvd_scores: Dict[str, Dict[str, float]],
     volume_voronoi: Dict
-
-    # r2: Dict, crps: Dict
 ):
     features_dic = names["features"]
     features = features_dic["str"]
@@ -173,30 +173,35 @@ def plot_metrics(
 
     targets_volume = None  # TODO yasser: compute covered area on targets space
     # targets_volume = {k: 10000 for k in data.columns}
-    # Space distribution
-    features_2d = gm.plot_2d(data, features_dic, ignition_points, volume)
+
+    # Features and targets space viz
+    features_2d = gm.plot_2d(data, features_dic, volume)
     violin_plot = gm.plot_violin_distribution(data, targets, region, targets_volume)
     kde_plot = gm.targets_kde(data, targets, region)
+
+    # Distribution analysis
+    total_asvd_plot = gm.plot_asvd_scores(data, total_asvd_scores, asvd_metrics_to_plot)
+    interest_asvd_plot = gm.plot_asvd_scores(data, interest_asvd_scores, asvd_metrics_to_plot)
+    voronoi_plot = gm.dist_volume_voronoi(data, volume_voronoi)
+
+    # Detailed features versus targets plots
     # pair_plot = gm.pair_grid_for_all_variables(data, features, targets)
     feat_tar_dict = {}
     feat_tar_dict["all"] = gm.plot_feat_tar(data, features, targets, only_interest=False)
     feat_tar_dict["all_int"] = gm.plot_feat_tar(data, features, targets, only_interest=True, title_extension='(only interest)')
     for k in data.keys():
         feat_tar_dict[k] = gm.plot_feat_tar({k: data[k]}, features, targets, only_interest=False)
-    total_asvd_plot = gm.plot_asvd_scores(data, total_asvd_scores, asvd_metrics_to_plot)
-    interest_asvd_plot = gm.plot_asvd_scores(data, interest_asvd_scores, asvd_metrics_to_plot)
-    # voronoi_plot = gm.dist_volume_voronoi(data, volume_voronoi)
 
     # Saving dictionary of plots
     plots_dict = {
         "features_2d.png": features_2d,
         "violin_plot.png": violin_plot,
         "targets_kde.png": kde_plot,
-        # "pair_plot.png": pair_plot,
-        **{f'features_targets_{k}.png': v for k, v in feat_tar_dict.items()},
         "ASVD_all.png": total_asvd_plot,
         "ASVD_interest.png": interest_asvd_plot,
-        # "volume_voronoi.png": voronoi_plot
+        "volume_voronoi.png": voronoi_plot,
+        # "pair_plot.png": pair_plot,
+        **{f'features_targets_{k}.png': v for k, v in feat_tar_dict.items()},
     }
     plots_dict = {f'{i+1:02d}_{k}': v for i, (k, v) in enumerate(plots_dict.items())}
     return plots_dict

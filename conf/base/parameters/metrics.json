@@ -13,9 +13,6 @@
     "features": [1e-6, 1e-6, 1],
     "targets": [1e6, 1]
   },
-  "ignition_points": {"colors": {
-    "interest": "#E02401", "not_interesting": "#A9B388", "outliers": "black"
-  }},
   "params_volume":{
     "compute_volume": false,
     "same_sphere_tol":1e-3,

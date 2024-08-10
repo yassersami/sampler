@@ -127,73 +127,71 @@ def targets_kde(data: Dict, targets: List[str], region: Dict):
     return fig
 
 
-def plot_2d(data: Dict, features_dic: Dict, points: Dict, volume: Dict):
+def plot_2d(data: Dict, features_dic: Dict, volume: Dict):
     features = features_dic["str"]
     features_latex = features_dic["latex"]
-    colors = points["colors"]
-
     feature_pairs = list(combinations(features, 2))
     n_exp = len(data)
     n_rows = len(feature_pairs)
 
-    fig, axs = plt.subplots(n_rows, n_exp, sharey='row', figsize=(4*n_exp, 4*n_rows+1),
-                        constrained_layout=False, squeeze=False)
-
+    fig, axs = plt.subplots(n_rows, n_exp, sharey='row', figsize=(4 * n_exp, 4 * n_rows + 1),
+                            constrained_layout=False, squeeze=False)
+    
     # ? Maybe for one experiment, uncomment this (next commit)
     # if len(feature_pairs)==1: # axs is a 2D array, but it have to be treated as a 1D array, squeeze
     #     axs = axs[0]
 
-    for n_col, (k,v) in enumerate(data.items()):
+    for n_col, (k, v) in enumerate(data.items()):
         num_not_interesting = v['not_interesting'].shape[0]
         num_interest = v['interest'].shape[0]
         num_outliers = v['outliers'].shape[0]
-
-        # Divide features columns using the scales["features"] array
-        # v['interest'][features] = v['interest'][features] / scales["features"]
-        # v['not_interesting'][features] = v['not_interesting'][features] / scales["features"]
-        # v['outliers'][features] = v['outliers'][features] / scales["features"]
+        interest_colors = plt.cm.coolwarm(np.linspace(0, 1, num_interest))
 
         for n_row, (x, y) in enumerate(feature_pairs):
-            idx = (n_row, n_col) if len(data.keys()) > 1 else (0, n_row)
-            idx = idx if n_exp > 1 else n_row
+            idx = (n_row, n_col) if n_exp > 1 else n_row
             axs[idx].scatter(
                 x=v['not_interesting'][x],
                 y=v['not_interesting'][y],
-                c=colors['not_interesting'], alpha=0.3, label=f"Not interesting",
-                # Add logscale
-                
+                c='gray', alpha=0.3, label="Not interesting"
             )
             axs[idx].scatter(
                 x=v['outliers'][x],
                 y=v['outliers'][y],
-                c=colors['outliers'], marker='x', label=f"Outliers"
+                c='black', alpha=0.5, marker='x', label="Outliers"
             )
             axs[idx].scatter(
                 x=v['interest'][x],
                 y=v['interest'][y],
-                c=colors['interest'], alpha=0.3, label=f"Interest"
+                c=interest_colors, alpha=0.7, label="Interest"
             )
             axs[idx].set_xticks(np.arange(11))
             axs[idx].set_xticklabels(['0', '', '2', '', '4', '', '6', '', '8', '', '10'])
-
-
             axs[idx].set_xlabel(features_latex[features.index(x)].replace('/', '\\'))
             axs[idx].set_ylabel(features_latex[features.index(y)].replace('/', '\\'))
 
-        # Sort labels as Interest, Not int and Outliers
-        idx_legend = (0, n_col) if len(data.keys()) > 1 else 0
+        idx_legend = (0, n_col) if n_exp > 1 else 0
         hs, _ = axs[idx_legend].get_legend_handles_labels()
 
         handles = [hs[2], hs[0]] if num_outliers == 0 else [hs[2], hs[0], hs[1]]
-        labels = [f'n_Itr: {num_interest} - n_noItr: {num_not_interesting} \n V_Itr_bound : [{volume[k][0]:.2e} ; {volume[k][1]:.2e}]']
+        labels = [
+            f'n_Itr: {num_interest} \nV_Itr_bound: [{volume[k][0]:.2e} ; {volume[k][1]:.2e}]',
+            f'n_noItr: {num_not_interesting} '
+        ]
         if num_outliers != 0:
-            labels += [f'Outliers {num_outliers}']
+            labels.append(f'Outliers {num_outliers}')
         
         axs[idx_legend].legend(handles=handles, labels=labels,
                                loc='lower center', bbox_to_anchor=(0.5, 1.0),
-                               title=f'{v["name"]}', title_fontsize='large')
+                               title=v["name"], title_fontsize='large')
+    
+    # Add a vertical color bar with custom ticks outside the subplots
+    cbar_ax = fig.add_axes([0.9, 0.15, 0.03, 0.7])  # Adjusted position
+    cbar = fig.colorbar(plt.cm.ScalarMappable(cmap='coolwarm'), cax=cbar_ax, orientation='vertical')
+    cbar.set_ticks([0, 1])  # Set ticks at the start and end
+    cbar.set_ticklabels(['first', 'last'])  # Label the ticks
+    cbar.set_label('Interest order', fontsize='large')
 
-    fig.tight_layout()
+    fig.tight_layout(rect=[0, 0, 0.9, 1])  # Adjust layout to make space for the color bar
     fig.subplots_adjust(top=0.85)
     return fig
 

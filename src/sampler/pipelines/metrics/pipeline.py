@@ -69,7 +69,6 @@ def create_pipeline(**kwargs) -> Pipeline:
                 data='scaled_exp_data',
                 names='params:names',
                 region='scaled_region',
-                ignition_points='params:ignition_points',
                 volume='volume',
                 total_asvd_scores='total_asvd_scores',
                 interest_asvd_scores='interest_asvd_scores',
