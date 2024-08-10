@@ -112,20 +112,20 @@ def get_metrics(
         interest_asvd_scores[key] = interest_asvd.compute_scores()
 
         # Get Voronoi volume
-        volume_voronoi[key] = {
-            "features": np.array([0]*n_interest[key]),
-            "features_targets": np.array([0]*n_interest[key])
-        }
-        if params_voronoi["compute_voronoi"]["features"]:
-            volume_voronoi[key]["features"] = get_volume_voronoi(
-                scaled_data_interest_f,
-                len(features),tol=params_voronoi["tol"], isFilter=params_voronoi["isFilter"]
-            )
-        if params_voronoi["compute_voronoi"]["features_targets"]:
-            volume_voronoi[key]["features_targets"] = get_volume_voronoi(
-                np.hstack([scaled_data_interest_f, scaled_data_interest_t]),
-                len(features+targets),tol=params_voronoi["tol"], isFilter=params_voronoi["isFilter"]
-            )
+        # volume_voronoi[key] = {
+        #     "features": np.array([0]*n_interest[key]),
+        #     "features_targets": np.array([0]*n_interest[key])
+        # }
+        # if params_voronoi["compute_voronoi"]["features"]:
+        #     volume_voronoi[key]["features"] = get_volume_voronoi(
+        #         scaled_data_interest_f,
+        #         len(features),tol=params_voronoi["tol"], isFilter=params_voronoi["isFilter"]
+        #     )
+        # if params_voronoi["compute_voronoi"]["features_targets"]:
+        #     volume_voronoi[key]["features_targets"] = get_volume_voronoi(
+        #         np.hstack([scaled_data_interest_f, scaled_data_interest_t]),
+        #         len(features+targets),tol=params_voronoi["tol"], isFilter=params_voronoi["isFilter"]
+        #     )
 
     return dict(
         n_interest=n_interest,
@@ -185,7 +185,7 @@ def plot_metrics(
         feat_tar_dict[k] = gm.plot_feat_tar({k: data[k]}, features, targets, only_interest=False)
     total_asvd_plot = gm.plot_asvd_scores(data, total_asvd_scores, asvd_metrics_to_plot)
     interest_asvd_plot = gm.plot_asvd_scores(data, interest_asvd_scores, asvd_metrics_to_plot)
-    voronoi_plot = gm.dist_volume_voronoi(data, volume_voronoi)
+    # voronoi_plot = gm.dist_volume_voronoi(data, volume_voronoi)
 
     # Saving dictionary of plots
     plots_dict = {
@@ -196,7 +196,7 @@ def plot_metrics(
         **{f'features_targets_{k}.png': v for k, v in feat_tar_dict.items()},
         "ASVD_all.png": total_asvd_plot,
         "ASVD_interest.png": interest_asvd_plot,
-        "volume_voronoi.png": voronoi_plot
+        # "volume_voronoi.png": voronoi_plot
     }
     plots_dict = {f'{i+1:02d}_{k}': v for i, (k, v) in enumerate(plots_dict.items())}
     return plots_dict

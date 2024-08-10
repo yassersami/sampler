@@ -37,9 +37,19 @@ class ASVD:
         self.curve_volume = {}
         self.curve_augmentation = {}
         self.set_vertices(data, use_func, func)
-        self.set_simplices()
-        self.compute_simplices_volumes()
-        self.compute_stars_volumes()
+
+        # Check if there are enough vertices for Delaunay triangulation
+        if data.shape[0] < len(self.features) + 1:
+            # Not enough vertices, set volumes to zero
+            self.simplices_volumes_x = np.array([0])
+            self.simplices_volumes_xy = np.array([0])
+            self.stars_volumes_x = np.array([0])
+            self.stars_volumes_xy = np.array([0])
+        else:
+            # Proceed with normal computation
+            self.set_simplices()
+            self.compute_simplices_volumes()
+            self.compute_stars_volumes()
 
     def set_vertices(self, data, use_func, func):
         # Set vertices

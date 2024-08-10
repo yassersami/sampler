@@ -5,6 +5,10 @@
   "irbs_coefficients": {
     "std": {"apply": true},
     "interest": {"apply": true},
-    "coverage": {"apply": true, "mode": "euclidean"}
+    "coverage": {"apply": true,
+      "include_outliers": true,
+      "mode": "euclidean"
+    },
+    "outlier_proximity": {"apply": true}
   }
 }

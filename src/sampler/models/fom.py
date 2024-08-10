@@ -65,23 +65,28 @@ class SurrogateGP:
         # Add these feature points to the set of ignored points
         self.ignored = self.ignored.union(features_set)
 
-    def should_ignore_point(self, point: np.ndarray) -> bool:
+    def should_ignore_point(self, x: np.ndarray) -> bool:
         """
-        Check if the given point is close to any point with erroneous simulations.
+        Proximity Exclusion Condition: Determine if the given point is near any point
+        with erroneous simulations. Points located within a very small hypercube of edge
+        lenght 1e(-self.decimals) around specified points are excluded from further
+        processing. This condition is necessary because surrogate GP does not update
+        around failed samples.
 
-        Args: point (np.ndarray): A single sample point to check.
+        Args: x (np.ndarray): A single sample point to check.
 
         Returns: bool: True if the point should be ignored, False otherwise.
-
-        Note: The comparison is done up to self.decimals decimal places.
         """
         if len(self.ignored) == 0:
             return False
-        # TODO yasser: instead of a cube of 1e(-self.decimals) why not set a sphere where r=(gp_std_relative > 20% or 5%)
-        point_rounded = np.round(point.ravel(), self.decimals)
+        x = np.atleast_2d(x)
+        assert x.shape[0] == 1, "Input x must be a single point!"
+        
+        # TODO yasser: instead of a cube of why not set a sphere where r=(gp_std_relative > 20% or 5%)
+        x_rounded = np.round(x.ravel(), self.decimals)
         ignored_rounded = np.round(np.array([*self.ignored]), self.decimals)
 
-        return np.any(np.all(point_rounded == ignored_rounded, axis=1))
+        return np.any(np.all(x_rounded == ignored_rounded, axis=1))
 
 
 class InlierOutlierGP:
@@ -280,12 +285,16 @@ class FigureOfMerit:
             Set the coverage function, which penalizes near by points in the space,
             promoting the exploration (coverage) of the space.
         """
-        if c["apply"] and c["mode"] == "euclidean":
+        if c["apply"]:
             def space_coverage_one(x: np.ndarray):
                 x = np.atleast_2d(x)
                 assert x.shape[0] == 1, "Input x must be a single point!"
-
-                distances = np.linalg.norm(self.data[self.features].values - x, axis=1)
+                if c["include_outliers"]:
+                    points = self.data[self.features].values
+                else:
+                    points = self.gp_surrogate.gp.X_train_
+                
+                distances = np.linalg.norm(points - x, axis=1)
 
                 # TODO: Add these to kedro catalog parameters
                 decay = 25         # 20 or lower for including farther points
@@ -345,7 +354,7 @@ class FigureOfMerit:
         assert x.shape[0] == 1, "Input x must be a single point!"
 
         if self.gp_surrogate.should_ignore_point(x):
-            # This condition is necessary because GP do not update around failed samples
+            # Point is excluded (ignored) from further processing
             print(f"FOM.target_function -> Point {x} was ignored.")
             score = np.array([1.0])
         else:
