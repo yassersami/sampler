@@ -6,6 +6,7 @@ generated using Kedro 0.18.5
 from kedro.pipeline import Pipeline, node, pipeline
 
 from sampler.pipelines.init_lhs.nodes import prepare_simulator_inputs, evaluate_inputs
+from sampler.common.storing import join_history
 
 def create_pipeline(**kwargs) -> Pipeline:
     return pipeline([
@@ -32,11 +33,23 @@ def create_pipeline(**kwargs) -> Pipeline:
                 features='params:features',
                 targets='params:targets',
                 additional_values='params:additional_values',
+                run_condition='params:run_condition',
                 simulator_env='params:simulator_env',
                 n_proc='params:initLHS_n_proc',
                 output_is_real='params:initLHS_output_is_real'
             ),
-            outputs="initLHS_output_data",
+            # outputs="initLHS_output_data",
+            outputs="initLHS_history",
             name='initLHS_evaluate',
+        ),
+        node(
+            func=join_history,
+            inputs=dict(
+                history='initLHS_history',
+                run_condition='params:run_condition',
+                initial_size='params:initial_size'
+            ),
+            outputs='initLHS_increased_data',
+            name='irbs_retrieve_outputs',
         )
     ])

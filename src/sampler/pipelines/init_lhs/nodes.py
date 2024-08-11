@@ -3,10 +3,12 @@ from typing import List, Dict
 
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 from scipy.stats import qmc
 
 from sampler.common.data_treatment import DataTreatment
 from sampler.models.wrapper_for_0d import SimulationProcessor
+from sampler.common.storing import parse_results
 
 RANDOM_STATE = 42
 
@@ -64,22 +66,46 @@ def prepare_simulator_inputs(
 
 
 def evaluate_inputs(
-    df_inputs: pd.DataFrame, treatment: DataTreatment,
-    features: List['str'], targets: List['str'], additional_values: List['str'],
-    simulator_env: Dict, n_proc: int, output_is_real: bool
-) -> Dict[str, pd.DataFrame]:
-
+    df_inputs: pd.DataFrame, treatment: 'DataTreatment',
+    features: List[str], targets: List[str], additional_values: List[str],
+    run_condition: Dict, simulator_env: Dict, n_proc: int, output_is_real: bool
+):
+    # Ensure 'r_ext_pMeO' is in features by copying 'r_ext_pAl' if necessary
     if "r_ext_pMeO" not in features:
         df_inputs['r_ext_pMeO'] = df_inputs['r_ext_pAl']
     
-    # Set simulator environement
+    # Initialize the simulation processor
     simulator = SimulationProcessor(
         features=features, targets=targets, additional_values=additional_values,
         treatment=treatment, n_proc=n_proc, simulator_env=simulator_env
     )
-    # Run simulation with possibility of treating output or not
-    df_results = simulator.process_data(
-        new_x=df_inputs.values, real_x=True, index=0, treat_output=(not output_is_real)
-    )
-    
-    return df_results
+
+    batch_size = run_condition['batch_size']
+    n_total = 0  # Total launched number of simulations
+    iteration = 0
+    max_size = df_inputs.shape[0]
+
+    # Initialize tqdm progress bar
+    progress_bar = tqdm(total=max_size, dynamic_ncols=True)
+
+    while n_total < max_size:
+        print(f"Iteration {iteration:03} - Total size {n_total}")
+
+        # Run the simulation
+        nex_x = df_inputs.loc[n_total: n_total + batch_size - 1, features].values
+        new_df = simulator.process_data(
+            nex_x, real_x=True, index=n_total, treat_output=(not output_is_real)
+        )
+        
+        # Yield results
+        yield parse_results(new_df, current_history_size=n_total)
+        
+        # Update counters
+        n_new_samples = new_df.shape[0]
+        n_total += n_new_samples
+        iteration += 1
+
+        # Update progress bar
+        progress_bar.update(n_new_samples)
+
+    progress_bar.close()

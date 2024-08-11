@@ -40,7 +40,7 @@ def irbs_sampling(
     data = simulator.adapt_targets(data)
 
     res = initialize_dataset(data=data, treatment=treatment) # Set dataset to complete with adaptive sampling
-    yield parse_results(res, n_new_samples=len(res))
+    yield parse_results(res, current_history_size=0)
 
     n_total = 0  # counting all simulations
     n_inliers = 0  # counting only inliers
@@ -54,7 +54,7 @@ def irbs_sampling(
 
         new_x, scores = model.optimize(batch_size=batch_size, iters=opt_iters, n=opt_points)  # Search new candidates to add to res dataset
 
-        new_df = simulator.process_data(new_x, real_x=False, index=n_total)  # Launch time expensive simulations
+        new_df = simulator.process_data(new_x, real_x=False, index=n_total, treat_output=True)  # Launch time expensive simulations
         model.gp_surrogate.add_ignored_points(new_df)
 
         print(f'Round {iteration:03} (continued): simulation results' + '-'*49)
@@ -78,10 +78,12 @@ def irbs_sampling(
         timenow = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         new_df['datetime'] = timenow
         new_df['iteration'] = iteration
+        
+        # Store final batch results
+        yield parse_results(new_df, current_history_size=res.shape[0])
 
         # Concatenate new values to original results DataFrame
         res = pd.concat([res, new_df], axis=0, ignore_index=True)
-        yield parse_results(res, n_new_samples=new_df.shape[0])
         
         # Update stopping conditions
         n_new_samples = new_df.shape[0]

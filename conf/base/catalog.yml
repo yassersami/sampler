@@ -64,6 +64,12 @@ metrics_plots:
   filepath: data/08_reporting/base
 
 ###### init_lhs ######
-initLHS_output_data:
+initLHS_history:
+  type: IncrementalDataSet
+  path: data/07_model_output/base/initLHS_history
+  dataset: pandas.CSVDataSet
+  filename_suffix: .csv
+
+initLHS_increased_data:
   type: pandas.CSVDataSet
-  filepath: data/07_model_output/base/initLHS_output_data.csv
+  filepath: data/07_model_output/base/initLHS_increased_data.csv
