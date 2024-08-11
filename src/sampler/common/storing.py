@@ -11,7 +11,7 @@ def parse_results(df: pd.DataFrame, current_history_size: int) -> Dict[str, pd.D
     end_idx = current_history_size + n_new_samples - 1
 
     # Create a dictionary with the index range as the key
-    return {f'[{start_idx}-{end_idx}]': df}
+    return {f'[{start_idx:03}-{end_idx:03}]': df}
 
 
 def join_history(history: Dict[str, pd.DataFrame], run_condition: Dict, initial_size: int) -> pd.DataFrame:

@@ -6,9 +6,17 @@
     "std": {"apply": true},
     "interest": {"apply": true},
     "coverage": {"apply": true,
-      "include_outliers": true,
-      "mode": "euclidean"
+      "include_outliers": false,
+      "mode": "euclidean",
+      "decay": 25,
+      "sigmoid_speed": 1,
+      "sigmoid_pos": 5
     },
-    "outlier_proximity": {"apply": true}
+    "std_x": {"apply": true,
+    "threshold": 0.8
+    },
+    "outlier_proximity": {"apply": true,
+    "decimals": 10
+  }
   }
 }

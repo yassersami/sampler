@@ -8,7 +8,7 @@
 
   "features": ["r_ext_pAl", "r_ext_pMeO", "pAl_richness"],
   "targets": ["Pg_f", "Tg_Tmax"],
-  "additional_values": ["sim_time", "timed_out"],
+  "additional_values": ["sim_time"],
   
   "variables_ranges": {
     "r_ext_pAl": {"bounds": [2e-7, 1e-5], "scale": "lin", "discete_steps": 0},

@@ -1,4 +1,4 @@
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Union
 
 import numpy as np
 import pandas as pd
@@ -23,8 +23,6 @@ class SurrogateGP:
         # Points to be ignored as they result in erroneous simulations
         self.ignored = set()
         self.decimals = decimals
-        # To normalize std of coverage function to be between 0 and 1
-        self.max_std = 1
 
     def fit(self, X_train: np.ndarray, y_train: np.ndarray):
         self.gp.fit(X_train, y_train)
@@ -32,28 +30,6 @@ class SurrogateGP:
     def predict(self, x: np.ndarray, return_std=False, return_cov=False):
         return self.gp.predict(x, return_std, return_cov)
 
-    def update_max_std(self, iters, n):
-        """ Returns the maximum standard deviation of the Gaussian Process for points between 0 and 1."""
-
-        print("SurrogateGP.update_max_std -> Searching for the maximum standard deviation of the surrogate...")
-        search_error = 0.01
-
-        def get_opposite_std(x):
-            """Opposite of std to be minimized."""
-            x = np.atleast_2d(x)
-            _, y_std = self.gp.predict(x, return_std=True)
-            return -1 * y_std.max()
-
-        bounds = [(0, 1) for _ in self.features]
-        result = shgo(
-            get_opposite_std, bounds, iters=iters, n=n, sampling_method='simplicial'
-        )
-
-        max_std = -1 * result.fun
-        self.max_std = min(1.0, max_std * (1 + search_error))
-        print(f"SurrogateGP.update_max_std -> Maximum GP std: {self.max_std:.3f}")
-        print(f"SurrogateGP.update_max_std -> Training data std: (X, {self.gp.X_train_.std():.3f}), (y, {self.gp.y_train_.std():.3f})")
-        
     def add_ignored_points(self, df: pd.DataFrame):
         """Add bad points (in feature space) to the set of ignored points."""
         # Identify rows where any target column has NaN
@@ -90,68 +66,77 @@ class SurrogateGP:
 
 
 class InlierOutlierGP:
-    def __init__(self, threshold=0.8):
-        """
-        Initializes the InlierOutlierGP class.
-
-        Parameters:
-        - threshold (float): Probability threshold for considering a point as an inlier.
-        """
-        self.threshold = threshold
+    def __init__(self):
+        # Initialize Gaussian Process Classifier with RBF kernel
         self.kernel = 1.0 * RBF(length_scale=1.0)
         self.gp = GaussianProcessClassifier(kernel=self.kernel)
-        self.max_std = 1  # To normalize std of coverage function to be between 0 and 1
+
+        # Map class labels to indices
+        self.class_to_index = {"outlier": 0, "inlier": 1}
+        self.index_to_class = {index: label for label, index in self.class_to_index.items()}
 
     def fit(self, X_train, y_train):
-        """
-        Fits the Gaussian Process model.
-
-        Parameters:
-        - X_train (np.ndarray): Feature matrix.
-        - y_train (np.ndarray): Target values, where NaN indicates an error (outlier).
-        """
         # Determine inlier or outlier status based on NaN presence in y_train
-        y = np.where(np.isnan(y_train).any(axis=1), 0, 1)
+        y = np.where(
+            np.isnan(y_train).any(axis=1),
+            self.class_to_index["outlier"],  # 0
+            self.class_to_index["inlier"]   # 1
+        )
 
         # Fit the Gaussian Process Classifier with the modified target values
         self.gp.fit(X_train, y)
 
-    def predict_inlier_proba(self, X: np.ndarray):
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        """  Predict the class labels for the input data. """
+        return self.gp.predict(X)
+    
+    def predict_proba(self, X: np.ndarray) -> np.ndarray:
+        """  Predict class probabilities for the input data. """
+        return self.gp.predict_proba(X)
+
+    def predict_inlier_proba(self, X: np.ndarray) -> np.ndarray:
+        """ Predicts the probability of being an inlier. """
+        return self.gp.predict_proba(X)[:, self.class_to_index["inlier"]]
+
+    def get_std(self, X: np.ndarray) -> np.ndarray:
         """
-        Predicts the probability of being an inlier.
-
-        Parameters:
-        - X (np.ndarray): Feature matrix.
-
-        Returns:
-        - np.ndarray: Probability of each point being an inlier.
+        Compute a measure of uncertainty based on probabilities.
+        For binary classification, use the probabilities of the positive class.
+        Calculate the standard deviation of the probabilities as a measure of uncertainty.
         """
-        return self.gp.predict_proba(X)[:, 1]
+        # Predict inlier probabilities
+        inlier_proba = self.predict_inlier_proba(X)
 
-    def score_points(self, X):
-        """
-        Scores points based on inlier probability and standard deviation.
+        # Calculate the standard deviation of the probabilities
+        std = np.sqrt(inlier_proba * (1 - inlier_proba))
+        return std
 
-        Parameters:
-        - X (np.ndarray): Feature matrix.
 
-        Returns:
-        - np.ndarray: Scores for each point, with a maximum value of 1.
-        """
-        proba = self.predict_inlier_proba(X)
-        _, std_dev = self.gp.predict(X, return_std=True)
+def search_max_std(
+    gp: Union[GaussianProcessRegressor, GaussianProcessClassifier],
+    features: List[str], shgo_iters: int = 5, shgo_n: int = 1000
+):
+    """ Returns the maximum standard deviation of the Gaussian Process for points between 0 and 1."""
 
-        # Normalize the standard deviation
-        normalized_std = std_dev / self.max_std
+    print("search_max_std -> Searching for the maximum standard deviation of the surrogate...")
+    search_error = 0.01
 
-        # Initialize scores to zero
-        score = np.zeros_like(proba)
+    def get_opposite_std(x):
+        """Opposite of std to be minimized."""
+        x = np.atleast_2d(x)
+        _, y_std = gp.predict(x, return_std=True)
+        return -1 * y_std.max()
 
-        # Calculate scores only for points with high inlier probability
-        high_proba_indices = proba > self.threshold
-        score[high_proba_indices] = proba[high_proba_indices] * normalized_std[high_proba_indices]
+    bounds = [(0, 1)]*len(features)
+    result = shgo(
+        get_opposite_std, bounds, iters=shgo_iters, n=shgo_n, sampling_method='simplicial'
+    )
 
-        return score
+    max_std = -1 * result.fun
+    max_std = min(1.0, max_std * (1 + search_error))
+    print(f"search_max_std -> Maximum GP std: {max_std:.3f}")
+    print(f"search_max_std -> Training data std: (X, {gp.X_train_.std():.3f}), (y, {gp.y_train_.std():.3f})")
+    return max_std
 
 
 class FigureOfMerit:
@@ -170,7 +155,7 @@ class FigureOfMerit:
         by evaluating the standard deviation, focusing on interesting points for further
         exploration. This model does not train on outliers or errors, necessitating an
         alternative method for avoiding poor regions.
-        - gp_filter (InlierOutlierGP): A classifier designed to detect unexplored inlier
+        - gp_classifier (InlierOutlierGP): A classifier designed to detect unexplored inlier
         regions by assessing the standard deviation. It aids in identifying promising
         areas while ensuring that regions with potential errors or outliers are avoided.
     """
@@ -195,44 +180,61 @@ class FigureOfMerit:
         self.gp_surrogate = SurrogateGP(features, targets, decimals)
         
         # Initialize GP fitted on 0|1 values
-        self.gp_filter = InlierOutlierGP()
+        self.gp_classifier = InlierOutlierGP()
         
         # Data attributes
         self.features = features
         self.targets = targets
         self.data = None
 
+        # To normalize std of coverage function to be between 0 and 1
+        self.max_std = 1
+
         # Store coefficients and initialize calculation methods
         self.coefficients = coefficients
-        self.calc_std = self.set_std(c=coefficients["std"])
-        self.calc_interest = self.set_interest(c=coefficients["interest"], interest_region=interest_region)
-        self.calc_coverage = self.set_coverage(c=coefficients["coverage"])
+        self.calc_std = self.set_std(config=coefficients["std"])
+        self.calc_interest = self.set_interest(config=coefficients["interest"], interest_region=interest_region)
+        self.calc_coverage = self.set_coverage(config=coefficients["coverage"])
+        self.calc_std_x = self.set_std_x(config=coefficients["std_x"])
+        # TODO yasser: this method will replace SurrogateGP.should_ignore point
+        # * It is coded but not yet implemented. Create a separate class to store ignored points.
+        self.calc_outlier_proximity = self.set_outlier_proximity(config=coefficients["outlier_proximity"])
         
-    def update(self, data):
+    def update(self, data: pd.DataFrame, shgo_iters: int = 5, shgo_n: int = 1000):
         """
         Updates the Gaussian Process model with new data, excluding rows with NaN target values.
 
         Parameters:
         - data (DataFrame): Total available data to update the model with.
         """
+        # Update current available dataset
         self.data = data
+
         # Filter out rows with NaN target values for GP training
         clean_data = data.dropna(subset=self.targets)
         self.gp_surrogate.fit(
             X_train=clean_data[self.features].values,
             y_train=clean_data[self.targets].values
         )
-        # Train another GP to find unexplored inlier regions
-        # self.gp_filter.fit(
-        #     X_train=data[self.features].values,
-        #     y_train=data[self.targets].values
-        # )
 
-    def set_std(self, c: Dict):
+        # Train another GP to find unexplored inlier regions
+        if self.coefficients["std_x"]["apply"]:
+            self.gp_classifier.fit(
+                X_train=data[self.features].values,
+                y_train=data[self.targets].values
+            )
+
+        # Update max_std of current GP model(s)
+        self.max_std = search_max_std(
+            gp=self.gp_surrogate.gp, features=self.features, shgo_iters=shgo_iters, shgo_n=shgo_n
+        )
+        # # TODO yasser: include std_x or not need ? gp = concat(gp_surrogate + gp_classifier)
+
+    def set_std(self, config: Dict):
         """
             Set the standard deviation function, which penalizes points with high uncertainty.
         """
-        if c["apply"]:
+        if config["apply"]:
             def std(x):
                 """
                 Computes the mean standard deviation over all target dimensions for a given input x
@@ -244,7 +246,7 @@ class FigureOfMerit:
 
                 y_std_mean = y_std.mean(axis=1)
 
-                score = 1 - y_std_mean / self.gp_surrogate.max_std
+                score = 1 - y_std_mean / self.max_std
                 return score
         else:
             def std(x):
@@ -253,8 +255,8 @@ class FigureOfMerit:
         return std
 
 
-    def set_interest(self, c: Dict, interest_region: Dict):
-        if c["apply"]:
+    def set_interest(self, config: Dict, interest_region: Dict):
+        if config["apply"]:
             lowers = [region[0] for region in interest_region.values()]
             uppers = [region[1] for region in interest_region.values()]
             def interest(x):
@@ -280,26 +282,26 @@ class FigureOfMerit:
 
         return interest
 
-    def set_coverage(self, c: Dict):
+    def set_coverage(self, config: Dict):
         """
             Set the coverage function, which penalizes near by points in the space,
             promoting the exploration (coverage) of the space.
         """
-        if c["apply"]:
+        if config["apply"]:
             def space_coverage_one(x: np.ndarray):
                 x = np.atleast_2d(x)
                 assert x.shape[0] == 1, "Input x must be a single point!"
-                if c["include_outliers"]:
+                if config["include_outliers"]:
                     points = self.data[self.features].values
                 else:
                     points = self.gp_surrogate.gp.X_train_
                 
                 distances = np.linalg.norm(points - x, axis=1)
 
-                # TODO: Add these to kedro catalog parameters
-                decay = 25         # 20 or lower for including farther points
-                sigmoid_speed = 1  # 5 or lower to allow more points to be closer to each other
-                sigmoid_pos = 5
+                # Sigmoid parameters
+                decay = config["decay"]  # 20 or lower for including farther points
+                sigmoid_speed = config["sigmoid_speed"]  # 5 or lower to allow more points to be closer to each other
+                sigmoid_pos = config["sigmoid_pos"]
 
                 score = np.exp(-decay * distances).sum()
                 # Pass sum of probs through sigmoid
@@ -320,6 +322,86 @@ class FigureOfMerit:
                 x = np.atleast_2d(x)
                 return np.zeros(x.shape[0])
         return space_coverage
+
+    def set_std_x(self, config: Dict) -> callable:
+        """
+        Set the standard deviation function for the InlierOutlierGP classifier.
+        This classifier predicts whether a sample is an inlier or outlier.
+        It trains on all data, not just inliers like the SurrogateGP class.
+        """
+        if config["apply"]:
+            def std_x(x):
+                """
+                Calculate scores based on inlier probability and standard deviation.
+                Computes the standard deviation over feature dimensions for a given
+                input x and scales it to the range [0, 1].
+                """
+                x = np.atleast_2d(x)
+                proba = self.gp_classifier.predict_inlier_proba(x)
+                y_std = self.gp_classifier.get_std(x)
+
+                # Normalize the standard deviation
+                normalized_std = y_std / self.max_std
+
+                # Initialize scores to zero
+                score = np.zeros_like(proba)
+                
+                # Probability threshold for considering a point as an inlier.
+                threshold = config["threshold"]
+
+                # Calculate scores for points with high inlier probability
+                high_proba_indices = proba > threshold
+                score[high_proba_indices] = proba[high_proba_indices] * normalized_std[high_proba_indices]
+
+                # Make score an objective for minimization
+                score = 1 - score
+                return score
+        else:
+            def std_x(x):
+                x = np.atleast_2d(x)
+                return np.zeros(x.shape[0])
+
+        return std_x
+    
+    def set_outlier_proximity(self, config: Dict) -> callable:
+        if config["apply"]:
+            def outlier_proximity(self, x: np.ndarray) -> np.ndarray:
+                """
+                Proximity Exclusion Condition: Determine if the given points are near any points
+                with erroneous simulations. Points located within a very small hypercube of edge
+                length 1e(-self.decimals) around specified points are excluded from further
+                processing. This condition is necessary because the surrogate GP does not update
+                around failed samples.
+
+                Returns:
+                - np.ndarray: An array of 1.0 (ignored) or 0.0 (not ignored) for each point.
+                """
+                if len(self.gp_surrogate.ignored) == 0:
+                    return np.zeros(x.shape[0])
+
+                decimals = config["decimals"]
+                
+                x = np.atleast_2d(x)
+                x_rounded = np.round(x, decimals)
+                ignored_rounded = np.round(np.array([*self.gp_surrogate.ignored]), decimals)
+
+                # Determine which points should be ignored
+                should_ignore = np.any(np.all(x_rounded[:, np.newaxis] == ignored_rounded, axis=2), axis=1)
+
+                # Log ignored points
+                for i, ignore in enumerate(should_ignore):
+                    if ignore:
+                        print(f"FOM.target_function -> Point {x[i]} was ignored.")
+
+                # return should_ignore.astype(float)
+                return should_ignore
+        else:
+            def outlier_proximity(x):
+                x = np.atleast_2d(x)
+                # return np.zeros(x.shape[0])
+                return np.full(x.shape[0], False)
+
+        return outlier_proximity
 
     def sort_by_relevance(self, mask: np.ndarray, unique_min: np.ndarray) -> List:
         n_feat = len(self.features)
@@ -353,12 +435,17 @@ class FigureOfMerit:
         x = np.atleast_2d(x)
         assert x.shape[0] == 1, "Input x must be a single point!"
 
-        if self.gp_surrogate.should_ignore_point(x):
+        if self.gp_surrogate.should_ignore_point(x) and self.coefficients["outlier_proximity"]["apply"]:
             # Point is excluded (ignored) from further processing
             print(f"FOM.target_function -> Point {x} was ignored.")
             score = np.array([1.0])
         else:
-            score = self.calc_std(x) + self.calc_interest(x) + self.calc_coverage(x)
+            score = (
+                self.calc_std(x)
+                + self.calc_interest(x)
+                + self.calc_coverage(x)
+                + self.calc_std_x(x)
+            )
         return score.item()
     
     def get_scores(self, new_xs: np.ndarray) -> List:
@@ -372,7 +459,7 @@ class FigureOfMerit:
         )
         return scores
 
-    def optimize(self, batch_size: int = 1, iters: int = 5, n: int = 1000):
+    def optimize(self, batch_size: int = 1, shgo_iters: int = 5, shgo_n: int = 1000):
         """
         Optimize the acquisition function to find the best candidates for simulation.
 
@@ -385,15 +472,15 @@ class FigureOfMerit:
         Returns:
             Tuple[np.ndarray, pd.DataFrame]: Selected points and their scores.
         """
-        
-        self.gp_surrogate.update_max_std(iters, n)
-        # self.gp_filter.max_std = self.gp_surrogate.max_std
 
         print("FOM.optimize -> Searching for good candidates using the acquisition function...")
 
         bounds = [(0, 1)]*len(self.features)
         
-        result = shgo(self.target_function, bounds, iters=iters, n=n, sampling_method='simplicial')
+        result = shgo(
+            self.target_function, bounds, iters=shgo_iters, n=shgo_n,
+            sampling_method='simplicial'
+        )
         res = result.xl if result.success else result.x.reshape(1, -1)
         new_xs = self.choose_results(minimums=res, size=batch_size)
         

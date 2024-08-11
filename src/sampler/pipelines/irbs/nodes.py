@@ -50,9 +50,9 @@ def irbs_sampling(
     progress_bar = tqdm(total=max_size, dynamic_ncols=True) if run_until_max_size else tqdm(total=n_interest_max, dynamic_ncols=True)  # Initialize tqdm progress bar with estimated time remaining
     print(f"Iteration {iteration:03} - Total size {n_total} - Inliers size {n_inliers} - Interest count {n_interest}")
     while end_condition:
-        model.update(res)  # Set the new model that will be used in next iteration
+        model.update(res, shgo_iters=opt_iters, shgo_n=opt_points)  # Set the new model that will be used in next iteration
 
-        new_x, scores = model.optimize(batch_size=batch_size, iters=opt_iters, n=opt_points)  # Search new candidates to add to res dataset
+        new_x, scores = model.optimize(batch_size=batch_size, shgo_iters=opt_iters, shgo_n=opt_points)  # Search new candidates to add to res dataset
 
         new_df = simulator.process_data(new_x, real_x=False, index=n_total, treat_output=True)  # Launch time expensive simulations
         model.gp_surrogate.add_ignored_points(new_df)
