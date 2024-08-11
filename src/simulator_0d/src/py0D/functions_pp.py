@@ -108,6 +108,7 @@ class DB_simu_pp(DB_simu):
         self.csv_file(output_dir)
         return {
             "sim_time": self.DOI["sim_time"],
+            "timed_out": self.DOI["timed_out"],
             "Tg_Tmax": self.DOI["Tg_Tmax"],
             "Pg_f": self.DOI["Pg_f"],
             "Pg_rate": self.DOI["Pg_rate"],

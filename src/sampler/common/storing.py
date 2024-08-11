@@ -42,14 +42,19 @@ def join_history(history: Dict[str, pd.DataFrame], run_condition: Dict, initial_
 
 def set_history_folder(history_path: str, should_rename: bool = True):
     '''
-    Set folder where to store explored samples during optimization.
+    Set history folder where explored samples are incrementally stored.
     '''
+    # Check if the folder already exists
     folder_exists = os.path.isdir(history_path)
+    
     if not folder_exists:
-        os.makedirs(history_path)  # create new folder
-    elif folder_exists and should_rename:
+        # If the folder does not exist, create it
+        os.makedirs(history_path)
+    elif should_rename:
+        # If the folder exists and should_rename is True, rename existing folder
         rename_folder(history_path)
-        os.makedirs(history_path)  # create new folder
+        # Create a new folder after renaming the old one
+        os.makedirs(history_path)
 
 
 def rename_folder(old_path: str):

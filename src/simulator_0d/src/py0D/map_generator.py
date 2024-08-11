@@ -38,12 +38,16 @@ def label(sample):
 #------------ Génération de la DB : creation des dossiers avec inputs_var.json et inputs_fix.json dedans --------------
 def map_generator(sample, map_dir=MAP_DIR):
 
-    # Création des dossiers simu_0000X
+    # Construire le chemin du répertoire simu_0000X
     simu_dir = join_path(map_dir, str(sample.loc["workdir"]))
-    pathlib.Path(simu_dir).mkdir(
-        parents=False,
-        exist_ok=True
-    )
+
+    # Vérifier si le répertoire existe
+    if pathlib.Path(simu_dir).exists():
+        # Supprimer le répertoire existant et son contenu
+        shutil.rmtree(simu_dir)
+
+    # Créer un nouveau répertoire
+    pathlib.Path(simu_dir).mkdir(parents=False, exist_ok=False)
 
     # Mise en place des fichiers inputs_fix.json et inputs_var.json dedans
     inputs_fix_path = join_path(simu_dir, 'inputs_fix.json')        # Création du chemins pour inputs_fix.json

@@ -13,38 +13,45 @@ import simulator_0d.src.py0D.main as simulator_0d
 from simulator_0d.src.py0D.functions_pp import DB_simu_pp as SimPostProc
 
 
-
-def launch_0d(input_dir: str):
-    IGNORE_TIMED_OUT = False
-
+def launch_0d(input_dir: str) -> Dict[str, float]:
+    # Define input and output directories
     inputs_dic, output_dir = sim_aux.define_in_out(input_dir)
-    
+
+    # Warn about the maximum simulation time
+    max_simu_time_sec = inputs_dic.get("max_simu_time", 0)
+    max_simu_time_min = max_simu_time_sec / 60
     warnings.warn(
-        f'Maximum simulation time is set to {inputs_dic["max_simu_time"]} seconds ({inputs_dic["max_simu_time"]/60:.2f} minutes). '
-        + 'Value can be changed in sampler/src/simulator_0d/data/inputs_fix/inputs_fix.json'
+        f"Maximum simulation time is set to {max_simu_time_sec} seconds "
+        f"({max_simu_time_min:.2f} minutes). "
+        "Value can be changed in src/simulator_0d/data/inputs_fix/inputs_fix.json"
     )
 
+    # Default error response
     error_res = {
-            "sim_time": np.NaN,
-            "Tg_Tmax": np.NaN,
-            "Pg_f": np.NaN,
-            "Pg_rate": np.NaN,
-            "Y_O2_f": np.NaN,
-        }
+        "sim_time": np.NaN,
+        "timed_out": np.NaN,
+        "Tg_Tmax": np.NaN,
+        "Pg_f": np.NaN,
+        "Pg_rate": np.NaN,
+        "Y_O2_f": np.NaN,
+    }
 
     try:
+        # Run the simulation
         db_simulation = simulator_0d.main(inputs_dic)
+        
+        # Post-process the simulation results
         results = SimPostProc(**db_simulation.__dict__)
-        
-        if IGNORE_TIMED_OUT and results.DOI["timed_out"]:
-            warnings.warn(f"Simulation timed out! Ignoring experiment for features: {inputs_dic}.")
-            return error_res
-        
         res_dict = results.manage(output_dir=output_dir)
-    except BaseException as e:
-        warnings.warn(f"Error in simulation! Returning NaNs. Error: {e}. Input dic: {inputs_dic}")
+        
+    except Exception as e:
+        # Handle any exceptions and return the error response
+        warnings.warn(
+            "Error in simulation! Returning NaNs.\n"
+            f"Error: {e}. \nInput dic: {inputs_dic}"
+        )
         return error_res
-    
+
     return res_dict
 
 
