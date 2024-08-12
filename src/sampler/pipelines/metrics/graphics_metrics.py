@@ -340,10 +340,10 @@ def dist_volume_voronoi(data, volume_voronoi):
 
     fig, axes = plt.subplots(2, 2, figsize=(14, 10), gridspec_kw={'height_ratios': [0.5, 0.5], 'width_ratios': [0.9, 0.1]})
 
-    inset_ax_features = fig.add_axes([0.17, 0.67, 0.2, 0.2])  # First subplot zoomed
-    inset_ax_features_box = fig.add_axes([0.41, 0.67, 0.2, 0.2])  # Second subplot zoomed with boxplot
-    inset_ax_targets = fig.add_axes([0.17, 0.25, 0.2, 0.2])   # Second subplot zoomed
-    inset_ax_targets_box = fig.add_axes([0.41, 0.25, 0.2, 0.2])  # Second subplot zoomed with boxplot
+    inset_ax_features = fig.add_axes([0.17, 0.66, 0.2, 0.2])  # First subplot zoomed
+    inset_ax_features_box = fig.add_axes([0.41, 0.66, 0.2, 0.2])  # Second subplot zoomed with boxplot
+    inset_ax_targets = fig.add_axes([0.17, 0.24, 0.2, 0.2])   # Second subplot zoomed
+    inset_ax_targets_box = fig.add_axes([0.41, 0.24, 0.2, 0.2])  # Second subplot zoomed with boxplot
 
     legend_info_features = []
     legend_info_targets = []
@@ -353,7 +353,15 @@ def dist_volume_voronoi(data, volume_voronoi):
     feature_labels = []
     target_labels = []
 
-    for data_keys, vol_voronoi in zip(data.keys(), volume_voronoi.values()):
+    x_limit_features, x_limit_targets = 1, 1
+    y_limit_features, y_limit_targets = 1e-7, 1e-7
+    max_features = max(all_features_data)
+    max_targets = max(all_targets_data)
+    
+    offset = 0.1
+    width = 0.5
+
+    for i, (data_keys, vol_voronoi) in enumerate(zip(data.keys(), volume_voronoi.values())):
         features = vol_voronoi['features']
         features_targets = vol_voronoi['features_targets']
 
@@ -365,27 +373,42 @@ def dist_volume_voronoi(data, volume_voronoi):
         median_targets = np.median(features_targets)
         std_targets = np.std(features_targets)
 
+        x_positions_features = np.arange(len(sorted_features)) + i * offset
+        x_positions_targets = np.arange(len(sorted_features_targets)) + i * offset
+
+
         axes[0, 0].bar(
-            x=range(len(sorted_features)),
-            height=sorted_features,
-            color=data[data_keys]['color'], alpha=0.25, label=data[data_keys]['name']
-        )
+                    x_positions_features, sorted_features,
+                    width=width, color=data[data_keys]['color'],
+                    alpha=0.25, label=data[data_keys]['name']
+                )   
         axes[1, 0].bar(
-            x=range(len(sorted_features_targets)),
-            height=sorted_features_targets,
-            color=data[data_keys]['color'], alpha=0.25, label=data[data_keys]['name']
-        )
+                    x_positions_targets, sorted_features_targets,
+                    width=width, color=data[data_keys]['color'],
+                    alpha=0.25, label=data[data_keys]['name']
+                )
 
         inset_ax_features.bar(
-            x=range(int(x_ratio_zoom * len(sorted_features))),
-            height=sorted_features[:int(x_ratio_zoom * len(sorted_features))],
-            color=data[data_keys]['color'], alpha=0.25
-        )
+                        x_positions_features, sorted_features, width=width,
+                        color=data[data_keys]['color'], alpha=0.25
+                    )  
         inset_ax_targets.bar(
-            x=range(int(x_ratio_zoom * len(sorted_features_targets))),
-            height=sorted_features_targets[:int(x_ratio_zoom * len(sorted_features_targets))],
-            color=data[data_keys]['color'], alpha=0.25
-        )
+                        x_positions_targets, sorted_features_targets, width=width,
+                        color=data[data_keys]['color'], alpha=0.25
+                    )
+
+        if max_features>0:
+            threshold_value_features = max_features * 0.01
+            x_limit_f = max([i for i, v in enumerate(sorted_features) if v < threshold_value_features])
+            x_limit_features = max(x_limit_features, x_limit_f)
+            y_limit_features = max(y_limit_features, sorted_features[x_limit_f+1])
+
+        if max_targets>0:
+            threshold_value_targets = max_targets * 0.01
+            x_limit_t = max([i for i, v in enumerate(sorted_features_targets) if v < threshold_value_targets])
+            x_limit_targets = max(x_limit_targets, x_limit_t)
+            y_limit_targets = max(y_limit_targets, sorted_features_targets[x_limit_t+1])
+
 
         feature_data_list.append(features)
         target_data_list.append(features_targets)
@@ -431,6 +454,18 @@ def dist_volume_voronoi(data, volume_voronoi):
     customize_boxplot(inset_ax_features_box, feature_data_list, feature_colors)
     customize_boxplot(inset_ax_targets_box, target_data_list, target_colors)
     
+    inset_ax_features.set_xlim([0, x_limit_features])
+    inset_ax_targets.set_xlim([0, x_limit_targets])
+    inset_ax_features.set_ylim([0, 1.05*y_limit_features])
+    inset_ax_targets.set_ylim([0, 1.05*y_limit_targets])
+
+    inset_ax_features.ticklabel_format(axis='y', style='sci', scilimits=(0,0))
+    inset_ax_targets.ticklabel_format(axis='y', style='sci', scilimits=(0,0))
+
+    inset_ax_features_box.ticklabel_format(axis='y', style='sci', scilimits=(0,0))
+    inset_ax_targets_box.ticklabel_format(axis='y', style='sci', scilimits=(0,0))
+
+
     # Set y-axis lim for inset bar plot
     if not is_same_size_interest:
         inset_ax_features.set_ylim(0, max(all_features_data) * 0.01)
