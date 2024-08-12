@@ -23,7 +23,6 @@ def create_pipeline(**kwargs) -> Pipeline:
                 run_condition='params:run_condition',
                 opt_iters='params:irbs_opt_iters',
                 opt_points='params:irbs_opt_sampling_points',
-                decimals='params:irbs_error_round_decimals',
                 simulator_env='params:simulator_env',
             ),
             outputs='irbs_history',

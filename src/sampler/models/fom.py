@@ -3,6 +3,7 @@ import warnings
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+from scipy.spatial import distance
 
 from scipy.stats import norm
 from sklearn.gaussian_process import GaussianProcessRegressor, GaussianProcessClassifier
@@ -13,7 +14,7 @@ RANDOM_STATE = 42
 
 
 class SurrogateGP:
-    def __init__(self, features: List[str], targets: List[str], decimals: int=10):
+    def __init__(self, features: List[str], targets: List[str]):
 
         self.features = features
         self.targets = targets
@@ -22,10 +23,6 @@ class SurrogateGP:
 
         # To normalize std of coverage function to be between 0 and 1
         self.max_std = 1
-        
-        # Points to be ignored as they result in erroneous simulations
-        self.ignored = set()
-        self.decimals = decimals
 
     def fit(self, X_train: np.ndarray, y_train: np.ndarray):
         self.gp.fit(X_train, y_train)
@@ -81,39 +78,58 @@ class SurrogateGP:
         print(f"SurrogateGP.update_max_std -> Maximum GP std: {max_std}")
         print(f"SurrogateGP.update_max_std -> Training data std per target: {self.gp.y_train_.std(axis=0)}")
 
-    def add_ignored_points(self, df: pd.DataFrame):
+
+class OutlierExcluder:
+    def __init__(
+        self, features: List[str], targets: List[str], threshold: float = 1e-5,
+        distance_metric: str = "euclidean"
+    ):
+        
+        self.features = features
+        self.targets = targets
+        self.threshold = threshold
+        self.distance_metric = distance_metric
+        # Points to be avoided as they result in erroneous simulations
+        self.ignored_df = pd.DataFrame(columns=self.features)
+    
+    def update_outliers_set(self, df: pd.DataFrame):
         """ Add bad points (in feature space) to the set of ignored points. """
         # Identify rows where any target column has NaN
         ignored_rows = df[df[self.targets].isna().any(axis=1)]
 
-        # Extract feature values from these rows and convert to a set of tuples
-        features_set = set(tuple(row) for row in ignored_rows[self.features].values)
+        # Extract feature values from these rows
+        new_ignored_df = ignored_rows[self.features]
 
-        # Add these feature points to the set of ignored points
-        self.ignored = self.ignored.union(features_set)
+        # Concatenate the new ignored points with the existing ones
+        self.ignored_df = pd.concat([self.ignored_df, new_ignored_df]).drop_duplicates()
+        self.ignored_df = self.ignored_df.reset_index(drop=True)
 
-    def should_ignore_point(self, x: np.ndarray) -> bool:
+    def detect_outlier_proximity(self, x: np.ndarray) -> bool:
         """
         Proximity Exclusion Condition: Determine if the given point is near any point
-        with erroneous simulations. Points located within a very small hypercube of edge
-        lenght 1e(-self.decimals) around specified points are excluded from further
-        processing. This condition is necessary because surrogate GP does not update
-        around failed samples.
-
-        Args: x (np.ndarray): A single sample point to check.
-
-        Returns: bool: True if the point should be ignored, False otherwise.
-        """
-        if len(self.ignored) == 0:
-            return False
-        x = np.atleast_2d(x)
-        assert x.shape[0] == 1, "Input x must be a single point!"
+        with erroneous simulations. Points located within a very small vicinity of
+        lenght threshold around specified points are excluded from further processing.
         
-        # TODO yasser: instead of a cube of why not set a sphere where r=(gp_std_relative > 20% or 5%)
-        x_rounded = np.round(x.ravel(), self.decimals)
-        ignored_rounded = np.round(np.array([*self.ignored]), self.decimals)
+        This condition is necessary because surrogate GP does not update around failed
+        samples.
+        """
+        x = np.atleast_2d(x)
+        
+        if self.ignored_df.empty:
+            return np.zeros(x.shape[0], dtype=bool)
+    
+        # Compute distances based on the specified metric
+        distances = distance.cdist(x, self.ignored_df.values, self.distance_metric)
 
-        return np.any(np.all(x_rounded == ignored_rounded, axis=1))
+        # Determine which points should be ignored based on the distance threshold
+        should_ignore = np.any(distances < self.threshold, axis=1)
+
+        # Log ignored points
+        for i, ignore in enumerate(should_ignore):
+            if ignore:
+                print(f"OutlierProximityHandler.should_ignore -> Point {x[i]} was ignored.")
+
+        return should_ignore
 
 
 class InlierOutlierGP:
@@ -233,8 +249,7 @@ class FigureOfMerit:
 
     def __init__(
         self, features: List[str], targets: List[str],
-        coefficients: Dict[str, Dict], interest_region: Dict[str, Tuple[float, float]],
-        decimals: int
+        coefficients: Dict[str, Dict], interest_region: Dict[str, Tuple[float, float]]
     ):
         """
         Initializes the FigureOfMerit class.
@@ -245,10 +260,14 @@ class FigureOfMerit:
         - coefficients: Coefficients for standard deviation, interest,
           and coverage calculations.
         - interest_region: Parameters defining the region of interest.
-        - decimals: Number of decimal places for rounding.
         """
         # Initialize GP surrogate model
-        self.gp_surrogate = SurrogateGP(features, targets, decimals)
+        self.gp_surrogate = SurrogateGP(features, targets)
+        
+        # Initialize outliers handler
+        self.excluder = OutlierExcluder(
+            features, targets, threshold=coefficients["outlier_proximity"]["threshold"]
+        )
         
         # Initialize GP fitted on 0|1 values
         self.gp_classifier = InlierOutlierGP()
@@ -264,9 +283,10 @@ class FigureOfMerit:
         self.calc_interest = self.set_interest(config=coefficients["interest"], interest_region=interest_region)
         self.calc_coverage = self.set_coverage(config=coefficients["coverage"])
         self.calc_std_x = self.set_std_x(config=coefficients["std_x"])
-        # TODO yasser: this method will replace SurrogateGP.should_ignore point
-        # * It is coded but not yet implemented. Create a separate class to store ignored points.
         self.calc_outlier_proximity = self.set_outlier_proximity(config=coefficients["outlier_proximity"])
+        
+        # Count number of active scores
+        self.count_active_scores = sum([score["apply"] for score in coefficients.values()])
         
     def update(self, data: pd.DataFrame, optimizer_kwargs: Dict):
         """
@@ -297,14 +317,12 @@ class FigureOfMerit:
 
     def set_std(self, config: Dict):
         """
-            Set the standard deviation function, which penalizes points with high uncertainty.
+        Set the standard deviation function, which penalizes points with high
+        uncertainty. Computes the combined standard deviation over all target dimensions
+        for a given input x and stretches it to reach the entire range of [0, 1].
         """
         if config["apply"]:
             def std(x):
-                """
-                Computes the combined standard deviation over all target dimensions for a given input x
-                and stretches it to reach the entire range of [0, 1].
-                """
                 x = np.atleast_2d(x)
 
                 y_std_combined = self.gp_surrogate.get_std(x)
@@ -319,13 +337,14 @@ class FigureOfMerit:
 
 
     def set_interest(self, config: Dict, interest_region: Dict):
+        """
+        Given an n-dimensional x returns the sum of the probabilities to be in the
+        interest region.
+        """
         if config["apply"]:
             lowers = [region[0] for region in interest_region.values()]
             uppers = [region[1] for region in interest_region.values()]
             def interest(x):
-                """
-                Given an n-dimensional x returns the sum of the probabilities to be in the interest region
-                """
                 x = np.atleast_2d(x)
 
                 y_hat, y_std = self.gp_surrogate.predict(x, return_std=True)
@@ -391,12 +410,10 @@ class FigureOfMerit:
         Set the standard deviation function for the InlierOutlierGP classifier.
         This classifier predicts whether a sample is an inlier or outlier.
         It trains on all data, not just inliers like the SurrogateGP class.
+        It calculates scores based on inlier probability and standard deviation.
         """
         if config["apply"]:
             def std_x(x):
-                """
-                Calculate scores based on inlier probability and standard deviation.
-                """
                 x = np.atleast_2d(x)
                 
                 use_threshold = config["use_threshold"]
@@ -417,42 +434,24 @@ class FigureOfMerit:
         return std_x
     
     def set_outlier_proximity(self, config: Dict) -> callable:
+        """
+        Proximity Exclusion Condition: Determine if the given points are near any points
+        with erroneous simulations. Points located within a very small vicinity around
+        outliers are excluded from further processing. This condition is necessary
+        because the surrogate GP does not update around failed samples.
+        """
         if config["apply"]:
-            def outlier_proximity(self, x: np.ndarray) -> np.ndarray:
-                """
-                Proximity Exclusion Condition: Determine if the given points are near any points
-                with erroneous simulations. Points located within a very small hypercube of edge
-                length 1e(-self.decimals) around specified points are excluded from further
-                processing. This condition is necessary because the surrogate GP does not update
-                around failed samples.
-
-                Returns:
-                - np.ndarray: An array of 1.0 (ignored) or 0.0 (not ignored) for each point.
-                """
-                if len(self.gp_surrogate.ignored) == 0:
-                    return np.zeros(x.shape[0])
-
-                decimals = config["decimals"]
-                
+            def outlier_proximity(x: np.ndarray) -> np.ndarray:
                 x = np.atleast_2d(x)
-                x_rounded = np.round(x, decimals)
-                ignored_rounded = np.round(np.array([*self.gp_surrogate.ignored]), decimals)
-
-                # Determine which points should be ignored
-                should_ignore = np.any(np.all(x_rounded[:, np.newaxis] == ignored_rounded, axis=2), axis=1)
-
-                # Log ignored points
-                for i, ignore in enumerate(should_ignore):
-                    if ignore:
-                        print(f"FOM.target_function -> Point {x[i]} was ignored.")
-
-                # return should_ignore.astype(float)
-                return should_ignore
+                # Array of bools
+                should_ignore = self.excluder.detect_outlier_proximity(x)
+                # if sample is bad (near outlier), score is 1, and 0 if not
+                score = should_ignore.astype(float)
+                return score
         else:
             def outlier_proximity(x):
                 x = np.atleast_2d(x)
-                # return np.zeros(x.shape[0])
-                return np.full(x.shape[0], False)
+                return np.zeros(x.shape[0])
 
         return outlier_proximity
 
@@ -488,17 +487,13 @@ class FigureOfMerit:
         x = np.atleast_2d(x)
         assert x.shape[0] == 1, "Input x must be a single point!"
 
-        if self.gp_surrogate.should_ignore_point(x) and self.coefficients["outlier_proximity"]["apply"]:
-            # Point is excluded (ignored) from further processing
-            print(f"FOM.target_function -> Point {x} was ignored.")
-            score = np.array([1.0])
-        else:
-            score = (
-                self.calc_std(x)
-                + self.calc_interest(x)
-                + self.calc_coverage(x)
-                + self.calc_std_x(x)
-            )
+        score = (
+            self.calc_std(x)
+            + self.calc_interest(x)
+            + self.calc_coverage(x)
+            + self.calc_std_x(x)
+            + self.calc_outlier_proximity(x)
+        )
         return score.item()
     
     def get_scores(self, new_xs: np.ndarray) -> List:
@@ -507,9 +502,10 @@ class FigureOfMerit:
                 self.calc_std(new_xs),
                 self.calc_interest(new_xs),
                 self.calc_coverage(new_xs),
-                self.calc_std_x(new_xs)
+                self.calc_std_x(new_xs),
+                self.calc_outlier_proximity(new_xs)
             ]).T,
-            columns=["std", "interest", "coverage", "std_x"]
+            columns=["std", "interest", "coverage", "std_x", "exclusion"]
         )
         return scores
 

@@ -20,15 +20,14 @@ def irbs_sampling(
         data: pd.DataFrame, treatment: DataTreatment,
         features: List[str], targets: List[str], additional_values: List[str],
         coefficients: Dict, simulator_env: Dict, run_condition: Dict,
-        opt_iters: int = 5, opt_points: int = 1000,
-        decimals: int = 7,
+        opt_iters: int = 5, opt_points: int = 1000
 ):
     max_size, n_interest_max, run_until_max_size, batch_size = run_condition['max_size'], run_condition['n_interest_max'], run_condition['run_until_max_size'], run_condition['batch_size']
     
     # Set figure of merite (acquisition function)
     model = FigureOfMerit(
         features=features, targets=targets, coefficients=coefficients,
-        interest_region=treatment.scaled_interest_region, decimals=decimals
+        interest_region=treatment.scaled_interest_region
     )
 
     # Set simulator environement
@@ -54,7 +53,7 @@ def irbs_sampling(
         new_x, scores = model.optimize(batch_size=batch_size, shgo_iters=opt_iters, shgo_n=opt_points)  # Search new candidates to add to res dataset
 
         new_df = simulator.process_data(new_x, real_x=False, index=n_total, treat_output=True)  # Launch time expensive simulations
-        model.gp_surrogate.add_ignored_points(new_df)
+        model.excluder.update_outliers_set(new_df)
 
         print(f'Round {iteration:03} (continued): simulation results' + '-'*49)
         print(f'irbs_sampling -> New samples after simulation:\n {new_df}')

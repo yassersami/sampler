@@ -64,7 +64,6 @@ def run_parego(
         dace.update_model(x_pop, y_pop, llambda) # Prepare train data and train GP
         new_x = EvolAlg(dace, x_pop, num_generations=num_generations, batch_size=batch_size) # Search new candidates to add to res dataset
         new_df = simulator.process_data(new_x, real_x=False, index=n_total, treat_output=True) # Launch time expensive simulations
-        dace.model.add_ignored_points(new_df)
 
         print(f'Round {iteration:03} (continued): simulation results' + '-'*49)
         print(f'run_parego -> New samples after simulation:\n {new_df}')

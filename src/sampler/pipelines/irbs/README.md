@@ -37,7 +37,6 @@ The pipeline requires the following inputs:
 - **`params:irbs_batch_size`**: Batch size to sample at each itereation
 - **`params:irbs_opt_iters`**: Number of optimization iterations for the SHGO algorithm
 - **`params:irbs_opt_sampling_points`**: Number of sampling points for optimization in SHGO
-- **`params:irbs_error_round_decimals`**: Decimal places for rounding errors
 
 ### Simulation Environment
 - **`params:simulator_env`**: Simulator environment configuration
