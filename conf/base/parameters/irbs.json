@@ -13,6 +13,7 @@
       "sigmoid_pos": 5
     },
     "std_x": {"apply": true,
+    "use_threshold": false,
     "threshold": 0.8
     },
     "outlier_proximity": {"apply": true,

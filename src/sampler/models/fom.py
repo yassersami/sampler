@@ -1,5 +1,5 @@
 from typing import List, Tuple, Dict, Union
-
+import warnings
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -19,6 +19,9 @@ class SurrogateGP:
         self.targets = targets
         kernel = RationalQuadratic(length_scale_bounds=(1e-7, 100000))
         self.gp = GaussianProcessRegressor(kernel=kernel, random_state=RANDOM_STATE)
+
+        # To normalize std of coverage function to be between 0 and 1
+        self.max_std = 1
         
         # Points to be ignored as they result in erroneous simulations
         self.ignored = set()
@@ -30,8 +33,56 @@ class SurrogateGP:
     def predict(self, x: np.ndarray, return_std=False, return_cov=False):
         return self.gp.predict(x, return_std, return_cov)
 
+    def get_std(self, x: np.ndarray) -> np.ndarray:
+        """
+        Compute the combined standard deviation for a GP regressor with multiple targets.
+
+        Note: In previous implementations, the mean of the Gaussian Process (GP) standard
+        deviations was computed for the Figure of Merit (FOM). However, the maximum
+        standard deviation was determined using only the first target's standard
+        deviation (y_std[:, 1]). Then the max_std was computed using max of stadard
+        deviations, but this approach was still lacking consistency.
+        This function unifies the approach by consistently combining the standard deviations
+        for both the determination of the maximum standard deviation and the application of
+        FOM constraints.
+        """
+        # Predict standard deviations for each target
+        _, y_std = self.gp.predict(x, return_std=True)
+
+        # Combine standard deviations using the mean
+        y_std_combined = y_std.mean(axis=1)
+
+        # Alternative: Combine using the maximum standard deviation
+        # y_std_combined = y_std.max(axis=1)
+
+        return y_std_combined
+    
+    def update_max_std(self, shgo_iters: int = 5, shgo_n: int = 1000):
+        """ Returns the maximum standard deviation of the Gaussian Process for points between 0 and 1."""
+
+        print("SurrogateGP.update_max_std -> Searching for the maximum standard deviation of the surrogate...")
+        search_error = 0.01
+
+        def get_opposite_std(x):
+            """Opposite of std to be minimized."""
+            x = np.atleast_2d(x)
+            y_std = self.get_std(x)
+            return -1 * y_std
+
+        bounds = [(0, 1)]*len(self.features)
+        result = shgo(
+            get_opposite_std, bounds, iters=shgo_iters, n=shgo_n, sampling_method='simplicial'
+        )
+
+        max_std = -1 * result.fun
+        max_std = min(1.0, max_std * (1 + search_error))
+        self.max_std = max_std
+
+        print(f"SurrogateGP.update_max_std -> Maximum GP std: {max_std}")
+        print(f"SurrogateGP.update_max_std -> Training data std per target: {self.gp.y_train_.std(axis=0)}")
+
     def add_ignored_points(self, df: pd.DataFrame):
-        """Add bad points (in feature space) to the set of ignored points."""
+        """ Add bad points (in feature space) to the set of ignored points. """
         # Identify rows where any target column has NaN
         ignored_rows = df[df[self.targets].isna().any(axis=1)]
 
@@ -70,6 +121,7 @@ class InlierOutlierGP:
         # Initialize Gaussian Process Classifier with RBF kernel
         self.kernel = 1.0 * RBF(length_scale=1.0)
         self.gp = GaussianProcessClassifier(kernel=self.kernel)
+        self.is_trained = False
 
         # Map class labels to indices
         self.class_to_index = {"outlier": 0, "inlier": 1}
@@ -82,9 +134,15 @@ class InlierOutlierGP:
             self.class_to_index["outlier"],  # 0
             self.class_to_index["inlier"]   # 1
         )
-
-        # Fit the Gaussian Process Classifier with the modified target values
-        self.gp.fit(X_train, y)
+        # # Check if there are two classes in y
+        unique_classes = np.unique(y)
+        if len(unique_classes) < 2:
+            self.is_trained = False
+            warnings.warn(f"No outliers have been detected yet")
+        else:
+            self.is_trained = True
+            # Fit the Gaussian Process Classifier with the modified target values
+            self.gp.fit(X_train, y)
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         """  Predict the class labels for the input data. """
@@ -103,40 +161,53 @@ class InlierOutlierGP:
         Compute a measure of uncertainty based on probabilities.
         For binary classification, use the probabilities of the positive class.
         Calculate the standard deviation of the probabilities as a measure of uncertainty.
+        y_std_max = sqrt(0.5*(1-0.5)) = 1/2
         """
         # Predict inlier probabilities
         inlier_proba = self.predict_inlier_proba(X)
 
         # Calculate the standard deviation of the probabilities
-        std = np.sqrt(inlier_proba * (1 - inlier_proba))
-        return std
+        y_std = np.sqrt(inlier_proba * (1 - inlier_proba))
+        return y_std
+    
+    def get_conditional_std(
+        self, X: np.ndarray, use_threshold: bool = False, threshold: int = 0.8
+    ) -> np.ndarray:
+        """
+        Calculate the conditional standard deviation score for each input sample.
+        
+        This function computes the score using the formula:
+        
+                f(P) = alpha * P * sqrt(P*(1-P))
+    
+        Where P = P(x is inlier) the probability that a sample is an inlier.
+        And alpha is a scaling factor such that the maximum value of f over the
+        interval [0, 1] is 1.
+        Knowing that x_max = argmax[0, 1](f) = 3/4.
+        
+        If `use_threshold` is True, the score is set to 0 for samples where the inlier
+        probability  P is below the specified threshold.
+        """
+        # Return zeros if the model is not trained as no outliers are encountered yet
+        if not self.is_trained:
+            return np.zeros(X.shape[0])
 
+        # Calculate the scaling factor alpha
+        alpha = ( (3/4)**3 * (1/4) )**(-0.5)
 
-def search_max_std(
-    gp: Union[GaussianProcessRegressor, GaussianProcessClassifier],
-    features: List[str], shgo_iters: int = 5, shgo_n: int = 1000
-):
-    """ Returns the maximum standard deviation of the Gaussian Process for points between 0 and 1."""
+        # Predict inlier probabilities and standard deviations
+        proba = self.predict_inlier_proba(X)
+        y_std = self.get_std(X)
 
-    print("search_max_std -> Searching for the maximum standard deviation of the surrogate...")
-    search_error = 0.01
+        # Compute the score using the given formula
+        score = alpha * proba * y_std
 
-    def get_opposite_std(x):
-        """Opposite of std to be minimized."""
-        x = np.atleast_2d(x)
-        _, y_std = gp.predict(x, return_std=True)
-        return -1 * y_std.max()
+        # Sanction points with low inlier probability if thresholding
+        if use_threshold:
+            low_proba_indices = proba < threshold
+            score[low_proba_indices] = 0
 
-    bounds = [(0, 1)]*len(features)
-    result = shgo(
-        get_opposite_std, bounds, iters=shgo_iters, n=shgo_n, sampling_method='simplicial'
-    )
-
-    max_std = -1 * result.fun
-    max_std = min(1.0, max_std * (1 + search_error))
-    print(f"search_max_std -> Maximum GP std: {max_std:.3f}")
-    print(f"search_max_std -> Training data std: (X, {gp.X_train_.std():.3f}), (y, {gp.y_train_.std():.3f})")
-    return max_std
+        return score
 
 
 class FigureOfMerit:
@@ -187,9 +258,6 @@ class FigureOfMerit:
         self.targets = targets
         self.data = None
 
-        # To normalize std of coverage function to be between 0 and 1
-        self.max_std = 1
-
         # Store coefficients and initialize calculation methods
         self.coefficients = coefficients
         self.calc_std = self.set_std(config=coefficients["std"])
@@ -200,7 +268,7 @@ class FigureOfMerit:
         # * It is coded but not yet implemented. Create a separate class to store ignored points.
         self.calc_outlier_proximity = self.set_outlier_proximity(config=coefficients["outlier_proximity"])
         
-    def update(self, data: pd.DataFrame, shgo_iters: int = 5, shgo_n: int = 1000):
+    def update(self, data: pd.DataFrame, optimizer_kwargs: Dict):
         """
         Updates the Gaussian Process model with new data, excluding rows with NaN target values.
 
@@ -216,6 +284,8 @@ class FigureOfMerit:
             X_train=clean_data[self.features].values,
             y_train=clean_data[self.targets].values
         )
+        # Update max_std of current surrogate GP
+        self.gp_surrogate.update_max_std(**optimizer_kwargs)
 
         # Train another GP to find unexplored inlier regions
         if self.coefficients["std_x"]["apply"]:
@@ -224,11 +294,6 @@ class FigureOfMerit:
                 y_train=data[self.targets].values
             )
 
-        # Update max_std of current GP model(s)
-        self.max_std = search_max_std(
-            gp=self.gp_surrogate.gp, features=self.features, shgo_iters=shgo_iters, shgo_n=shgo_n
-        )
-        # # TODO yasser: include std_x or not need ? gp = concat(gp_surrogate + gp_classifier)
 
     def set_std(self, config: Dict):
         """
@@ -237,16 +302,14 @@ class FigureOfMerit:
         if config["apply"]:
             def std(x):
                 """
-                Computes the mean standard deviation over all target dimensions for a given input x
+                Computes the combined standard deviation over all target dimensions for a given input x
                 and stretches it to reach the entire range of [0, 1].
                 """
                 x = np.atleast_2d(x)
 
-                _, y_std = self.gp_surrogate.predict(x, return_std=True)
+                y_std_combined = self.gp_surrogate.get_std(x)
 
-                y_std_mean = y_std.mean(axis=1)
-
-                score = 1 - y_std_mean / self.max_std
+                score = 1 - y_std_combined / self.gp_surrogate.max_std
                 return score
         else:
             def std(x):
@@ -333,28 +396,18 @@ class FigureOfMerit:
             def std_x(x):
                 """
                 Calculate scores based on inlier probability and standard deviation.
-                Computes the standard deviation over feature dimensions for a given
-                input x and scales it to the range [0, 1].
                 """
                 x = np.atleast_2d(x)
-                proba = self.gp_classifier.predict_inlier_proba(x)
-                y_std = self.gp_classifier.get_std(x)
-
-                # Normalize the standard deviation
-                normalized_std = y_std / self.max_std
-
-                # Initialize scores to zero
-                score = np.zeros_like(proba)
                 
-                # Probability threshold for considering a point as an inlier.
+                use_threshold = config["use_threshold"]
                 threshold = config["threshold"]
-
-                # Calculate scores for points with high inlier probability
-                high_proba_indices = proba > threshold
-                score[high_proba_indices] = proba[high_proba_indices] * normalized_std[high_proba_indices]
+                
+                y_std_conditional = self.gp_classifier.get_conditional_std(
+                    x, use_threshold, threshold
+                )
 
                 # Make score an objective for minimization
-                score = 1 - score
+                score = 1 - y_std_conditional
                 return score
         else:
             def std_x(x):
@@ -453,9 +506,10 @@ class FigureOfMerit:
             data=np.array([
                 self.calc_std(new_xs),
                 self.calc_interest(new_xs),
-                self.calc_coverage(new_xs)
+                self.calc_coverage(new_xs),
+                self.calc_std_x(new_xs)
             ]).T,
-            columns=["std", "interest", "coverage"]
+            columns=["std", "interest", "coverage", "std_x"]
         )
         return scores
 

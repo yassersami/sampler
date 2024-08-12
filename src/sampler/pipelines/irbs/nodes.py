@@ -5,7 +5,6 @@ generated using Kedro 0.18.5
 from datetime import datetime
 from typing import List, Dict
 from tqdm import tqdm
-import warnings
 
 import pandas as pd
 
@@ -50,7 +49,7 @@ def irbs_sampling(
     progress_bar = tqdm(total=max_size, dynamic_ncols=True) if run_until_max_size else tqdm(total=n_interest_max, dynamic_ncols=True)  # Initialize tqdm progress bar with estimated time remaining
     print(f"Iteration {iteration:03} - Total size {n_total} - Inliers size {n_inliers} - Interest count {n_interest}")
     while end_condition:
-        model.update(res, shgo_iters=opt_iters, shgo_n=opt_points)  # Set the new model that will be used in next iteration
+        model.update(res, optimizer_kwargs=dict(shgo_iters=opt_iters, shgo_n=opt_points))  # Set the new model that will be used in next iteration
 
         new_x, scores = model.optimize(batch_size=batch_size, shgo_iters=opt_iters, shgo_n=opt_points)  # Search new candidates to add to res dataset
 
@@ -67,12 +66,16 @@ def irbs_sampling(
         # * join='inner' because scores can have more rows than new_df
         new_df = pd.concat([new_df, scores], axis=1, join='inner', ignore_index=False)
 
+        # Add maximum found value for surrogate GP combined std
+        new_df['max_std'] = model.gp_surrogate.max_std
+
         # Add model prediction to selected (already simulated) points
         prediction = model.gp_surrogate.predict(new_df[features].values)
         prediction_cols = [f"pred_{t}" for t in targets]
         new_df[prediction_cols] = prediction if len(targets) > 1 else prediction.reshape(-1, 1)
 
-        new_df = treatment.classify_scaled_interest(new_df) # Add column is_interest with True if row is inside the interest region
+        # Add column is_interest with True if targets are inside the interest region
+        new_df = treatment.classify_scaled_interest(new_df)
         
         # Add iteration number and datetime
         timenow = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
