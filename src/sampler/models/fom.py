@@ -79,16 +79,73 @@ class SurrogateGP:
         print(f"SurrogateGP.update_max_std -> Training data std per target: {self.gp.y_train_.std(axis=0)}")
 
 
+def compute_decay_sigmoid_score(
+    x: np.ndarray, points: np.ndarray, decay_dist: float = 0.1
+) -> np.ndarray:
+    """
+    Compute the decay score and apply a sigmoid transformation to obtain a 
+    density-like value.
+
+    Parameters:
+    - decay_dist (delta): A float representing the characteristic distance at 
+    which the decay effect becomes significant. This parameter controls the 
+    rate at which the influence of a reference point decreases with distance. 
+    Lower values allow for the inclusion of farther points, effectively 
+    shifting the sigmoid curve horizontally. Note that for x_half = delta * 
+    np.log(2), we have np.exp(-x_half/delta) = 1/2, indicating the distance 
+    at which the decay effect reduces to half its initial value.
+
+    Returns:
+    - A float representing the transformed score after applying the decay and 
+    sigmoid functions.
+
+    Explanation:
+    - Sigmoid Effect: The sigmoid function is applied to the decay score to 
+    compress it into a range between 0 and 1. This transformation makes the 
+    score resemble a density measure, where values close to 1 indicate a 
+    densely populated area.
+    - Sigmoid Parameters: The sigmoid position (sigmoid_pos) and sigmoid speed 
+    (sigmoid_speed) are fixed at 5 and 1, respectively. The sigmoid_pos 
+    determines the midpoint of the sigmoid curve, while the sigmoid_speed 
+    controls its steepness. In our context, these parameters do not have 
+    significantly different effects compared to decay_dist, hence their 
+    fixed values.
+    """
+    x = np.atleast_2d(x)
+    scores = []
+    
+    # Fix sigmoid parameters
+    sigmoid_pos = 5
+    sigmoid_speed = 1
+        
+    for x_row in x:
+        x_row = x_row.reshape(1, -1)
+        
+        # Calculate distances from x_row to each reference point using the specified metric
+        distances = distance.cdist(x_row, points, metric="euclidean").flatten()
+
+        # Compute the decay score (=0 for distance = inf, =1 for distance = 0)
+        decay_scores = np.exp(-distances/decay_dist)
+        
+        # Sum all the scores (sum is supported mainly by closer points having greater effect)
+        combined_scores = decay_scores.sum()
+
+        # Apply the sigmoid transformation
+        transformed_decays = 1 / (1 + np.exp(sigmoid_pos - sigmoid_speed * combined_scores))
+        
+        scores.append(transformed_decays)
+
+    return np.array(scores)
+
+
 class OutlierExcluder:
     def __init__(
-        self, features: List[str], targets: List[str], threshold: float = 1e-5,
-        distance_metric: str = "euclidean"
+        self, features: List[str], targets: List[str], threshold: float = 1e-5
     ):
         
         self.features = features
         self.targets = targets
         self.threshold = threshold
-        self.distance_metric = distance_metric
         # Points to be avoided as they result in erroneous simulations
         self.ignored_df = pd.DataFrame(columns=self.features)
     
@@ -119,7 +176,7 @@ class OutlierExcluder:
             return np.zeros(x.shape[0], dtype=bool)
     
         # Compute distances based on the specified metric
-        distances = distance.cdist(x, self.ignored_df.values, self.distance_metric)
+        distances = distance.cdist(x, self.ignored_df.values, "euclidean")
 
         # Determine which points should be ignored based on the distance threshold
         should_ignore = np.any(distances < self.threshold, axis=1)
@@ -226,6 +283,11 @@ class InlierOutlierGP:
         return score
 
 
+def zeros_like_rows(x: np.ndarray) -> np.ndarray:
+    x = np.atleast_2d(x)
+    return np.zeros(x.shape[0])
+
+
 class FigureOfMerit:
     """
     The FigureOfMerit class is responsible for evaluating and selecting
@@ -266,7 +328,7 @@ class FigureOfMerit:
         
         # Initialize outliers handler
         self.excluder = OutlierExcluder(
-            features, targets, threshold=coefficients["outlier_proximity"]["threshold"]
+            features, targets, threshold=coefficients["outlier_proximity"]["dist_threshold"]
         )
         
         # Initialize GP fitted on 0|1 values
@@ -293,19 +355,21 @@ class FigureOfMerit:
         Updates the Gaussian Process model with new data, excluding rows with NaN target values.
 
         Parameters:
-        - data (DataFrame): Total available data to update the model with.
+        - data (DataFrame): Total available data.
         """
         # Update current available dataset
         self.data = data
 
         # Filter out rows with NaN target values for GP training
-        clean_data = data.dropna(subset=self.targets)
-        self.gp_surrogate.fit(
-            X_train=clean_data[self.features].values,
-            y_train=clean_data[self.targets].values
-        )
-        # Update max_std of current surrogate GP
-        self.gp_surrogate.update_max_std(**optimizer_kwargs)
+        if self.coefficients["std"]["apply"] or self.coefficients["interest"]["apply"]:
+            clean_data = data.dropna(subset=self.targets)
+            self.gp_surrogate.fit(
+                X_train=clean_data[self.features].values,
+                y_train=clean_data[self.targets].values
+            )
+            if self.coefficients["std"]["apply"]:
+                # Update max_std of current surrogate GP
+                self.gp_surrogate.update_max_std(**optimizer_kwargs)
 
         # Train another GP to find unexplored inlier regions
         if self.coefficients["std_x"]["apply"]:
@@ -321,18 +385,16 @@ class FigureOfMerit:
         uncertainty. Computes the combined standard deviation over all target dimensions
         for a given input x and stretches it to reach the entire range of [0, 1].
         """
-        if config["apply"]:
-            def std(x):
-                x = np.atleast_2d(x)
+        if not config["apply"]:
+            return zeros_like_rows
+        
+        def std(x):
+            x = np.atleast_2d(x)
 
-                y_std_combined = self.gp_surrogate.get_std(x)
+            y_std_combined = self.gp_surrogate.get_std(x)
 
-                score = 1 - y_std_combined / self.gp_surrogate.max_std
-                return score
-        else:
-            def std(x):
-                x = np.atleast_2d(x)
-                return np.zeros(x.shape[0])
+            score = 1 - y_std_combined / self.gp_surrogate.max_std
+            return score
         return std
 
 
@@ -341,68 +403,48 @@ class FigureOfMerit:
         Given an n-dimensional x returns the sum of the probabilities to be in the
         interest region.
         """
-        if config["apply"]:
-            lowers = [region[0] for region in interest_region.values()]
-            uppers = [region[1] for region in interest_region.values()]
-            def interest(x):
-                x = np.atleast_2d(x)
+        if not config["apply"]:
+            return zeros_like_rows
+        
+        lowers = [region[0] for region in interest_region.values()]
+        uppers = [region[1] for region in interest_region.values()]
+        def interest(x):
+            x = np.atleast_2d(x)
 
-                y_hat, y_std = self.gp_surrogate.predict(x, return_std=True)
+            y_hat, y_std = self.gp_surrogate.predict(x, return_std=True)
 
-                point_norm = norm(loc=y_hat, scale=y_std)
+            point_norm = norm(loc=y_hat, scale=y_std)
 
-                probabilities = point_norm.cdf(uppers) - point_norm.cdf(lowers)
+            probabilities = point_norm.cdf(uppers) - point_norm.cdf(lowers)
 
-                # We want to minimize this function, to maximize the probability of being in the interest region
-                score = 1 - np.prod(probabilities, axis=1)
-                
-                return score
-        else:
-            def interest(x):
-                x = np.atleast_2d(x)
-                return np.zeros(x.shape[0])
-
+            # Minimize score to maximize probability of being interest region
+            score = 1 - np.prod(probabilities, axis=1)
+            
+            return score
         return interest
 
     def set_coverage(self, config: Dict):
         """
-            Set the coverage function, which penalizes near by points in the space,
-            promoting the exploration (coverage) of the space.
+        Set the coverage function, which penalizes near by points in the space,
+        promoting the exploration (coverage) of the space.
         """
-        if config["apply"]:
-            def space_coverage_one(x: np.ndarray):
-                x = np.atleast_2d(x)
-                assert x.shape[0] == 1, "Input x must be a single point!"
-                if config["include_outliers"]:
-                    points = self.data[self.features].values
-                else:
-                    points = self.gp_surrogate.gp.X_train_
-                
-                distances = np.linalg.norm(points - x, axis=1)
+        if not config["apply"]:
+            return zeros_like_rows
+        
+        def space_coverage(x: np.ndarray):
+            x = np.atleast_2d(x)
+            scores = []
+            
+            if config["include_outliers"]:
+                dataset_points = self.data[self.features].values
+            else:
+                dataset_points = self.gp_surrogate.gp.X_train_
+            
+            scores = compute_decay_sigmoid_score(
+                x, dataset_points, config["decay_dist"],
+            )
 
-                # Sigmoid parameters
-                decay = config["decay"]  # 20 or lower for including farther points
-                sigmoid_speed = config["sigmoid_speed"]  # 5 or lower to allow more points to be closer to each other
-                sigmoid_pos = config["sigmoid_pos"]
-
-                score = np.exp(-decay * distances).sum()
-                # Pass sum of probs through sigmoid
-                all_probs = 1 / (1 + np.exp(sigmoid_pos - sigmoid_speed * score))
-
-                return all_probs
-
-            def space_coverage(x: np.ndarray):
-                # Launch multiple space_coverage_one
-                x = np.atleast_2d(x)
-                score = []
-                for x_row in x:
-                    score.append(space_coverage_one(x_row))
-                score = np.array(score)
-                return score
-        else:
-            def space_coverage(x: np.ndarray):
-                x = np.atleast_2d(x)
-                return np.zeros(x.shape[0])
+            return scores
         return space_coverage
 
     def set_std_x(self, config: Dict) -> callable:
@@ -412,25 +454,22 @@ class FigureOfMerit:
         It trains on all data, not just inliers like the SurrogateGP class.
         It calculates scores based on inlier probability and standard deviation.
         """
-        if config["apply"]:
-            def std_x(x):
-                x = np.atleast_2d(x)
-                
-                use_threshold = config["use_threshold"]
-                threshold = config["threshold"]
-                
-                y_std_conditional = self.gp_classifier.get_conditional_std(
-                    x, use_threshold, threshold
-                )
+        if not config["apply"]:
+            return zeros_like_rows
+        
+        def std_x(x):
+            x = np.atleast_2d(x)
+            
+            use_threshold = config["use_threshold"]
+            threshold = config["inlier_proba_threshold"]
+            
+            y_std_conditional = self.gp_classifier.get_conditional_std(
+                x, use_threshold, threshold
+            )
 
-                # Make score an objective for minimization
-                score = 1 - y_std_conditional
-                return score
-        else:
-            def std_x(x):
-                x = np.atleast_2d(x)
-                return np.zeros(x.shape[0])
-
+            # Make score an objective for minimization
+            score = 1 - y_std_conditional
+            return score
         return std_x
     
     def set_outlier_proximity(self, config: Dict) -> callable:
@@ -440,19 +479,16 @@ class FigureOfMerit:
         outliers are excluded from further processing. This condition is necessary
         because the surrogate GP does not update around failed samples.
         """
-        if config["apply"]:
-            def outlier_proximity(x: np.ndarray) -> np.ndarray:
-                x = np.atleast_2d(x)
-                # Array of bools
-                should_ignore = self.excluder.detect_outlier_proximity(x)
-                # if sample is bad (near outlier), score is 1, and 0 if not
-                score = should_ignore.astype(float)
-                return score
-        else:
-            def outlier_proximity(x):
-                x = np.atleast_2d(x)
-                return np.zeros(x.shape[0])
-
+        if not config["apply"]:
+            return zeros_like_rows
+        
+        def outlier_proximity(x: np.ndarray) -> np.ndarray:
+            x = np.atleast_2d(x)
+            # Array of bools
+            should_ignore = self.excluder.detect_outlier_proximity(x)
+            # if sample is bad (near outlier), score is 1, and 0 if not
+            score = should_ignore.astype(float)
+            return score
         return outlier_proximity
 
     def sort_by_relevance(self, mask: np.ndarray, unique_min: np.ndarray) -> List:

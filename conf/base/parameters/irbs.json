@@ -6,18 +6,15 @@
     "std": {"apply": true},
     "interest": {"apply": true},
     "coverage": {"apply": true,
-      "include_outliers": false,
-      "mode": "euclidean",
-      "decay": 25,
-      "sigmoid_speed": 1,
-      "sigmoid_pos": 5
+      "include_outliers": true,
+      "decay_dist": 0.04
     },
-    "std_x": {"apply": true,
-    "use_threshold": false,
-    "threshold": 0.8
+    "std_x": {"apply": false,
+      "use_threshold": false,
+      "inlier_proba_threshold": 0.8
     },
     "outlier_proximity": {"apply": true,
-    "threshold": 1e-5
-  }
+      "dist_threshold": 1e-5
+    }
   }
 }
