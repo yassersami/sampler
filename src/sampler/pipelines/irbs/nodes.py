@@ -19,14 +19,14 @@ RANDOM_STATE = 42
 def irbs_sampling(
         data: pd.DataFrame, treatment: DataTreatment,
         features: List[str], targets: List[str], additional_values: List[str],
-        coefficients: Dict, simulator_env: Dict, run_condition: Dict,
+        fom_terms: Dict, simulator_env: Dict, run_condition: Dict,
         opt_iters: int = 5, opt_points: int = 1000
 ):
     max_size, n_interest_max, run_until_max_size, batch_size = run_condition['max_size'], run_condition['n_interest_max'], run_condition['run_until_max_size'], run_condition['batch_size']
     
     # Set figure of merite (acquisition function)
     model = FigureOfMerit(
-        features=features, targets=targets, coefficients=coefficients,
+        features=features, targets=targets, terms=fom_terms,
         interest_region=treatment.scaled_interest_region
     )
 

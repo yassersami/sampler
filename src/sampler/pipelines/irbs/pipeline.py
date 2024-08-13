@@ -19,7 +19,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 features='params:features',
                 targets='params:targets',
                 additional_values='params:additional_values',
-                coefficients='params:irbs_coefficients',
+                fom_terms='params:irbs_fom_terms',
                 run_condition='params:run_condition',
                 opt_iters='params:irbs_opt_iters',
                 opt_points='params:irbs_opt_sampling_points',

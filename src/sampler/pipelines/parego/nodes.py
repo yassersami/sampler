@@ -14,7 +14,7 @@ import numpy as np
 
 from sampler.common.data_treatment import DataTreatment, initialize_dataset
 from sampler.common.storing import parse_results
-from sampler.models.fom import SurrogateGP
+from sampler.models.fom_terms import SurrogateGP
 from sampler.models.wrapper_for_0d import SimulationProcessor
 
 from scipy.stats import norm

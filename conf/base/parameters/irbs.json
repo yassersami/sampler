@@ -2,19 +2,26 @@
   "irbs_opt_sampling_points": 1000,
   "irbs_opt_iters": 5,
   "irbs_error_round_decimals": 10,
-  "irbs_coefficients": {
-    "std": {"apply": true},
-    "interest": {"apply": true},
-    "coverage": {"apply": true,
+  "irbs_fom_terms": {
+    "std": {
+      "apply": true
+    },
+    "interest": {
+      "apply": true
+    },
+    "local_density": {
+      "apply": true,
       "include_outliers": true,
       "decay_dist": 0.04
     },
-    "std_x": {"apply": false,
+    "outlier_proximity": {
+      "apply": true,
+      "dist_threshold": 1e-5
+    },
+    "std_x": {
+      "apply": false,
       "use_threshold": false,
       "inlier_proba_threshold": 0.8
-    },
-    "outlier_proximity": {"apply": true,
-      "dist_threshold": 1e-5
     }
   }
 }

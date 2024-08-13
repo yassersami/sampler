@@ -29,7 +29,7 @@ The pipeline requires the following inputs:
 - **`params:additional_values`**: List of additional values to consider (other values of interest to track such as sim_time)
 
 ### IRBS Algorithm Parameters
-- **`params:irbs_coefficients`**: Coefficients for the IRBS algorithm, including:
+- **`params:irbs_fom_terms`**: Terms of figure of merit for the IRBS algorithm, including:
   - **`std`**: The std given by the trained GP.
   - **`interest`**: The probability of getting target values in the interest region.
   - **`coverage`**: A measure defining if the selected sample is covering an new empty region or an already densly sampled region.

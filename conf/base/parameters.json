@@ -2,7 +2,7 @@
   "env_name": "base",
   "simulator_env": {
     "map_dir": "data/07_simulation/base",
-    "use": false
+    "use": true
   },
   "sao_history_path": "data/07_model_output/base/sao_history",
 
@@ -27,7 +27,7 @@
   },
 
   "run_condition":{
-    "run_until_max_size": false, 
+    "run_until_max_size": true, 
     "batch_size": 8,
 
     "max_size": 200,
