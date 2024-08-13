@@ -1,0 +1,18 @@
+{
+    "transform_type": "V=cste", # Choix de la simulation à V = cste ou P = cste
+    "bool_gas_chamber": false, # Si True prise en compte de la gas chamber
+    "bool_thermal_flux_gc": false,
+    "mlt_thermal_flux": 1,
+    "t_f": 0.5, 
+    "HW": false,
+    "CO_T": 2500,
+    "load_last_data": false,
+    "save_last_data": false,
+    "max_dt": 1e-05,
+    "max_dTg_ite": 5, # 10 
+    "sample_period": 4e0, # Periode d'échantillonage (Enregistrement des valeurs toute les sample_periode itérations)
+    "max_simu_time": 2400, #1800, # temps max de simulation en seconde
+    "var_ths_h": 1,
+    "var_window_factor": 0.5,
+    "ct_data_base" : "AlxOy_N2_Cu_O_and_Catoire_kin.yaml"
+}
