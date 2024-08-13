@@ -203,7 +203,7 @@ def plot_metrics(
         # "pair_plot": pair_plot,
         "ASVD_all": total_asvd_plot,
         "ASVD_interest": interest_asvd_plot,
-        "volume_voronoi": voronoi_plot
+        "volume_voronoi": voronoi_plot,
         **{f'features_targets_{k}': v for k, v in feat_tar_dict.items()},
     }
     plots_dict = {f'{i+1:02d}_{k}': v for i, (k, v) in enumerate(plots_dict.items())}
