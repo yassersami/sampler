@@ -145,7 +145,7 @@ def plot_2d(data: Dict, features_dic: Dict, volume: Dict):
         num_not_interesting = v['not_interesting'].shape[0]
         num_interest = v['interest'].shape[0]
         num_outliers = v['outliers'].shape[0]
-        interest_colors = plt.cm.coolwarm(np.linspace(0, 1, num_interest))
+        interest_colors = plt.cm.autumn(np.linspace(1, 0, num_interest))
 
         for n_row, (x, y) in enumerate(feature_pairs):
             idx = (n_row, n_col) if n_exp > 1 else n_row
@@ -157,23 +157,25 @@ def plot_2d(data: Dict, features_dic: Dict, volume: Dict):
             axs[idx].scatter(
                 x=v['outliers'][x],
                 y=v['outliers'][y],
-                c='black', alpha=0.5, marker='x', label="Outliers"
+                c='black', alpha=0.7, marker='x', label="Outliers"
             )
             axs[idx].scatter(
                 x=v['interest'][x],
                 y=v['interest'][y],
-                c=interest_colors, alpha=0.7, label="Interest"
+                c=interest_colors, alpha=0.5, label="Interest"
             )
             axs[idx].set_xticks(np.arange(11))
             axs[idx].set_xticklabels(['0', '', '2', '', '4', '', '6', '', '8', '', '10'])
             axs[idx].set_xlabel(features_latex[features.index(x)].replace('/', '\\'))
             axs[idx].set_ylabel(features_latex[features.index(y)].replace('/', '\\'))
 
+
         idx_legend = (0, n_col) if n_exp > 1 else 0
         hs, _ = axs[idx_legend].get_legend_handles_labels()
 
         invisible_handle = plt.Line2D([0], [0], color='none', label="")
-        handles = [hs[2], hs[0], invisible_handle] if num_outliers == 0 else [hs[2], hs[0], invisible_handle, hs[1]]
+        itr_marker = plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='red', alpha=0.7, label="") # Maybe it exists a better way to do this
+        handles = [itr_marker, hs[0], invisible_handle] if num_outliers == 0 else [itr_marker, hs[0], invisible_handle, hs[1]]
         labels = [
             f'n_Itr: {num_interest}',
             f'n_noItr: {num_not_interesting}',
@@ -181,14 +183,14 @@ def plot_2d(data: Dict, features_dic: Dict, volume: Dict):
         ]
         if num_outliers != 0:
             labels.append(f'Outliers {num_outliers}')
-        
+
         axs[idx_legend].legend(handles=handles, labels=labels,
                                loc='lower center', bbox_to_anchor=(0.5, 1.0),
                                title=v["name"], title_fontsize='large')
     
     # Add a vertical color bar with custom ticks outside the subplots
     cbar_ax = fig.add_axes([0.9, 0.15, 0.03, 0.7])  # Adjusted position
-    cbar = fig.colorbar(plt.cm.ScalarMappable(cmap='coolwarm'), cax=cbar_ax, orientation='vertical')
+    cbar = fig.colorbar(plt.cm.ScalarMappable(cmap='autumn_r'), cax=cbar_ax, orientation='vertical')
     cbar.set_ticks([0, 1])  # Set ticks at the start and end
     cbar.set_ticklabels(['first', 'last'])  # Label the ticks
     cbar.set_label('Interest order', fontsize='large')
