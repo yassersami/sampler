@@ -22,7 +22,7 @@ def get_result(path: str):
 
 
 def prepare_benchmark(df: pd.DataFrame, f: List[str], t: List[str], treatment: DataTreatment,) -> pd.DataFrame:
-    res, _ = treatment.define_quality_of_data(data=df)
+    res = treatment.define_quality_of_data(data=df, specify_errors=False)
     return res
 
 
@@ -51,7 +51,7 @@ def prepare_new_data(
         df[t_c[1]] = df[t[1]]
 
     res[f+t_c] = pd.DataFrame(treatment.scaler.inverse_transform(df[f+t_c].values), columns=f+t_c)
-    final_res, _ = treatment.define_quality_of_data(data=res, )
+    final_res = treatment.define_quality_of_data(data=res, specify_errors=False)
     return final_res
 
 

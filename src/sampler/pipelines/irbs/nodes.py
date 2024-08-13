@@ -10,17 +10,17 @@ import pandas as pd
 
 from sampler.common.data_treatment import DataTreatment, initialize_dataset
 from sampler.common.storing import parse_results
-from sampler.models.wrapper_for_0d import SimulationProcessor  # get_values_from_simulator
+from sampler.models.wrapper_for_0d import SimulationProcessor
 from sampler.models.fom import FigureOfMerit
 
 RANDOM_STATE = 42
 
 
 def irbs_sampling(
-        data: pd.DataFrame, treatment: DataTreatment,
-        features: List[str], targets: List[str], additional_values: List[str],
-        fom_terms: Dict, simulator_env: Dict, run_condition: Dict,
-        opt_iters: int = 5, opt_points: int = 1000
+    data: pd.DataFrame, treatment: DataTreatment,
+    features: List[str], targets: List[str], additional_values: List[str],
+    fom_terms: Dict, simulator_env: Dict, run_condition: Dict,
+    opt_iters: int = 5, opt_points: int = 1000
 ):
     max_size, n_interest_max, run_until_max_size, batch_size = run_condition['max_size'], run_condition['n_interest_max'], run_condition['run_until_max_size'], run_condition['batch_size']
     
@@ -74,7 +74,7 @@ def irbs_sampling(
         new_df[prediction_cols] = prediction if len(targets) > 1 else prediction.reshape(-1, 1)
 
         # Add column is_interest with True if targets are inside the interest region
-        new_df = treatment.classify_scaled_interest(new_df)
+        new_df = treatment.classify_quality_interest(new_df, data_is_scaled=True)
         
         # Add iteration number and datetime
         timenow = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

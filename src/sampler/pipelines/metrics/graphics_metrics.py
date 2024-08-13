@@ -71,7 +71,13 @@ def targets_kde(data: Dict, targets: List[str], region: Dict):
     n_col = len(targets)
     fig, axs = plt.subplots(1, n_col, figsize=(6*n_col, 6))
 
-    df_to_plot = pd.concat([v['inliers'].assign(identity=v['name'], experiment=k) for k, v in data.items()])
+    df_to_plot = pd.concat(
+        [
+            v['inliers'].assign(identity=v['name'], experiment=k)
+            for k, v in data.items()
+        ],
+        axis=0, ignore_index=True
+    )
 
     #df_to_plot[targets] = df_to_plot[targets] / scales['targets']
 

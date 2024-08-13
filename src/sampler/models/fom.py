@@ -16,8 +16,9 @@ def zeros_like_rows(x: np.ndarray) -> np.ndarray:
 
 class FigureOfMerit:
     """
-    The FigureOfMerit class is responsible for evaluating and selecting
-    interesting candidates for simulation in the adaptive sampling process.
+    The FigureOfMerit class (also called acquisition function) is responsible
+    for evaluating and selecting interesting candidates for simulation in the
+    adaptive sampling process.
 
     This class uses a Gaussian Process model to assess the potential value
     of sampling points based on criteria such as standard deviation, interest,
@@ -26,13 +27,15 @@ class FigureOfMerit:
     in the sampling strategy.
 
     Attributes:
-        - gp_surrogate (SurrogateGP): A surrogate model used to identify unexplored areas
-        by evaluating the standard deviation, focusing on interesting points for further
-        exploration. This model does not train on outliers or errors, necessitating an
-        alternative method for avoiding poor regions.
-        - gp_classifier (InlierOutlierGP): A classifier designed to detect unexplored inlier
-        regions by assessing the standard deviation. It aids in identifying promising
-        areas while ensuring that regions with potential errors or outliers are avoided.
+        - gp_surrogate (SurrogateGP): A surrogate model used to identify
+        unexplored areas
+        by evaluating the standard deviation, focusing on interesting pointsfor
+        further exploration. This model does not train on outliers or errors,
+        necessitating an alternative method for avoiding poor regions.
+        - gp_classifier (InlierOutlierGP): A classifier designed to detect
+        unexplored inlierregions by assessing the standard deviation. It aids in
+        identifying promisingareas while ensuring that regions with potential
+        errors or outliers are avoided.
     """
 
     def __init__(
@@ -63,20 +66,31 @@ class FigureOfMerit:
         self.targets = targets
         self.data = None
 
-        # Store FOM's terms and initialize calculation methods
-        self.terms = terms
-        self.calc_std = self.set_std(**terms["std"])
-        self.calc_interest = self.set_interest(**terms["interest"], interest_region=interest_region)
-        self.calc_local_density = self.set_local_density(**terms["local_density"])
-        self.calc_outlier_proximity = self.set_outlier_proximity(**terms["outlier_proximity"])
-        self.calc_std_x = self.set_std_x(**terms["std_x"])
+        # Set terms calculation methods
+        self.calc_std = self.set_std(
+            **terms["std"]
+        )
+        self.calc_interest = self.set_interest(
+            **terms["interest"], interest_region=interest_region
+        )
+        self.calc_local_density = self.set_local_density(
+            **terms["local_density"]
+        )
+        self.calc_outlier_proximity = self.set_outlier_proximity(
+            **terms["outlier_proximity"]
+        )
+        self.calc_std_x = self.set_std_x(
+            **terms["std_x"]
+        )
         
-        # Count number of active scores
-        self.count_active_scores = sum([score["apply"] for score in terms.values()])
+        # Store terms and count active ones
+        self.terms = terms
+        self.count_active_terms = sum([d["apply"] for d in terms.values()])
         
     def update(self, data: pd.DataFrame, optimizer_kwargs: Dict):
         """
-        Updates the Gaussian Process model with new data, excluding rows with NaN target values.
+        Updates the Gaussian Process model with new data, excluding rows with
+        NaN target values.
 
         Parameters:
         - data (DataFrame): Total available data.
@@ -103,11 +117,12 @@ class FigureOfMerit:
             )
 
 
-    def set_std(self, apply: bool):
+    def set_std(self, apply: bool) -> callable:
         """
         Set the standard deviation function, which penalizes points with high
-        uncertainty. Computes the combined standard deviation over all target dimensions
-        for a given input x and stretches it to reach the entire range of [0, 1].
+        uncertainty. Computes the combined standard deviation over all target
+        dimensions for a given input x and stretches it to reach the entire
+        range of [0, 1].
         """
         if not apply:
             return zeros_like_rows
@@ -122,10 +137,10 @@ class FigureOfMerit:
         return std
 
 
-    def set_interest(self, apply: bool, interest_region: Dict):
+    def set_interest(self, apply: bool, interest_region: Dict) -> callable:
         """
-        Given an n-dimensional x returns the sum of the probabilities to be in the
-        interest region.
+        Given an n-dimensional x returns the sum of the probabilities to be in
+        the interest region.
         """
         if not apply:
             return zeros_like_rows
@@ -147,7 +162,9 @@ class FigureOfMerit:
             return score
         return interest
 
-    def set_local_density(self, apply: bool, include_outliers: bool, decay_dist: float):
+    def set_local_density(
+        self, apply: bool, include_outliers: bool, decay_dist: float
+    ) -> callable:
         """
         Set the local density function, which penalizes near points in already
         crowded region, promoting the exploration (coverage) of the space.
@@ -171,12 +188,15 @@ class FigureOfMerit:
             return scores
         return space_local_density
     
-    def set_outlier_proximity(self, apply: bool, dist_threshold: float) -> callable:
+    def set_outlier_proximity(
+        self, apply: bool, dist_threshold: float
+    ) -> callable:
         """
-        Proximity Exclusion Condition: Determine if the given points are near any points
-        with erroneous simulations. Points located within a very small vicinity around
-        outliers are excluded from further processing. This condition is necessary
-        because the surrogate GP does not update around failed samples.
+        Proximity Exclusion Condition: Determine if the given points are near
+        any pointswith erroneous simulations. Points located within a very small
+        vicinity aroundoutliers are excluded from further processing. This
+        condition is necessary because the surrogate GP does not update around
+        failed samples.
         """
         if not apply:
             return zeros_like_rows
@@ -254,8 +274,8 @@ class FigureOfMerit:
             self.calc_std(x)
             + self.calc_interest(x)
             + self.calc_local_density(x)
-            + self.calc_std_x(x)
             + self.calc_outlier_proximity(x)
+            + self.calc_std_x(x)
         )
         return score.item()
     
@@ -265,28 +285,28 @@ class FigureOfMerit:
                 self.calc_std(new_xs),
                 self.calc_interest(new_xs),
                 self.calc_local_density(new_xs),
+                self.calc_outlier_proximity(new_xs),
                 self.calc_std_x(new_xs),
-                self.calc_outlier_proximity(new_xs)
             ]).T,
-            columns=["std", "interest", "local_density", "std_x", "exclusion"]
+            columns=["std", "interest", "local_density", "exclusion", "std_x"]
         )
         return scores
 
     def optimize(self, batch_size: int = 1, shgo_iters: int = 5, shgo_n: int = 1000):
         """
-        Optimize the acquisition function to find the best candidates for simulation.
+        Optimize the FOM to find the best candidates for simulation.
 
-        Args:
-            batch_size (int): Number of points to select for simulation.
-            iters (int): Number of iterations used in the construction of the simplicial
-                         complex of SHGO optimizer.
-            n (int): Number of sampling points for the SHGO optimizer.
+        Parameters:
+        - batch_size (int): Number of points to select for simulation.
+        - iters (int): Number of iterations used in the construction of the
+        simplicial complex of SHGO optimizer.
+        - n (int): Number of sampling points for the SHGO optimizer.
 
         Returns:
             Tuple[np.ndarray, pd.DataFrame]: Selected points and their scores.
         """
 
-        print("FOM.optimize -> Searching for good candidates using the acquisition function...")
+        print("FOM.optimize -> Searching for good candidates...")
 
         bounds = [(0, 1)]*len(self.features)
         
@@ -301,6 +321,9 @@ class FigureOfMerit:
 
         df_new_xs = pd.DataFrame(new_xs, columns=self.features)
         df_print = pd.concat([df_new_xs, scores], axis=1, ignore_index=False)
-        print("FOM.optimize -> Selected points to be input to the simulator:\n", df_print)
+        print(
+            "FOM.optimize -> Selected points to be input to the simulator:\n",
+            df_print
+        )
 
         return new_xs, scores

@@ -1,7 +1,7 @@
 {
   "names": {
     "features": {
-      "str": ["Al radius [micron]", "r_ext_pMeO", "Al richness"],
+      "str": ["Al radius [micron]", "CuO radius [micron]", "Al richness"],
       "latex": ["$r_{Al}, [/mu m]$", "$r_{CuO}, [/mu m]$", "$/phi$"]
     },
     "targets": {

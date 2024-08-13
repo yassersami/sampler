@@ -79,7 +79,7 @@ class SurrogateGP:
 
 
 def compute_space_local_density(
-    x: np.ndarray, points: np.ndarray, decay_dist: float = 0.1
+    x: np.ndarray, points: np.ndarray, decay_dist: float = 0.04
 ) -> np.ndarray:
     """
     Compute the decay score and apply a sigmoid transformation to obtain a 
@@ -123,7 +123,7 @@ def compute_space_local_density(
         # Calculate distances from x_row to each reference point using the specified metric
         distances = distance.cdist(x_row, points, metric="euclidean").flatten()
 
-        # Compute the decay score (=0 for distance = inf, =1 for distance = 0)
+        # Compute the decay score wheight (=0 for big distance, =1 for small distance)
         decay_scores = np.exp(-distances/decay_dist)
         
         # Sum all the scores (sum is supported mainly by closer points having greater effect)
@@ -198,7 +198,9 @@ class InlierOutlierGP:
 
         # Map class labels to indices
         self.class_to_index = {"outlier": 0, "inlier": 1}
-        self.index_to_class = {index: label for label, index in self.class_to_index.items()}
+        self.index_to_class = {
+            index: label for label, index in self.class_to_index.items()
+        }
 
     def fit(self, X_train, y_train):
         # Determine inlier or outlier status based on NaN presence in y_train

@@ -74,7 +74,7 @@ def run_parego(
         new_df[prediction_cols] = prediction if len(dace.model_targets) > 1 else prediction.reshape(-1, 1)
         score = dace.get_score(new_df[features].values)
         new_df["obj_score"] = score
-        new_df = treatment.classify_scaled_interest(new_df)
+        new_df = treatment.classify_quality_interest(new_df, data_is_scaled=True)
         timenow = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         new_df['datetime'] = timenow
         new_df['iteration'] = iteration

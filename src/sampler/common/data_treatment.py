@@ -31,9 +31,10 @@ class DataTreatment:
         """
         Treat and optionally scale data.
 
-        Args:
-            df_real (pd.DataFrame): DataFrame containing at least features and targets in the real space (not scaled one).
-            scale (bool): Whether to scale the data or not. Defaults to True.
+        Parameters:
+        - df_real (pd.DataFrame): DataFrame containing at least features and
+        targets in the real space (not scaled one).
+        - scale (bool): Whether to scale the data or not. Defaults to True.
 
         Returns:
             pd.DataFrame: treated_data
@@ -46,24 +47,27 @@ class DataTreatment:
             return real_data
         scaler_cols = self.features + self.targets
         scaled_data = real_data.copy()
-        scaled_data[scaler_cols] = self.scaler.transform_with_nans(real_data[scaler_cols].values)
+        scaled_data[scaler_cols] = self.scaler.transform_with_nans(
+            real_data[scaler_cols].values
+        )
         return scaled_data
 
     def fill_outliers_with_nans(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        Treats outliers in the input DataFrame by replacing non-feature values with NaNs for non-clean data:
+        Treats outliers in the input DataFrame by replacing non-feature values
+        with NaNs for non-clean data:
         1. Identify rows with out-of-bounds features, time_out, or sim_error.
         2. Replace non-feature values with NaNs for these rows.
 
         Parameters:
-        - df (pd.DataFrame): Input DataFrame containing simulation data with at least
-        features and targets both in the real space (not scaled one)
+        - df (pd.DataFrame): Input DataFrame containing simulation data with at 
+        least features and targets both in the real space (not scaled one)
 
         Returns:
-        - pd.DataFrame: DataFrame with the same index as the input, where non-clean data
-        has non-feature values replaced with NaNs.
+        - pd.DataFrame: DataFrame with the same index as the input, where 
+        non-clean data has non-feature values replaced with NaNs.
         """
-        outliers = self.get_outliers(df=df)
+        outliers = self.get_outliers_masks(df=df)
         df_out = df.copy()
 
         # Identify all rows with outliers
@@ -80,7 +84,8 @@ class DataTreatment:
 
         return df_out
 
-    def get_outliers(self, df: pd.DataFrame) -> pd.DataFrame:
+    def get_outliers_masks(self, df: pd.DataFrame) -> pd.DataFrame:
+        """ Get outlier classes on real df"""
         # Tolerance to consider a value outside its bounds
         tol = 1e-16
         
@@ -122,25 +127,26 @@ class DataTreatment:
             - res: DataFrame with treated data
             - error_res: DataFrame with time_out and sim_error rows
         """
-        outliers = self.get_outliers(df=df)
+        outliers_masks = self.get_outliers_masks(df=df)
         res = df.copy()
 
         # Step 1: Drop rows with out-of-bounds features
-        if outliers["out_of_bounds_feat"].any():
-            warnings.warn(f"There are samples with features out of design space bounds: \n{res[outliers['out_of_bounds_feat']]}")
-            res = res[~outliers["out_of_bounds_feat"]]
+        if outliers_masks["out_of_bounds_feat"].any():
+            warnings.warn(f"There are samples with features out of design space bounds: \n{res[outliers_masks['out_of_bounds_feat']]}")
+            res = res[~outliers_masks["out_of_bounds_feat"]]
         
         if len(res) == 0:
             return res, pd.DataFrame()
 
         # Step 2: Split rows with time_out or sim_error
-        error_mask = outliers["time_out"] | outliers["sim_error"]
+        error_mask = outliers_masks["time_out"] | outliers_masks["sim_error"]
         error_res = res[error_mask]
         res = res[~error_mask]
 
         # Step 3: Fill out-of-bounds targets with fixed values
-        res = self.fill_outliers_with_fixed_value(  # TODO yasser: why fill outliers with minimums instead of removing.
-            outliers_mask=outliers["out_of_bounds_tar"],
+        # TODO yasser: why fill outliers_masks with minimums instead of removing.
+        res = self.fill_outliers_with_fixed_value(
+            outliers_mask=outliers_masks["out_of_bounds_tar"],
             df=res
         )
 
@@ -159,32 +165,66 @@ class DataTreatment:
         
         return df
 
-    def classify_scaled_interest(self, data: pd.DataFrame):
-        aux_df = pd.DataFrame()
-        for key, val in self.scaled_interest_region.items():
-            aux_df[key] = (val[0] < data[key]) & (data[key] < val[1])
-        interest_cond = aux_df.all(axis=1)
+    def classify_quality_interest(
+        self, data: pd.DataFrame, data_is_scaled: bool
+    ) -> pd.DataFrame:
+        """
+        Classifies data based on interest or scaled interest regions.
+
+        Returns:
+        - The DataFrame with an updated 'quality' column.
+        """
+        # Choose the appropriate interest region based on whether the data is scaled
+        interest_region = self.scaled_interest_region if data_is_scaled else self.interest_region
+
+        # Compute interest condition
+        interest_cond = np.all(
+            [
+                (data[key] > val[0]) & (data[key] < val[1])
+                for key, val in interest_region.items()
+            ],
+            axis=0
+        )
+
+        # Set 'quality' column based on interest conditions
         data["quality"] = np.where(interest_cond, "interest", "not_interesting")
+
         return data
 
-    def define_interest(self, data: pd.DataFrame):
-        aux_df = pd.DataFrame()
-        for key, val in self.interest_region.items():
-            aux_df[key] = (val[0] < data[key]) & (data[key] < val[1])
-        interest_cond = aux_df.all(axis=1)
-        data["quality"] = np.where(interest_cond, "interest", "not_interesting")
+    def classify_quality_error(
+        self, data: pd.DataFrame, data_is_scaled: bool
+        ) -> pd.DataFrame:
+        """
+        Classifies data based on outlier masks, with an option to scale the data.
+
+        Returns:
+        - The DataFrame with an updated 'quality' column based on outlier
+        classification.
+        """
+        # Create a copy of the data for scaling if necessary
+        if data_is_scaled:
+            scaler_cols = self.features + self.targets
+            # Ensure real_data is initialized before use
+            real_data = data.copy()
+            # Scale only the specified columns
+            real_data[scaler_cols] = self.scaler.transform(data[scaler_cols].values)
+        else:
+            real_data = data
+
+        # Get outlier masks
+        outliers_masks = self.get_outliers_masks(df=real_data)
+
+        # Update 'quality' column based on outlier masks
+        for key, mask in outliers_masks.items():
+            data.loc[mask, "quality"] = key
+
         return data
 
-    def define_errors(self, data: pd.DataFrame):
-        outliers = self.get_outliers(df=data)
-        for key, val in outliers.items():
-            data.loc[val, "quality"] = key
-        return outliers
-
-    def define_quality_of_data(self, data: pd.DataFrame):
-        data = self.define_interest(data)
-        errors = self.define_errors(data)
-        return data, errors
+    def define_quality_of_data(self, data: pd.DataFrame, specify_errors=False):
+        data = self.classify_quality_interest(data, data_is_scaled=False)
+        if specify_errors:
+            data = self.classify_quality_error(data, data_is_scaled=False)
+        return data
 
 
 def scale_interest_region(interest_region: Dict, scaler: MixedMinMaxScaler) -> Dict:
@@ -217,5 +257,5 @@ def initialize_dataset(data: pd.DataFrame, treatment: DataTreatment) -> pd.DataF
     """
     # Add column 'quality' with 'interest' if row is inside the interest region
     df_res = data[treatment.features + treatment.targets].copy(deep=True)
-    df_res = treatment.classify_scaled_interest(df_res)
+    df_res = treatment.classify_quality_interest(df_res, data_is_scaled=True)
     return df_res
