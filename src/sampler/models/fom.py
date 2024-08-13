@@ -100,10 +100,10 @@ class FigureOfMerit:
 
         # Filter out rows with NaN target values for GP training
         if self.terms["std"]["apply"] or self.terms["interest"]["apply"]:
-            clean_data = data.dropna(subset=self.targets)
+            clean_regr_data = data.dropna(subset=self.targets)
             self.gp_surrogate.fit(
-                X_train=clean_data[self.features].values,
-                y_train=clean_data[self.targets].values
+                X_train=clean_regr_data[self.features].values,
+                y_train=clean_regr_data[self.targets].values
             )
             if self.terms["std"]["apply"]:
                 # Update max_std of current surrogate GP

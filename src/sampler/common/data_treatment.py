@@ -27,24 +27,57 @@ class DataTreatment:
         self.interest_region = interest_region
         self.scaled_interest_region = scale_interest_region(interest_region, self.scaler)
 
-    def treat_data(self, df_real: pd.DataFrame, scale=True) -> pd.DataFrame:
+    def select_in_bounds_feat(self, df_real: pd.DataFrame) -> pd.DataFrame:
         """
-        Treat and optionally scale data.
+        Filters the input DataFrame to retain only rows with in-bound features. 
+        This function is intended for use when importing new data, such as from
+        a CSV file, to ensure that only valid data is processed.
+        """
+        if df_real.empty:
+            return df_real
+
+        # Get masks of all types of outliers
+        masks = self.get_outliers_masks(df_real)
+
+        # Keep only rows with in-bound features
+        return df_real[~masks["out_of_bounds_feat"]]
+
+
+    def treat_real_data(self, df_real: pd.DataFrame) -> pd.DataFrame:
+        """
+        Treat and scale data.
 
         Parameters:
         - df_real (pd.DataFrame): DataFrame containing at least features and
         targets in the real space (not scaled one).
-        - scale (bool): Whether to scale the data or not. Defaults to True.
-
-        Returns:
-            pd.DataFrame: treated_data
         """
         if len(df_real) == 0:
             return df_real
-        # Get outliers
-        real_data = self.fill_outliers_with_nans(df_real)
-        if not scale:
-            return real_data
+        
+        # Get masks of all types of outliers
+        masks = self.get_outliers_masks(df_real)
+        
+        # Check for out-of-bounds features and raise an error if detected
+        features_mask = masks["out_of_bounds_feat"]
+        if features_mask.any():
+            df_out_of_bounds_features = df_real.loc[
+                features_mask,
+                self.features + self.targets
+            ]
+            raise ValueError(
+                "Out-of-bounds features detected!\n"
+                "Affected rows feature and target values:\n"
+                f"{df_out_of_bounds_features}\n"
+                "Error: `treat_real_data` should never receive samples with "
+                "out-of-bounds features. If you are reading CSV data as input, "
+                "outside of the pipeline, try cleaning it first with "
+                "`select_in_bounds_feat`."
+            )
+            
+        # Fill outliers target values with NaNs
+        real_data = self.fill_outliers_with_nans(df_real, masks)
+        
+        # Scale data
         scaler_cols = self.features + self.targets
         scaled_data = real_data.copy()
         scaled_data[scaler_cols] = self.scaler.transform_with_nans(
@@ -52,45 +85,42 @@ class DataTreatment:
         )
         return scaled_data
 
-    def fill_outliers_with_nans(self, df: pd.DataFrame) -> pd.DataFrame:
+    def fill_outliers_with_nans(self, df_real: pd.DataFrame, masks: Dict) -> pd.DataFrame:
         """
         Treats outliers in the input DataFrame by replacing non-feature values
         with NaNs for non-clean data:
-        1. Identify rows with out-of-bounds features, time_out, or sim_error.
-        2. Replace non-feature values with NaNs for these rows.
+        1. Identify bad rows with out-of-bounds targets, time_out, or sim_error.
+        3. Replace target values with NaNs for all bad rows.
 
         Parameters:
-        - df (pd.DataFrame): Input DataFrame containing simulation data with at 
-        least features and targets both in the real space (not scaled one)
+        - df_real (pd.DataFrame): DataFrame containing at least features and
+        targets in the real space (not scaled one).
 
         Returns:
         - pd.DataFrame: DataFrame with the same index as the input, where 
         non-clean data has non-feature values replaced with NaNs.
         """
-        outliers = self.get_outliers_masks(df=df)
-        df_out = df.copy()
+        df_real_out = df_real.copy()
 
         # Identify all rows with outliers
         bad_rows_mask = (
-            outliers["out_of_bounds_feat"] |
-            outliers["time_out"] |
-            outliers["sim_error"] |
-            outliers["out_of_bounds_tar"]
+            masks["time_out"] |
+            masks["sim_error"] |
+            masks["out_of_bounds_tar"]
         )
 
-        # Set non-feature columns to NaN for bad rows
-        # non_feature_columns = df_out.columns.difference(self.features)
-        df_out.loc[bad_rows_mask, self.targets] = np.nan
+        # Set target columns to NaN for bad rows
+        df_real_out.loc[bad_rows_mask, self.targets] = np.nan
 
-        return df_out
+        return df_real_out
 
-    def get_outliers_masks(self, df: pd.DataFrame) -> pd.DataFrame:
+    def get_outliers_masks(self, df_real: pd.DataFrame) -> pd.DataFrame:
         """ Get outlier classes on real df"""
         # Tolerance to consider a value outside its bounds
         tol = 1e-16
         
         # Initialize DataFrame to store masks
-        masks = pd.DataFrame(index=df.index)
+        masks = pd.DataFrame(index=df_real.index)
         
         # Initialize feature and target masks
         masks['out_of_bounds_feat'] = False
@@ -98,7 +128,7 @@ class DataTreatment:
         
         for key, val in self.variables_ranges.items():
             bounds = [val["bounds"][0] - tol, val["bounds"][1] + tol]
-            mask = ~(df[key].between(*bounds))
+            mask = ~(df_real[key].between(*bounds))
             
             if key in self.features:
                 masks['out_of_bounds_feat'] |= mask
@@ -106,64 +136,10 @@ class DataTreatment:
                 masks['out_of_bounds_tar'] |= mask
         
         # Create masks for time_out and sim_error
-        masks['time_out'] = df["sim_time"].round() >= self.sim_time_cutoff
-        masks['sim_error'] = df[self.targets].isna().any(axis=1)
+        masks['time_out'] = df_real["sim_time"].round() >= self.sim_time_cutoff
+        masks['sim_error'] = df_real[self.targets].isna().any(axis=1)
         
         return masks
-
-    def split_inliers_outliers(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        """
-        Treats outliers in the input DataFrame following these steps:
-        1. Drop rows with out-of-bounds features
-        2. Split rows with time_out or sim_error from the rest
-        3. Fill out-of-bounds targets with fixed values
-
-        Parameters:
-        - df (pd.DataFrame): Input DataFrame containing simulation data with at least
-        features and targets both in the real space (not scaled one)
-
-        Returns:
-        tuple: (res, error_res)
-            - res: DataFrame with treated data
-            - error_res: DataFrame with time_out and sim_error rows
-        """
-        outliers_masks = self.get_outliers_masks(df=df)
-        res = df.copy()
-
-        # Step 1: Drop rows with out-of-bounds features
-        if outliers_masks["out_of_bounds_feat"].any():
-            warnings.warn(f"There are samples with features out of design space bounds: \n{res[outliers_masks['out_of_bounds_feat']]}")
-            res = res[~outliers_masks["out_of_bounds_feat"]]
-        
-        if len(res) == 0:
-            return res, pd.DataFrame()
-
-        # Step 2: Split rows with time_out or sim_error
-        error_mask = outliers_masks["time_out"] | outliers_masks["sim_error"]
-        error_res = res[error_mask]
-        res = res[~error_mask]
-
-        # Step 3: Fill out-of-bounds targets with fixed values
-        # TODO yasser: why fill outliers_masks with minimums instead of removing.
-        res = self.fill_outliers_with_fixed_value(
-            outliers_mask=outliers_masks["out_of_bounds_tar"],
-            df=res
-        )
-
-        return res, error_res
-
-    def fill_outliers_with_fixed_value(self, outliers_mask: np.ndarray, df: pd.DataFrame):
-        # Create a DataFrame with default values for all targets
-        default_values = pd.DataFrame(
-            data=[[self.defaults[t] for t in self.targets]],
-            columns=self.targets,
-            index=df.index,
-        )
-        
-        # Use the mask to replace values in the original DataFrame
-        df.loc[outliers_mask, self.targets] = default_values.loc[outliers_mask]
-        
-        return df
 
     def classify_quality_interest(
         self, data: pd.DataFrame, data_is_scaled: bool
@@ -212,7 +188,7 @@ class DataTreatment:
             real_data = data
 
         # Get outlier masks
-        outliers_masks = self.get_outliers_masks(df=real_data)
+        outliers_masks = self.get_outliers_masks(real_data)
 
         # Update 'quality' column based on outlier masks
         for key, mask in outliers_masks.items():

@@ -31,7 +31,7 @@
     },
 
     "tol": 1e-3,
-    "isFilter": true
+    "isFilter": false
   },
 
   "experiments": {

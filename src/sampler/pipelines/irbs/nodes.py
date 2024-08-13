@@ -58,7 +58,7 @@ def irbs_sampling(
         print(f'Round {iteration:03} (continued): simulation results' + '-'*49)
         print(f'irbs_sampling -> New samples after simulation:\n {new_df}')
 
-        # % Add more data than features, targets and additional_values -----------------
+        # ----- Add more cols than features, targets and additional_values -----
 
         # Add multi_objective optimization scores
         # * ignore_index=False to keep columns names 
@@ -105,12 +105,5 @@ def irbs_sampling(
 
         # Print iteration details
         print(f"Iteration {iteration:03} - Total size {n_total} - Inliers size {n_inliers} - Interest count {n_interest}")
-
-        # * Print some informations
-        # iter_interest_count = (new_df['quality']=='interest').sum()
-        # total_interest_count = (res['quality']=='interest').sum()
-        # print(f'irbs_sampling -> Final batch data that wil be stored:\n {new_df}')
-        # print(f'irbs_sampling -> [batch  report] new points: {n_new_samples}, interesting points: {iter_interest_count}')
-        # print(f'irbs_sampling -> [global report] progress: {n_inliers}/{max_size}, interesting points: {total_interest_count}')
     progress_bar.close()
 

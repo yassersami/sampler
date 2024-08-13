@@ -104,8 +104,8 @@ def run_fake_simulator(x_real, features, targets, additional_values, scaler, spi
 
     # Add some spice to check how outliers and errors are handled
     if spice_on and new_points.shape[0] >= 4:
-        new_points.loc[0, features[0]] = 1e-3  # feature out of bounds
-        new_points.loc[1, targets] = [45e6, 6000]  # inlier targets
+        new_points.loc[0, "sim_time"] = 60  # time_out
+        new_points.loc[1, targets] = [45e6, 6000]  # interest sample
         new_points.loc[2, targets[0]] = 1e20  # target out of bounds
         new_points.loc[3, targets[0]] = np.nan  # failed simulation causing error (missing value)
 
@@ -167,7 +167,7 @@ class SimulationProcessor:
         if not treat_output:
             return new_points
         # Scale and clean data
-        scaled_data = self.treatment.treat_data(df_real=new_points, scale=True)
+        scaled_data = self.treatment.treat_real_data(df_real=new_points)
         scaled_data = scaled_data[self.features + self.targets + self.additional_values]
         return scaled_data
 
@@ -179,40 +179,3 @@ class SimulationProcessor:
             )
             data[self.targets] = scaled_data[self.targets].values
         return data
-
-
-# def get_values_from_simulator(
-#         new_x: np.ndarray, features: List[str], targets: List[str],
-#         additional_values: List[str], treatment: DataTreatment, real_x: bool,
-#         simulator: Dict, size: int, n_proc: int = 1
-# ) -> Tuple[pd.DataFrame, List, set]:
-#     """
-#     Receives features either rescaled (real_x=False) or physical (real_x=True) to
-#     launch simulator with the unscaled (physical/real) values.
-#     Returns a DataFrame with scaler features, scaled targets and additional values.
-#     """
-
-#     if real_x:
-#         x_real = new_x
-#     else:
-#         new_xy = np.array([np.append(row, [0]*len(targets)) for row in new_x])
-#         x_real = treatment.scaler.inverse_transform(new_xy)[:, :len(features)]
-#     real_df = pd.DataFrame(x_real, columns=features)
-
-#     # Create map_dir where the simulation files are stored
-#     set_history_folder(simulator['map_dir'], should_rename=False)
-
-#     if simulator['use']:
-#         results_df = run_simulation(
-#             x=real_df, n_proc=n_proc, size=size, map_dir=simulator['map_dir']
-#         )
-#         new_points = pd.concat([real_df, results_df], axis=1)
-#     else:
-#         new_points = run_fake_simulator(
-#             x_real, features, targets, additional_values, treatment.scaler
-#         )
-
-#     scaled_data, scaled_errors = treatment.treat_data(df_real=new_points, scale=True)
-#     final_points = final_points[features + targets + additional_values]
-#     return scaled_data, scaled_errors
-

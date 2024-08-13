@@ -17,8 +17,10 @@ class MixedMinMaxScaler:
 
         self.scale = scale
         if scale is not None:
-            assert all([v in ["lin", "log"] for v in scale]),\
-                    f"Only allowed values for scale are 'lin' or 'log', but got:\n{zip(features+targets, scale)}"
+            assert all(v in ["lin", "log"] for v in scale), (
+                "Only allowed values for scale are 'lin' or 'log', but got:\n"
+                f"{list(zip(features + targets, scale))}"
+            )
             self.lin_vars = np.array([v == "lin" for v in scale])
             self.log_vars = np.array([v == "log" for v in scale])
 

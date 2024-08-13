@@ -62,7 +62,7 @@ def run_parego(
         llambda = lambda_gen.choose_uniform_lambda()
 
         dace.update_model(x_pop, y_pop, llambda) # Prepare train data and train GP
-        new_x = EvolAlg(dace, x_pop, num_generations=num_generations, batch_size=batch_size) # Search new candidates to add to res dataset
+        new_x = EvolAlg(dace, num_generations=num_generations, batch_size=batch_size) # Search new candidates to add to res dataset
         new_df = simulator.process_data(new_x, real_x=False, index=n_total, treat_output=True) # Launch time expensive simulations
 
         print(f'Round {iteration:03} (continued): simulation results' + '-'*49)
@@ -102,13 +102,7 @@ def run_parego(
         # Print iteration details
         print(f"Iteration {iteration:03} - Total size {n_total} - Inliers size {n_inliers} - Interest count {n_interest}")
 
-        # * Print some informations
-        # iter_interest_count = (new_df['quality']=='interest').sum()
-        # total_interest_count = (res['quality']=='interest').sum()
-        # print(f'irbs_sampling -> Final batch data that wil be stored:\n {new_df}')
-        # print(f'irbs_sampling -> [batch  report] new points: {n_new_samples}, interesting points: {iter_interest_count}')
-        # print(f'irbs_sampling -> [global report] progress: {n_inliers}/{max_size}, interesting points: {total_interest_count}')
-
+    progress_bar.close()
 
 class DACEModel:
     def __init__(
@@ -231,7 +225,7 @@ class DACEModel:
         elif self.use_interest:
             return self.excpected_interest(x)
 
-    
+
 def linear_tent(x, L, U, slope: float=1.0):
     """
     Tent function equal to 1 on interval [L, U],
@@ -272,8 +266,8 @@ def tchebychev(y_pop: np.array, llambda: List[float]):
     return y_pop_tchebychev
 
 
-def EvolAlg(dace: DACEModel, x_pop: np.array, num_generations: int=1000, population_size: int=20, batch_size: int=1):
-    dimensions = x_pop.shape[1]
+def EvolAlg(dace: DACEModel, num_generations: int=1000, population_size: int=20, batch_size: int=1):
+    dimensions = len(dace.features)
 
     def fitness_function(x):
         # Expected improvement is an increasing function of goodness of selected sample. Thus we add a minus for minization algorithm.
