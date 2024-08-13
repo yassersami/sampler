@@ -172,10 +172,12 @@ def plot_2d(data: Dict, features_dic: Dict, volume: Dict):
         idx_legend = (0, n_col) if n_exp > 1 else 0
         hs, _ = axs[idx_legend].get_legend_handles_labels()
 
-        handles = [hs[2], hs[0]] if num_outliers == 0 else [hs[2], hs[0], hs[1]]
+        invisible_handle = plt.Line2D([0], [0], color='none', label="")
+        handles = [hs[2], hs[0], invisible_handle] if num_outliers == 0 else [hs[2], hs[0], invisible_handle, hs[1]]
         labels = [
-            f'n_Itr: {num_interest} \nV_Itr_bound: [{volume[k][0]:.2e} ; {volume[k][1]:.2e}]',
-            f'n_noItr: {num_not_interesting} '
+            f'n_Itr: {num_interest}',
+            f'n_noItr: {num_not_interesting}',
+            f'V_Itr_bound : [{volume[k][0]:.2e} ; {volume[k][1]:.2e}]'
         ]
         if num_outliers != 0:
             labels.append(f'Outliers {num_outliers}')
