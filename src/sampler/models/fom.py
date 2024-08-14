@@ -67,21 +67,11 @@ class FigureOfMerit:
         self.data = None
 
         # Set terms calculation methods
-        self.calc_std = self.set_std(
-            **terms["std"]
-        )
-        self.calc_interest = self.set_interest(
-            **terms["interest"], interest_region=interest_region
-        )
-        self.calc_local_density = self.set_local_density(
-            **terms["local_density"]
-        )
-        self.calc_outlier_proximity = self.set_outlier_proximity(
-            **terms["outlier_proximity"]
-        )
-        self.calc_std_x = self.set_std_x(
-            **terms["std_x"]
-        )
+        self.set_std(**terms["std"])
+        self.set_interest(**terms["interest"], interest_region=interest_region)
+        self.set_local_density(**terms["local_density"])
+        self.set_outlier_proximity(**terms["outlier_proximity"])
+        self.set_std_x(**terms["std_x"])
         
         # Store terms and count active ones
         self.terms = terms
@@ -124,9 +114,6 @@ class FigureOfMerit:
         dimensions for a given input x and stretches it to reach the entire
         range of [0, 1].
         """
-        if not apply:
-            return zeros_like_rows
-        
         def std(x):
             x = np.atleast_2d(x)
 
@@ -134,7 +121,11 @@ class FigureOfMerit:
 
             score = 1 - y_std_combined / self.gp_surrogate.max_std
             return score
-        return std
+        
+        if apply:
+            self.calc_std = std
+        else:
+            self.calc_std = zeros_like_rows
 
 
     def set_interest(self, apply: bool, interest_region: Dict) -> callable:
@@ -142,11 +133,9 @@ class FigureOfMerit:
         Given an n-dimensional x returns the sum of the probabilities to be in
         the interest region.
         """
-        if not apply:
-            return zeros_like_rows
-        
         lowers = [region[0] for region in interest_region.values()]
         uppers = [region[1] for region in interest_region.values()]
+        
         def interest(x):
             x = np.atleast_2d(x)
 
@@ -160,7 +149,11 @@ class FigureOfMerit:
             score = 1 - np.prod(probabilities, axis=1)
             
             return score
-        return interest
+        
+        if apply:
+            self.calc_interest = interest
+        else:
+            self.calc_interest = zeros_like_rows
 
     def set_local_density(
         self, apply: bool, include_outliers: bool, decay_dist: float
@@ -169,24 +162,25 @@ class FigureOfMerit:
         Set the local density function, which penalizes near points in already
         crowded region, promoting the exploration (coverage) of the space.
         """
-        if not apply:
-            return zeros_like_rows
         
         def space_local_density(x: np.ndarray):
             x = np.atleast_2d(x)
-            scores = []
             
             if include_outliers:
                 dataset_points = self.data[self.features].values
             else:
                 dataset_points = self.gp_surrogate.gp.X_train_
             
-            scores = compute_space_local_density(
+            score = compute_space_local_density(
                 x, dataset_points, decay_dist,
             )
 
-            return scores
-        return space_local_density
+            return score
+        
+        if apply:
+            self.calc_local_density = space_local_density
+        else:
+            self.calc_local_density = zeros_like_rows
     
     def set_outlier_proximity(
         self, apply: bool, dist_threshold: float
@@ -198,9 +192,7 @@ class FigureOfMerit:
         condition is necessary because the surrogate GP does not update around
         failed samples.
         """
-        if not apply:
-            return zeros_like_rows
-        
+
         def outlier_proximity(x: np.ndarray) -> np.ndarray:
             x = np.atleast_2d(x)
             
@@ -211,8 +203,13 @@ class FigureOfMerit:
             
             # if sample is bad (near outlier), score is 1, and 0 if not
             score = should_ignore.astype(float)
+            
             return score
-        return outlier_proximity
+    
+        if apply:
+            self.calc_outlier_proximity = outlier_proximity
+        else:
+            self.calc_outlier_proximity = zeros_like_rows
 
     def set_std_x(
         self, apply: bool, use_threshold: bool, inlier_proba_threshold: float
@@ -223,8 +220,6 @@ class FigureOfMerit:
         It trains on all data, not just inliers like the SurrogateGP class.
         It calculates scores based on inlier probability and standard deviation.
         """
-        if not apply:
-            return zeros_like_rows
         
         def std_x(x):
             x = np.atleast_2d(x)
@@ -235,8 +230,13 @@ class FigureOfMerit:
 
             # Make score an objective for minimization
             score = 1 - y_std_conditional
+            
             return score
-        return std_x
+    
+        if apply:
+            self.calc_std_x = std_x
+        else:
+            self.calc_std_x = zeros_like_rows
 
     def sort_by_relevance(self, mask: np.ndarray, unique_min: np.ndarray) -> List:
         n_feat = len(self.features)
