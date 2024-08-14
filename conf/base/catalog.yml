@@ -7,15 +7,11 @@
 ###### prep ######
 initial_data:
   type: pandas.CSVDataSet
-  filepath: data/02_intermediate/100_initial_data.csv
-
-scaler:
-  type: pickle.PickleDataSet
-  filepath: data/04_feature/base/scaler.pkl
+  filepath: data/01_raw/100_initial_data.csv
 
 treatment:
   type: pickle.PickleDataSet
-  filepath: data/04_feature/base/treatment.pkl
+  filepath: data/05_model_input/base/treatment.pkl
 
 treated_data:
   type: pandas.CSVDataSet

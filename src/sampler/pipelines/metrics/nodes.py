@@ -20,7 +20,6 @@ from sampler.pipelines.metrics.voronoi import get_volume_voronoi
 import sampler.pipelines.metrics.graphics_metrics as gm
 
 
-
 def prepare_data_metrics(
         experiments: Dict, names: Dict, features: List[str], targets: List[str],
         additional_values: List[str], treatment: DataTreatment

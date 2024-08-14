@@ -5,39 +5,31 @@ generated using Kedro 0.18.4
 
 from kedro.pipeline import Pipeline, node, pipeline
 
-from sampler.pipelines.prep.nodes import prepare_initial_data, get_scaler
+from .nodes import prepare_treatment, prepare_data
 
 
 def create_pipeline(**kwargs) -> Pipeline:
     return pipeline([
         node(
-            func=get_scaler,
+            func=prepare_treatment,
             inputs=dict(
-                log_scale='params:log_scale',
-                features='params:features',
-                targets='params:targets',
-                variables_ranges='params:variables_ranges',
+                features="params:features",
+                targets="params:targets",
+                variables_ranges="params:variables_ranges",
+                interest_region="params:interest_region",
+                simulator_env="params:simulator_env"
             ),
-            outputs='scaler',
-            name='fit_scaler'
+            outputs="treatment",
+            name="prepare_treatment_node"
         ),
         node(
-            func=prepare_initial_data,
+            func=prepare_data,
             inputs=dict(
-                initial_data='initial_data',
-                features='params:features',
-                targets='params:targets',
-                additional_values='params:additional_values',
-                variables_ranges='params:variables_ranges',
-                interest_region='params:interest_region',
-                outliers_filling='params:outliers_filling',
-                sim_time_cutoff='params:sim_time_cutoff',
-                scaler='scaler',
+                initial_data="initial_data",
+                additional_values="params:additional_values",
+                treatment="treatment"
             ),
-            outputs=dict(
-                treated_data='treated_data',
-                treatment='treatment',
-            ),
-            name='preparation',
+            outputs="treated_data",
+            name="prepare_data_node"
         )
     ])

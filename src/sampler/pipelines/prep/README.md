@@ -25,7 +25,6 @@ With these tools, it also returns the initial data set, prepared to be enlarged.
   * additional_values: Other values of interest that the user wishes to keep track (but not use), defined in 'parameters:additional_values',
   * variables_ranges: Definition of the design space (boundaries for each variable), defined in 'parameters/prep:variables_ranges',                          
   * interest_region: Boundaries of the targets that will define the region of interest, defined in 'parameters:interest_region',
-  * outliers_filling: Method to replace a NaN value on targets, defined in 'parameters/prep:outliers_filling',
   * sim_time_cutoff: Maximum time of simulation allowed to obtain ground truth of targets, defined in 'parameters/prep:sim_time_cutoff',
   * scaler: Class that contains the parameters needed to transform the design space into a space between 0 and 1, defined in 'catalog:scaler'.
 

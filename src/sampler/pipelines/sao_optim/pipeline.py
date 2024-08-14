@@ -5,12 +5,15 @@ generated using Kedro 0.18.5
 
 from kedro.pipeline import Pipeline, node, pipeline
 
-from sampler.pipelines.sao_optim.nodes import sao_optim_from_simulator
+from sampler.pipelines.prep import create_pipeline as create_pipeline_prep
+
+from .nodes import sao_optim_from_simulator
 from sampler.common.storing import join_history
 
-# For this pipeline I need to install plotly and optuna
+
 def create_pipeline(**kwargs) -> Pipeline:
-    return pipeline([
+    pipeline_prep = create_pipeline_prep()
+    pipeline_local = pipeline([
         node(
             func=sao_optim_from_simulator,
             inputs=dict(
@@ -41,3 +44,4 @@ def create_pipeline(**kwargs) -> Pipeline:
             name='sao_retrieve_outputs',
         )
     ])
+    return pipeline([pipeline_prep, pipeline_local])

@@ -5,12 +5,15 @@ generated using Kedro 0.18.5
 
 from kedro.pipeline import Pipeline, node, pipeline
 
-from sampler.pipelines.irbs.nodes import irbs_sampling
+from sampler.pipelines.prep import create_pipeline as create_pipeline_prep
+
+from .nodes import irbs_sampling
 from sampler.common.storing import join_history
 
 
 def create_pipeline(**kwargs) -> Pipeline:
-    return pipeline([
+    pipeline_prep = create_pipeline_prep()
+    pipeline_local = pipeline([
         node(
             func=irbs_sampling,
             inputs=dict(
@@ -41,3 +44,4 @@ def create_pipeline(**kwargs) -> Pipeline:
             name='irbs_retrieve_outputs',
         )
     ])
+    return pipeline([pipeline_prep, pipeline_local])

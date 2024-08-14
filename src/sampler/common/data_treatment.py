@@ -12,16 +12,14 @@ class DataTreatment:
             self,
             features: List[str],
             targets: List[str],
-            scaler: MixedMinMaxScaler,
-            outliers_filling: Dict,
             variables_ranges: Dict,
-            sim_time_cutoff: int,
             interest_region: Dict,
+            scaler: MixedMinMaxScaler,
+            sim_time_cutoff: int,
     ):
         self.features = features
         self.targets = targets
         self.scaler = scaler
-        self.defaults = outliers_filling["default_values"]
         self.variables_ranges = variables_ranges
         self.sim_time_cutoff = sim_time_cutoff
         self.interest_region = interest_region

@@ -5,11 +5,14 @@ generated using Kedro 0.18.5
 
 from kedro.pipeline import Pipeline, node, pipeline
 
-from sampler.pipelines.metrics.nodes import prepare_data_metrics, get_metrics, scale_data_for_plots, plot_metrics
+from sampler.pipelines.prep import create_pipeline as create_pipeline_prep
+
+from .nodes import prepare_data_metrics, get_metrics, scale_data_for_plots, plot_metrics
 
 
 def create_pipeline(**kwargs) -> Pipeline:
-    return pipeline([
+    pipeline_prep = create_pipeline_prep()
+    pipeline_local = pipeline([
         node(
             func=prepare_data_metrics,
             inputs=dict(
@@ -79,3 +82,4 @@ def create_pipeline(**kwargs) -> Pipeline:
             # name='plot_metrics'
         )
     ])
+    return pipeline([pipeline_prep, pipeline_local])

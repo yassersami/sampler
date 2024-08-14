@@ -65,17 +65,18 @@ class FigureOfMerit:
         self.features = features
         self.targets = targets
         self.data = None
+        
+        # Store terms kwargs and count active ones
+        terms["interest"]["interest_region"] = interest_region
+        self.terms = terms
+        self.count_active_terms = sum([d["apply"] for d in terms.values()])
 
         # Set terms calculation methods
         self.set_std(**terms["std"])
-        self.set_interest(**terms["interest"], interest_region=interest_region)
+        self.set_interest(**terms["interest"])
         self.set_local_density(**terms["local_density"])
         self.set_outlier_proximity(**terms["outlier_proximity"])
         self.set_std_x(**terms["std_x"])
-        
-        # Store terms and count active ones
-        self.terms = terms
-        self.count_active_terms = sum([d["apply"] for d in terms.values()])
         
     def update(self, data: pd.DataFrame, optimizer_kwargs: Dict):
         """

@@ -2,6 +2,7 @@
   "env_name": "base",
   "simulator_env": {
     "map_dir": "data/07_simulation/base",
+    "sim_time_cutoff": 41,
     "use": true
   },
   "sao_history_path": "data/07_model_output/base/sao_history",
