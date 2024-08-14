@@ -26,16 +26,16 @@ def sao_optim_from_simulator(
         features: List[str],
         targets: List[str],
         additional_values: List[str],
+        simulator_env: Dict,
+        batch_size: int,
         run_condition: Dict[str, Union[bool, int]],
         sao_history_path: str,
-        simulator_env: Dict
 ):
     '''
     Output values of simulation function must be in 0, 1 so that it's easier
     for optimizer to search.
 
     '''
-    max_size, batch_size = run_condition['max_size'], run_condition['batch_size']
 
     # Chose the simulation function that will be adapted for optimizer
     simulator = SimulationProcessor(
@@ -53,7 +53,7 @@ def sao_optim_from_simulator(
     )
     # Run optimization
     X_1D, y_obj, optiminfo_dic = run_optimization_optuna(
-        objective, max_size, batch_size
+        objective, run_condition['max_size'], batch_size
     )
     # Parse optimization results
     result_dic = {

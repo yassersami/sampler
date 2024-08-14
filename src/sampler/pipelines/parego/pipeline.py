@@ -20,12 +20,14 @@ def create_pipeline(**kwargs) -> Pipeline:
                 features='params:features',
                 targets='params:targets',
                 additional_values='params:additional_values', # 'sim_time', 'Y_O2', ...
+                simulator_env='params:simulator_env',
+                batch_size='params:batch_size',
                 run_condition='params:run_condition',
+                
                 llambda_s='params:parego_llambda_s',
                 num_generations='params:parego_num_generations',
                 tent_slope='params:parego_tent_slope',
                 experience='params:parego_experience',
-                simulator_env='params:simulator_env',
             ),
             outputs='parego_history',
             name='parego_sampling',

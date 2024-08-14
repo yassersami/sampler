@@ -66,24 +66,23 @@ def prepare_simulator_inputs(
 
 
 def evaluate_inputs(
-    df_inputs: pd.DataFrame, treatment: 'DataTreatment',
+    data: pd.DataFrame, treatment: 'DataTreatment',
     features: List[str], targets: List[str], additional_values: List[str],
-    run_condition: Dict, simulator_env: Dict, n_proc: int, output_is_real: bool
+    simulator_env: Dict, batch_size: int, n_proc: int, output_is_real: bool
 ):
     # Ensure 'r_ext_pMeO' is in features by copying 'r_ext_pAl' if necessary
     if "r_ext_pMeO" not in features:
-        df_inputs['r_ext_pMeO'] = df_inputs['r_ext_pAl']
+        data['r_ext_pMeO'] = data['r_ext_pAl']
     
-    # Initialize the simulation processor
+    # Initialize the simulation processor, n_proc to None to use cpu_count()
     simulator = SimulationProcessor(
         features=features, targets=targets, additional_values=additional_values,
         treatment=treatment, n_proc=n_proc, simulator_env=simulator_env
     )
 
-    batch_size = run_condition['batch_size']
     n_total = 0  # Total launched number of simulations
     iteration = 0
-    max_size = df_inputs.shape[0]
+    max_size = data.shape[0]
 
     # Initialize tqdm progress bar
     progress_bar = tqdm(total=max_size, dynamic_ncols=True)
@@ -92,7 +91,7 @@ def evaluate_inputs(
         print(f"Iteration {iteration:03} - Total size {n_total}")
 
         # Run the simulation
-        nex_x = df_inputs.loc[n_total: n_total + batch_size - 1, features].values
+        nex_x = data.loc[n_total: n_total + batch_size - 1, features].values
         new_df = simulator.process_data(
             nex_x, real_x=True, index=n_total, treat_output=(not output_is_real)
         )

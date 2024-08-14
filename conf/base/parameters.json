@@ -19,17 +19,15 @@
     "Tg_Tmax": {"bounds": [600, 7500], "scale": "log"}
   },
   
-  "initial_size": 100,
-
   "interest_region": {
     "Pg_f": [40e6, 56e6],
     "Tg_Tmax": [5800, 7000]
   },
 
+  "initial_size": 100,
+  "batch_size": 8,
   "run_condition":{
-    "run_until_max_size": true, 
-    "batch_size": 8,
-
+    "run_until_max_size": true,
     "max_size": 200,
     "n_interest_max": 50
   }

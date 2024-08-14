@@ -28,13 +28,14 @@ def create_pipeline(**kwargs) -> Pipeline:
         node(
             func=evaluate_inputs,
             inputs=dict(
-                df_inputs='df_inputs',
+                data='df_inputs',
                 treatment='treatment',
                 features='params:features',
                 targets='params:targets',
                 additional_values='params:additional_values',
-                run_condition='params:run_condition',
                 simulator_env='params:simulator_env',
+                batch_size='params:batch_size',
+                
                 n_proc='params:initLHS_n_proc',
                 output_is_real='params:initLHS_output_is_real'
             ),

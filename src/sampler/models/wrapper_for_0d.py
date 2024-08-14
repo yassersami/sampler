@@ -66,7 +66,11 @@ def define_initial_params(index: int, x: pd.DataFrame, map_dir: str):
     return folders
 
 
-def run_parallel_simulation(folders: List[str], n_proc: int):
+def run_parallel_simulation(folders: List[str], n_proc: int=None):
+    """
+    If processes is specified as None the default value used is the value
+    returned by the cpu_count() function.
+    """
     pool = Pool(processes=n_proc)
     result_f = pool.map_async(launch_0d, folders,).get()
     pool.close()

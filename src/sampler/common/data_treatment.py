@@ -45,12 +45,25 @@ class DataTreatment:
 
     def treat_real_data(self, df_real: pd.DataFrame) -> pd.DataFrame:
         """
-        Treat and scale data.
+        Processes the input DataFrame by filling outlier samples with NaN target
+        values and scaling the data. This approach ensures consistency in
+        outlier removal by always proceeding to the exclusion of NaNs, thereby
+        providing clean data for regression. This NaN exclusion to get 'clean
+        data' is utilized in the following contexts:
+            - `FigureOfMerit.update`: Extracts `clean_regr_data`.
+            - `OutlierExcluder.update_outliers_set`: Extracts `ignored_rows`.
+            - Main sampling node: Updates `n_new_inliers`.
 
-        Parameters:
-        - df_real (pd.DataFrame): DataFrame containing at least features and
-        targets in the real space (not scaled one).
+        Note: This function does not handle out-of-bounds features, as it is
+        assumed that such cases are impossible within the pipeline. The
+        `FigureOfMerit.optimize` function is solely responsible for selecting
+        new samples and ensures that they remain within the defined design
+        space.
+
+        Parameters: - df_real (pd.DataFrame): A DataFrame containing features
+        and targets in real (unscaled) space.
         """
+
         if len(df_real) == 0:
             return df_real
         

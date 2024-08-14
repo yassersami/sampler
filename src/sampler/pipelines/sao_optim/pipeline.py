@@ -18,9 +18,11 @@ def create_pipeline(**kwargs) -> Pipeline:
                 features='params:features',
                 targets='params:targets',
                 additional_values='params:additional_values',
-                run_condition='params:run_condition',
-                sao_history_path='params:sao_history_path',
                 simulator_env='params:simulator_env',
+                batch_size='params:batch_size',
+                run_condition='params:run_condition',
+                
+                sao_history_path='params:sao_history_path',
             ),
             outputs=dict(
                 history='sao_history',  # dummy output to run nodes in sequence but is used undirectly by aux_func.store_df

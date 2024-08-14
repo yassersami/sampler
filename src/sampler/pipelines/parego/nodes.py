@@ -26,13 +26,12 @@ RANDOM_STATE = 42
 
 
 def run_parego(
-        data: pd.DataFrame, treatment: DataTreatment,
-        features: List[str], targets: List[str], additional_values: List[str],
-        simulator_env: Dict, run_condition: Dict, llambda_s: int, num_generations: int, 
-        tent_slope: float=10, experience: str="parEGO_maxIpr"
+    data: pd.DataFrame, treatment: DataTreatment,
+    features: List[str], targets: List[str], additional_values: List[str],
+    simulator_env: Dict, batch_size: int, run_condition: Dict,
+    llambda_s: int, num_generations: int, tent_slope: float=10,
+    experience: str="parEGO_maxIpr"
 ):
-    max_size, n_interest_max, run_until_max_size, batch_size = run_condition['max_size'], run_condition['n_interest_max'], run_condition['run_until_max_size'], run_condition['batch_size']
-
     lambda_gen = LambdaGenerator(k=len(targets), s=llambda_s)
     dace = DACEModel(
         features=features, targets=targets,
@@ -48,22 +47,37 @@ def run_parego(
     res = initialize_dataset(data=data, treatment=treatment)
     yield parse_results(res, current_history_size=0)
 
+    # Set progress counting variables
+    max_size = run_condition['max_size']
+    n_interest_max = run_condition['n_interest_max']
+    run_until_max_size = run_condition['run_until_max_size']
+    
     n_total = 0  # counting all simulations
     n_inliers = 0  # counting only inliers
     n_interest = 0  # counting only interesting inliers
     iteration = 0
-    end_condition = n_inliers < max_size if run_until_max_size else n_interest < n_interest_max
-    progress_bar = tqdm(total=max_size, dynamic_ncols=True) if run_until_max_size else tqdm(total=n_interest_max, dynamic_ncols=True) # Initialize tqdm progress bar with estimated time remaining
-    print(f"Iteration {iteration:03} - Total size {n_total} - Inliers size {n_inliers} - Interest count {n_interest}")
-    while end_condition:
+    should_continue = True
+    
+    # Initialize tqdm progress bar with estimated time remaining
+    progress_bar = (
+        tqdm(total=max_size, dynamic_ncols=True) if run_until_max_size else 
+        tqdm(total=n_interest_max, dynamic_ncols=True)
+    )
+    
+    while should_continue:
         clean_res = res.dropna(subset=targets)
         x_pop = clean_res[features].values
         y_pop = clean_res[targets].values
         llambda = lambda_gen.choose_uniform_lambda()
 
-        dace.update_model(x_pop, y_pop, llambda) # Prepare train data and train GP
-        new_x = EvolAlg(dace, num_generations=num_generations, batch_size=batch_size) # Search new candidates to add to res dataset
-        new_df = simulator.process_data(new_x, real_x=False, index=n_total, treat_output=True) # Launch time expensive simulations
+        # Prepare train data and train GP
+        dace.update_model(x_pop, y_pop, llambda)
+        
+        # Search new candidates to add to res dataset
+        new_x = EvolAlg(dace, num_generations=num_generations, batch_size=batch_size)
+        
+        # Launch time expensive simulations
+        new_df = simulator.process_data(new_x, real_x=False, index=n_total, treat_output=True)
 
         print(f'Round {iteration:03} (continued): simulation results' + '-'*49)
         print(f'run_parego -> New samples after simulation:\n {new_df}')
@@ -71,7 +85,7 @@ def run_parego(
         # Add interesting informations about samples choice
         prediction = dace.model.predict(new_df[features].values)
         prediction_cols = [f'pred_{t}' for t in dace.model_targets]
-        new_df[prediction_cols] = prediction if len(dace.model_targets) > 1 else prediction.reshape(-1, 1)
+        new_df[prediction_cols] = np.atleast_2d(prediction)
         score = dace.get_score(new_df[features].values)
         new_df["obj_score"] = score
         new_df = treatment.classify_quality_interest(new_df, data_is_scaled=True)
@@ -79,9 +93,11 @@ def run_parego(
         new_df['datetime'] = timenow
         new_df['iteration'] = iteration
         
-        yield parse_results(new_df, current_history_size=res.shape[0]) # Store final batch results
+        # Store final batch results
+        yield parse_results(new_df, current_history_size=res.shape[0])
 
-        res = pd.concat([res, new_df], axis=0, ignore_index=True) # Concatenate new values to original results DataFrame
+        # Concatenate new values to original results DataFrame
+        res = pd.concat([res, new_df], axis=0, ignore_index=True)
         
         # Update stopping conditions
         n_new_samples = new_df.shape[0]
@@ -97,12 +113,20 @@ def run_parego(
         progress_bar.update(n_new_inliers if run_until_max_size else n_new_interest)
 
         # Determine the end condition
-        end_condition = (n_inliers < max_size) if run_until_max_size else (n_interest < n_interest_max)
-
+        should_continue = (
+            (n_inliers < max_size) if run_until_max_size else
+            (n_interest < n_interest_max)
+        )
+        
         # Print iteration details
-        print(f"Iteration {iteration:03} - Total size {n_total} - Inliers size {n_inliers} - Interest count {n_interest}")
-
+        print(
+            f"Report count of iteration {iteration - 1:03}: "
+            f"Total: {n_total}, "
+            f"Inliers: {n_inliers}, "
+            f"Interest: {n_interest}"
+        )
     progress_bar.close()
+
 
 class DACEModel:
     def __init__(

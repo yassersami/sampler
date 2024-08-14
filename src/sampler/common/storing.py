@@ -14,7 +14,9 @@ def parse_results(df: pd.DataFrame, current_history_size: int) -> Dict[str, pd.D
     return {f'[{start_idx:03}-{end_idx:03}]': df}
 
 
-def join_history(history: Dict[str, pd.DataFrame], run_condition: Dict, initial_size: int) -> pd.DataFrame:
+def join_history(
+    history: Dict[str, pd.DataFrame], run_condition: Dict, initial_size: int
+) -> pd.DataFrame:
     """ Joins all checkpoints of a run into a single file """
     df_history = pd.DataFrame()
     for df_batch in history.values():
@@ -30,13 +32,18 @@ def join_history(history: Dict[str, pd.DataFrame], run_condition: Dict, initial_
     # truncate increased_data to respect run_condition
     interest_count = 0
     index = initial_size
-    while interest_count<run_condition['n_interest_max'] and index<len(df_history):
+    while (
+        interest_count < run_condition['n_interest_max'] and 
+        index < len(df_history)
+    ):
         if df_history.iloc[index]['quality']=='interest':
             interest_count += 1
         index+=1
 
     df_history = df_history.iloc[:index]
-    assert interest_count==run_condition['n_interest_max'], "Not enough 'interest' rows in the dataset."
+    assert interest_count==run_condition['n_interest_max'], (
+        "Not enough 'interest' rows in the dataset."
+    )
     return df_history
 
 
