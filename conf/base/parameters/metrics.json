@@ -36,16 +36,19 @@
 
   "experiments": {
     "exp0": {
-      "color": "blue",
-      "name": "name_exp0 [reg_itr]",
-      "path": "PATH/history",
-      "scale": "real-inverse"
+      "color": "royalblue",
+      "name": "name_exp0 [R1 interest region]",
+      "path": "data/07_model_output/exp0/irbs_history"
     },
     "exp1": {
-      "color": "red",
-      "name": "name_exp1 [reg_itr]",
-      "path": "PATH/name.csv",
-      "scale": "read"
+      "color": "firebrick",
+      "name": "name_exp1 [R1 interest region]",
+      "path": "data/07_model_output/exp1/irbs_increased_data.csv"
+    },
+    "exp2": {
+      "color": "forestgreen",
+      "name": "name_exp2 [R1 interest region]",
+      "path": "data/07_model_output/exp2/parego_increased_data.csv"
     }
   }
 }

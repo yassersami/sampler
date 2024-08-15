@@ -1,4 +1,4 @@
-import glob
+import os
 from typing import Dict, List, Union
 
 import numpy as np
@@ -7,26 +7,31 @@ import pandas as pd
 from sampler.common.data_treatment import DataTreatment
 
 
-def get_result(path: str):
-    if 'history' in path:
-        path = path.replace('/db-t/', '/') # TODO: fix this with the actual path being used in the first place
-        path = path.replace('/db-p/', '/') # TODO: fix this with the actual path being used in the first place
-        path = path.replace('/db-tp/', '/') # TODO: fix this with the actual path being used in the first place
-        files = glob.glob(f"{path}/*.csv")
-        files.sort()
-        dfs = [pd.read_csv(f) for f in files]
-        history = pd.concat(dfs, ignore_index=True)
-        return history
-    else:
-        return pd.read_csv(path)
+def aggregate_csv_files(directory_path: str) -> pd.DataFrame:
+    """
+    Combine data from all CSV files in a given directory into a single DataFrame.
+
+    Args:
+        directory_path (str): Path to the directory containing CSV files.
+
+    Returns:
+        pd.DataFrame: Combined DataFrame from all CSV files in the directory.
+    """
+    csv_files = [f for f in os.listdir(directory_path) if f.endswith('.csv')]
+    dataframes = []
+
+    for csv_file in csv_files:
+        file_path = os.path.join(directory_path, csv_file)
+        df = pd.read_csv(file_path)
+        dataframes.append(df)
+
+    combined_df = pd.concat(dataframes, ignore_index=True)
+    return combined_df
 
 
-def prepare_benchmark(df: pd.DataFrame, f: List[str], t: List[str], treatment: DataTreatment,) -> pd.DataFrame:
-    res = treatment.define_quality_of_data(data=df, specify_errors=False)
-    return res
-
-
-def create_dict(df: pd.DataFrame, name: str, color: str) -> Dict[str, Union[str, pd.DataFrame]]:
+def categorize_df_by_quality(
+    df: pd.DataFrame, name: str, color: str
+) -> Dict[str, Union[str, pd.DataFrame]]:
     return {
         'name': name,
         'color': color,
@@ -57,7 +62,7 @@ def prepare_new_data(
 
 def extract_percentage(initial_size, tot_size, n_slice, vals):
     res_io = pd.DataFrame(columns=['interest', 'others', 'in%', 'o%'])
-    for n_row, lim in enumerate(np.append([initial_size], np.arange(n_slice, tot_size + 1, n_slice))):
+    for lim in np.append([initial_size], np.arange(n_slice, tot_size + 1, n_slice)):
         if lim <= vals['df'].shape[0]:
             res_io.loc[lim, 'interest'] = vals['interest'].loc[vals['interest'].index < lim].shape[0]
             res_io.loc[lim, 'in%'] = res_io.loc[lim, 'interest'] / lim

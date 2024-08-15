@@ -2,75 +2,71 @@
 This is a boilerplate pipeline 'metrics'
 generated using Kedro 0.18.5
 """
-import sys
 from typing import List, Dict
-
+import os
 import numpy as np
 import pandas as pd
-from sklearn.metrics import r2_score
-from scipy.stats import norm
-import os
 import matplotlib.pyplot as plt
 
-from sampler.common.data_treatment import DataTreatment
-from sampler.pipelines.metrics.asvd import ASVD
-from sampler.pipelines.metrics.postprocessing_functions import create_dict, prepare_new_data, prepare_benchmark, get_result
-from sampler.pipelines.metrics.volume import covered_space_bound
-from sampler.pipelines.metrics.voronoi import get_volume_voronoi
+from .postprocessing_functions import (
+    categorize_df_by_quality, prepare_new_data, aggregate_csv_files
+)
+from .volume import covered_space_bound
+from .asvd import ASVD
+from .voronoi import get_volume_voronoi
 import sampler.pipelines.metrics.graphics_metrics as gm
+from sampler.common.data_treatment import DataTreatment
 
 
 def prepare_data_metrics(
-        experiments: Dict, names: Dict, features: List[str], targets: List[str],
-        additional_values: List[str], treatment: DataTreatment
+    experiments: Dict, names: Dict, features: List[str], targets: List[str],
+    additional_values: List[str], treatment: DataTreatment
 ) -> Dict:
+    """
+    Prepare data metrics by processing experiment data based on the path type.
+    """
     data = {}
-    f_r = names["features"]["str"]
-    t_r = names["targets"]["str"]
-    targets_prediction = [f'{t}_hat' for t in targets]
-    renaming_cols = {v1: v2 for v1, v2 in zip(features + targets, f_r + t_r)}
-    # * TODO: Don't use magic number 1e6, find a way to generalize
-    # region = {
-    #     t_r[0]: [v/1e6 for v in interest_region[targets[0]]],
-    #     t_r[1]: interest_region[targets[1]]
-    # }
-    for key, value in experiments.items():
-        if value["scale"] == "classify":
-            # * TODO: Solve this:
-            #  ParserWarning: Falling back to the 'python' engine because the 'c' engine                
-            #  does not support regex separators (separators > 1 char and different from                
-            #  '\s+' are interpreted as regex); you can avoid this warning by specifying                
-            #  engine='python'.
-            # TODO yasser: prepare_benchmark is now replaced by case of value["scale"] == "read"
-            df = prepare_benchmark(
-                df=pd.read_csv(
-                    value["path"], sep='[; ,]',
-                    usecols=features + targets + additional_values
-                ),
-                f=features, t=targets, treatment=treatment
-            ).rename(columns=renaming_cols)
-        elif value["scale"] == "real-inverse":
-            history = get_result(value["path"])
-            df = prepare_new_data(
-                df=history, treatment=treatment, f=features, t=targets, t_c=targets_prediction
-            ).rename(columns=renaming_cols)
-        elif value["scale"] == "read": # TODO : Rewrite properly this part and "classify"
-            df_read = pd.read_csv(value["path"], sep='[; ,]', usecols=features+targets+additional_values+["quality"])
-            df = prepare_new_data(
-                df=df_read, treatment=treatment, f=features, t=targets, t_c=targets_prediction
-            ).rename(columns=renaming_cols)
+    # New names for data columns
+    feature_aliases = names["features"]["str"]
+    target_aliases = names["targets"]["str"]
+    column_renaming = {
+        orig: alias for orig, alias in 
+        zip(features + targets, feature_aliases + target_aliases)
+    }
+    # Name fot target prediction columns
+    targets_pred = [f'{target}_hat' for target in targets]
 
+    for exp_id, exp_config in experiments.items():
+        file_path = exp_config["path"]
+        
+        # Import data, etiher from a folder or a csv file
+        if os.path.isdir(file_path):
+            imported_df = aggregate_csv_files(file_path)
+        elif os.path.isfile(file_path) and file_path.endswith('.csv'):
+            imported_df = pd.read_csv(
+                file_path, sep=',', 
+                usecols=features + targets + additional_values + ["quality"]
+            )
         else:
-            print(f'{value["scale"]} is not a valid scaler for the data. Exiting program')
-            sys.exit(1)
+            raise ValueError(f"Path '{file_path}' is neither a valid directory "
+                             "nor a CSV file. Exiting program.")
 
-        data[key] = create_dict(df=df, name=value["name"], color=value["color"])
-    return dict(
-        exp_data=data,
-        features=f_r,
-        targets=t_r,
-        targets_prediction=targets_prediction
-    )
+        df = prepare_new_data(
+            df=imported_df, treatment=treatment, f=features, t=targets,
+            t_c=targets_pred
+        )
+        df = df.rename(columns=column_renaming)
+
+        data[exp_id] = categorize_df_by_quality(
+            df=df, name=exp_config["name"], color=exp_config["color"]
+        )
+
+    return {
+        "exp_data": data,
+        "features": feature_aliases,
+        "targets": target_aliases,
+        "targets_prediction": targets_pred
+    }
 
 
 def get_metrics(
