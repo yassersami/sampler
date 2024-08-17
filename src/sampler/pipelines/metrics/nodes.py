@@ -43,10 +43,7 @@ def prepare_data_metrics(
         if os.path.isdir(file_path):
             imported_df = aggregate_csv_files(file_path)
         elif os.path.isfile(file_path) and file_path.endswith('.csv'):
-            imported_df = pd.read_csv(
-                file_path, sep=',', 
-                usecols=features + targets + additional_values + ["quality"]
-            )
+            imported_df = pd.read_csv(file_path)
         else:
             raise ValueError(f"Path '{file_path}' is neither a valid directory "
                              "nor a CSV file. Exiting program.")
@@ -80,11 +77,23 @@ def get_metrics(
     volume = {} # for each experiment, volume space covered (dict of float)
     total_asvd_scores = {}
     interest_asvd_scores = {}
-    volume_voronoi = {} # for each experiment, volumes of the Voronoi regions (clipped by the unit hypercube) : in feature space and feature+target space
+    volume_voronoi = {} # for each experiment, volumes of the Voronoi regions (clipped by the unit hypercube)
     
     for key, value in data.items():
-        scaled_data_interest_f = treatment.scaler.transform_features(value["interest"][features].values)
-        scaled_data_interest_t = treatment.scaler.transform_targets(value["interest"][targets].values)
+        # Scale all data
+        XY = value["df"][features+targets].values
+        scaled_data = pd.DataFrame(
+            treatment.scaler.transform(XY),
+            columns=features+targets
+        )
+        # Scale interest data
+        XY_interest = value["interest"][features+targets].values
+        scaled_data_interest = pd.DataFrame(
+            treatment.scaler.transform(XY_interest),
+            columns=features+targets
+        )
+        scaled_x_interest = scaled_data_interest[features]
+        scaled_y_interest = scaled_data_interest[targets]
 
         # Get number of interesting samples
         n_interest[key] = len(value["interest"])
@@ -93,36 +102,38 @@ def get_metrics(
         if key in params_volume["default"]:
             volume[key] = params_volume["default"][key]
         elif params_volume["compute_volume"]:
-            volume[key] = covered_space_bound(scaled_data_interest_f, radius, params_volume, len(features))
+            volume[key] = covered_space_bound(
+                scaled_x_interest, radius, params_volume, len(features)
+            )
         else:
             volume[key] = np.array([0,0])
         
         # Get all data distribution using ASVD
-        XY = value["df"][features+targets].values
-        scaled_data = pd.DataFrame(treatment.scaler.transform(XY), columns=features+targets)
         total_asvd = ASVD(scaled_data, features, targets)
         total_asvd_scores[key] = total_asvd.compute_scores()
         
         # Get only interest data distribution using ASVD
-        XY = value["interest"][features+targets].values
-        scaled_data = pd.DataFrame(treatment.scaler.transform(XY), columns=features+targets)
-        interest_asvd = ASVD(scaled_data, features, targets)
+        interest_asvd = ASVD(scaled_data_interest, features, targets)
         interest_asvd_scores[key] = interest_asvd.compute_scores()
 
         # Get Voronoi volume
         volume_voronoi[key] = {
             "features": np.array([0]*n_interest[key]),
-            "features_targets": np.array([0]*n_interest[key])
+            "targets": np.array([0]*n_interest[key])
         }
         if params_voronoi["compute_voronoi"]["features"]:
             volume_voronoi[key]["features"] = get_volume_voronoi(
-                scaled_data_interest_f,
-                len(features),tol=params_voronoi["tol"], isFilter=params_voronoi["isFilter"]
+                scaled_x_interest,
+                dim=len(features),
+                tol=params_voronoi["tol"],
+                isFilter=params_voronoi["isFilter"]
             )
-        if params_voronoi["compute_voronoi"]["features_targets"]:
-            volume_voronoi[key]["features_targets"] = get_volume_voronoi(
-                np.hstack([scaled_data_interest_f, scaled_data_interest_t]),
-                len(features+targets),tol=params_voronoi["tol"], isFilter=params_voronoi["isFilter"]
+        if params_voronoi["compute_voronoi"]["targets"]:
+            volume_voronoi[key]["targets"] = get_volume_voronoi(
+                scaled_y_interest,
+                dim=len(features+targets),
+                tol=params_voronoi["tol"],
+                isFilter=params_voronoi["isFilter"]
             )
 
     return dict(
@@ -134,7 +145,10 @@ def get_metrics(
     )
 
 
-def scale_data_for_plots(data: Dict, features: List[str], targets: List[str], targets_prediction: List[str], scales: Dict, interest_region: Dict):
+def scale_data_for_plots(
+    data: Dict, features: List[str], targets: List[str],
+    targets_prediction: List[str], scales: Dict, interest_region: Dict
+):
     """Scales data in place for visualization purposes."""
     df_names = ["interest", "not_interesting", "inliers", "outliers", "df"]
     for v in data.values():

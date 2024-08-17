@@ -18,7 +18,6 @@
     "same_sphere_tol":1e-3,
     "max_depth":3,
     "n_subdivision": 128,
-    
     "default": {
       "exp_1": [-1, 4.5e-6],
       "exp_2": [0, 2e-5]
@@ -27,9 +26,8 @@
   "params_voronoi": {
     "compute_voronoi": {
       "features": true,
-      "features_targets": false
+      "targets": true
     },
-
     "tol": 1e-3,
     "isFilter": false
   },

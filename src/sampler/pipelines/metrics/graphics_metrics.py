@@ -177,22 +177,33 @@ def plot_2d(data: Dict, features_dic: Dict, volume: Dict):
 
 
         idx_legend = (0, n_col) if n_exp > 1 else 0
-        hs, _ = axs[idx_legend].get_legend_handles_labels()
+        handles, _ = axs[idx_legend].get_legend_handles_labels()
 
-        invisible_handle = plt.Line2D([0], [0], color='none', label="")
-        itr_marker = plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='red', alpha=0.7, label="") # Maybe it exists a better way to do this
-        handles = [itr_marker, hs[0], invisible_handle] if num_outliers == 0 else [itr_marker, hs[0], invisible_handle, hs[1]]
-        labels = [
-            f'n_Itr: {num_interest}',
+        # Create a handle for the 'interest' marker
+        interest_marker = plt.Line2D(
+            [0], [0], marker='o', color='w', markerfacecolor='red',
+            alpha=0.7, label=""
+        )
+
+        # Initialize handles and labels for the legend
+        legend_handles = [interest_marker, handles[0]]
+        legend_labels = [
+            f'n_Itr: {num_interest}\n'
+            f'V_Itr_bound: [{volume[k][0]:.2e}, {volume[k][1]:.2e}]',
             f'n_noItr: {num_not_interesting}',
-            f'V_Itr_bound : [{volume[k][0]:.2e} ; {volume[k][1]:.2e}]'
         ]
-        if num_outliers != 0:
-            labels.append(f'Outliers {num_outliers}')
 
-        axs[idx_legend].legend(handles=handles, labels=labels,
-                               loc='lower center', bbox_to_anchor=(0.5, 1.0),
-                               title=v["name"], title_fontsize='large')
+        # Add outliers to the legend if present
+        if num_outliers != 0:
+            legend_handles.append(handles[1])
+            legend_labels.append(f'Outliers {num_outliers}')
+
+        # Create the legend on the specified axis
+        axs[idx_legend].legend(
+            handles=legend_handles, labels=legend_labels,
+            loc='lower center', bbox_to_anchor=(0.5, 1.0),
+            title=v["name"], title_fontsize='large'
+        )
     
     # Add a vertical color bar with custom ticks outside the subplots
     cbar_ax = fig.add_axes([0.9, 0.15, 0.03, 0.7])  # Adjusted position
@@ -338,17 +349,26 @@ def dist_volume_voronoi(data, volume_voronoi):
 
     for val in volume_voronoi.values():
         all_features_data.extend(val['features'])
-        all_targets_data.extend(val['features_targets'])
+        all_targets_data.extend(val['targets'])
 
     # Check if all experiments have same number of interest samples
     first_exp_dict = next(iter(volume_voronoi.values()))['features']
     first_interest_size = first_exp_dict.shape[0]
-    is_same_size_interest = all(exp_dict['features'].shape[0] == first_interest_size for exp_dict in volume_voronoi.values())
+    is_same_size_interest = all(
+        exp_dict['features'].shape[0] == first_interest_size
+        for exp_dict in volume_voronoi.values()
+    )
     x_ratio_zoom = 0.75 if is_same_size_interest else 1.
 
-    print("Voronoi Volume is interpretable only if run_until_max_size==False (same number of interest points)")
+    print(
+        "Voronoi Volume is interpretable only if run_until_max_size==False "
+        "(same number of interest points)"
+    )
 
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10), gridspec_kw={'height_ratios': [0.5, 0.5], 'width_ratios': [0.9, 0.1]})
+    fig, axes = plt.subplots(
+        2, 2, figsize=(14, 10),
+        gridspec_kw={'height_ratios': [0.5, 0.5],'width_ratios': [0.9, 0.1]}
+    )
 
     inset_ax_features = fig.add_axes([0.17, 0.66, 0.2, 0.2])  # First subplot zoomed
     inset_ax_features_box = fig.add_axes([0.41, 0.66, 0.2, 0.2])  # Second subplot zoomed with boxplot
@@ -373,55 +393,59 @@ def dist_volume_voronoi(data, volume_voronoi):
 
     for i, (data_keys, vol_voronoi) in enumerate(zip(data.keys(), volume_voronoi.values())):
         features = vol_voronoi['features']
-        features_targets = vol_voronoi['features_targets']
+        targets = vol_voronoi['targets']
 
         sorted_features = sorted(features)
-        sorted_features_targets = sorted(features_targets)
+        sorted_targets = sorted(targets)
 
         median_features = np.median(features)
         std_features = np.std(features)
-        median_targets = np.median(features_targets)
-        std_targets = np.std(features_targets)
+        median_targets = np.median(targets)
+        std_targets = np.std(targets)
 
         x_positions_features = np.arange(len(sorted_features)) + i * offset
-        x_positions_targets = np.arange(len(sorted_features_targets)) + i * offset
-
+        x_positions_targets = np.arange(len(sorted_targets)) + i * offset
 
         axes[0, 0].bar(
-                    x_positions_features, sorted_features,
-                    width=width, color=data[data_keys]['color'],
-                    alpha=0.25, label=data[data_keys]['name']
-                )   
+            x_positions_features, sorted_features,
+            width=width, color=data[data_keys]['color'],
+            alpha=0.25, label=data[data_keys]['name']
+        )   
         axes[1, 0].bar(
-                    x_positions_targets, sorted_features_targets,
-                    width=width, color=data[data_keys]['color'],
-                    alpha=0.25, label=data[data_keys]['name']
-                )
-
+            x_positions_targets, sorted_targets,
+            width=width, color=data[data_keys]['color'],
+            alpha=0.25, label=data[data_keys]['name']
+        )
+        
         inset_ax_features.bar(
-                        x_positions_features, sorted_features, width=width,
-                        color=data[data_keys]['color'], alpha=0.25
-                    )  
+            x_positions_features, sorted_features, width=width,
+            color=data[data_keys]['color'], alpha=0.25
+        )  
         inset_ax_targets.bar(
-                        x_positions_targets, sorted_features_targets, width=width,
-                        color=data[data_keys]['color'], alpha=0.25
-                    )
+            x_positions_targets, sorted_targets, width=width,
+            color=data[data_keys]['color'], alpha=0.25
+        )
 
-        if max_features>0:
-            threshold_value_features = max_features * 0.01
-            x_limit_f = max([i for i, v in enumerate(sorted_features) if v < threshold_value_features] + [0])
+        if max_features > 0:
+            features_threshold = max_features * 0.01
+            x_limit_f = max([
+                i for i, v in enumerate(sorted_features) if v < features_threshold
+            ] + [0])
             x_limit_features = max(x_limit_features, x_limit_f)
             y_limit_features = max(y_limit_features, sorted_features[x_limit_f+1])
 
-        if max_targets>0:
-            threshold_value_targets = max_targets * 0.01
-            x_limit_t = max([i for i, v in enumerate(sorted_features_targets) if v < threshold_value_targets] + [0])
+        if max_targets > 0:
+            targets_threshold = max_targets * 0.01
+            x_limit_t = max([
+                i for i, v in enumerate(sorted_targets)
+                if v < targets_threshold
+            ] + [0])
             x_limit_targets = max(x_limit_targets, x_limit_t)
-            y_limit_targets = max(y_limit_targets, sorted_features_targets[x_limit_t+1])
+            y_limit_targets = max(y_limit_targets, sorted_targets[x_limit_t+1])
 
 
         feature_data_list.append(features)
-        target_data_list.append(features_targets)
+        target_data_list.append(targets)
         feature_labels.append(data[data_keys]['name'])
         target_labels.append(data[data_keys]['name'])
 
@@ -429,18 +453,38 @@ def dist_volume_voronoi(data, volume_voronoi):
         q1_features = np.percentile(features, 25)
         q3_features = np.percentile(features, 75)
         iqr_features = q3_features - q1_features
-        outliers_features = [x for x in features if x < q1_features - 1.5 * iqr_features or x > q3_features + 1.5 * iqr_features]
+        outliers_features = [
+            x for x in features if (
+                x < q1_features - 1.5 * iqr_features
+                or x > q3_features + 1.5 * iqr_features
+            )
+        ]
 
-        q1_targets = np.percentile(features_targets, 25)
-        q3_targets = np.percentile(features_targets, 75)
+        q1_targets = np.percentile(targets, 25)
+        q3_targets = np.percentile(targets, 75)
         iqr_targets = q3_targets - q1_targets
-        outliers_targets = [x for x in features_targets if x < q1_targets - 1.5 * iqr_targets or x > q3_targets + 1.5 * iqr_targets]
+        outliers_targets = [
+            x for x in targets if (
+                x < q1_targets - 1.5 * iqr_targets
+                or x > q3_targets + 1.5 * iqr_targets
+            )
+        ]
 
         n_outliers_features = len(outliers_features)
         n_outliers_targets = len(outliers_targets)
 
-        legend_info_features.append(f"{data[data_keys]['name']}\n  median: {median_features:.3e}\n  std: {std_features:.3e}\n  n_outliers: {n_outliers_features}")
-        legend_info_targets.append(f"{data[data_keys]['name']}\n  median: {median_targets:.3e}\n  std: {std_targets:.3e}\n  n_outliers: {n_outliers_targets}")
+        legend_info_features.append(
+            f"{data[data_keys]['name']}\n"
+            f"median: {median_features:.3e}\n"
+            f"std: {std_features:.3e}\n"
+            f"n_outliers: {n_outliers_features}"
+        )
+        legend_info_targets.append(
+            f"{data[data_keys]['name']}\n"
+            f"median: {median_targets:.3e}\n"
+            f"std: {std_targets:.3e}\n"
+            f"n_outliers: {n_outliers_targets}"
+        )
 
     def customize_boxplot(ax, data_list, colors):
         boxplots = ax.boxplot(data_list, patch_artist=True, medianprops=dict(color='black'))
@@ -490,7 +534,7 @@ def dist_volume_voronoi(data, volume_voronoi):
     axes[0, 1].axis('off')  # Hide the empty subplot for the legend
     axes[1, 1].axis('off')  # Hide the empty subplot for the legend
     fig.legend(legend_info_features, loc='center', bbox_to_anchor=(0.85, 0.75), title='Features')
-    fig.legend(legend_info_targets, loc='center', bbox_to_anchor=(0.85, 0.3), title='Features_Targets')
+    fig.legend(legend_info_targets, loc='center', bbox_to_anchor=(0.85, 0.3), title='Targets')
 
     return fig
 

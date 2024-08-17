@@ -144,22 +144,22 @@ class DACEModel:
         self.L = np.array([scaled_regions[target][0] for target in targets])
         self.U = np.array([scaled_regions[target][1] for target in targets])
         # Set conditions that defines parego pipeline operations 
-        if experience == 'parEGO_maxIpr':
+        if experience == 'parEGO_maxIpr':  # True parEGO
             self.use_linear_tent = False
             self.use_tcheby = True
             self.use_maxIpr = True
             self.use_interest = False
-        elif experience == 'parEGO_Tent':
-            self.use_linear_tent = True
-            self.use_tcheby = True
-            self.use_maxIpr = True
-            self.use_interest = False
-        elif experience == 'parEGO_Itr':
+        elif experience == 'parEGO_Itr':  # Almost parego just changing the EI
             self.use_linear_tent = False
             self.use_tcheby = True
             self.use_maxIpr = False
             self.use_interest = True
-        elif experience == 'parEGO_GP':
+        elif experience == 'parEGO_Tent':  # not pareto, scalarizing with tent
+            self.use_linear_tent = True
+            self.use_tcheby = True
+            self.use_maxIpr = True
+            self.use_interest = False
+        elif experience == 'parEGO_GP':  # Very different
             self.use_linear_tent = False
             self.use_tcheby = False
             self.use_maxIpr = False

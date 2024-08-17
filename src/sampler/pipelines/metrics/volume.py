@@ -34,9 +34,15 @@ def remove_very_close_points(cluster_points, same_sphere_tol=1e-3):
 # * ---------------- Simples clusters ----------------
 def volume_n_sphere_cap(radius, a, n):
     if a >= 0:
-        volume = (1/2) * np.pi**(n/2) / gamma(n/2 + 1) * radius**n * betainc((n + 1)/2, 1/2, 1 - (a**2 / radius**2))
+        volume = (
+            (1/2) * np.pi**(n/2) / gamma(n/2 + 1) * radius**n
+            * betainc((n + 1)/2,1/2, 1 - (a**2 / radius**2))
+        )
     else:
-        volume = np.pi**(n/2) / gamma(n/2 + 1) * radius**n - volume_n_sphere_cap(radius, -a, n)
+        volume = (
+            np.pi**(n/2) / gamma(n/2 + 1) * radius**n 
+            - volume_n_sphere_cap(radius, -a, n)
+        )
     return volume
 
 def compute_two_sphere_intersection_volume(center1, center2, radius, n):
@@ -67,7 +73,9 @@ def compute_simple_case_volume(cluster_points, radius, n)-> np.ndarray:
         acum_volume += sphere_volume
     elif len(cluster_points) == 2:
         # There is a simple equation for the volume of intersection of two spheres
-        intersection = compute_two_sphere_intersection_volume(cluster_points[0], cluster_points[1], radius, n)
+        intersection = compute_two_sphere_intersection_volume(
+            cluster_points[0], cluster_points[1], radius, n
+        )
         volume = 2 * sphere_volume - intersection
         acum_volume += volume
 
@@ -150,7 +158,10 @@ def generate_subdivisions(min_coords, max_coords, n_subdivision):
 
 
 @jit(nopython=True)
-def count_pave_volume(points: np.ndarray, radius: float, pave: List[Tuple[float, float]], depth: int, max_depth: int)-> np.ndarray:
+def count_pave_volume(
+    points: np.ndarray, radius: float, pave: List[Tuple[float, float]],
+    depth: int, max_depth: int
+)-> np.ndarray:
     min_coords = np.array([p[0] for p in pave])
     max_coords = np.array([p[1] for p in pave])
     pave_points = generate_pave_points(min_coords, max_coords)
@@ -178,6 +189,7 @@ def count_pave_volume(points: np.ndarray, radius: float, pave: List[Tuple[float,
     
     return volume
 
+
 @jit(nopython=True, parallel=True)
 def octree(centers: np.ndarray, radius: float, max_depth: int, dim: int, n_subdivision: int)-> np.ndarray:
     min_coords = np.array([custom_min(centers[:, i]) for i in range(dim)]) - radius
@@ -197,8 +209,12 @@ def octree(centers: np.ndarray, radius: float, max_depth: int, dim: int, n_subdi
     
     return volume
 
+
 # * ---------------- Mains functions ----------------
-def compute_cluster_volume(cluster_points: np.ndarray, radius: float, same_sphere_tol: float, max_depth: int, dim: int, n_subdivision: int)-> np.ndarray:
+def compute_cluster_volume(
+    cluster_points: np.ndarray, radius: float, same_sphere_tol: float,
+    max_depth: int, dim: int, n_subdivision: int
+)-> np.ndarray:
     cluster_points = remove_very_close_points(cluster_points, same_sphere_tol)
 
     # Check for points near [0,1]^3 cube borders
@@ -212,8 +228,11 @@ def compute_cluster_volume(cluster_points: np.ndarray, radius: float, same_spher
         volume = octree(cluster_points, radius, max_depth, dim, n_subdivision) 
         return volume
 
+
 # TODO : Parallelize this function (prange) -> this implies to transform precedents functions to be compatible with numba
-def covered_space_bound(points: np.ndarray, radius: float, params_volume: Dict, dim: int)-> np.ndarray:
+def covered_space_bound(
+    points: np.ndarray, radius: float, params_volume: Dict, dim: int
+)-> np.ndarray:
     same_sphere_tol = params_volume['same_sphere_tol']
     max_depth = params_volume['max_depth']
     n_subdivision = params_volume['n_subdivision']
@@ -227,7 +246,10 @@ def covered_space_bound(points: np.ndarray, radius: float, params_volume: Dict, 
     acum_volume = np.array([0, 0], dtype=np.float64)
     for cluster_id in np.unique(clusters):
         cluster_points = points[clusters == cluster_id]
-        acum_volume += compute_cluster_volume(cluster_points, radius, same_sphere_tol, max_depth, dim, n_subdivision)
+        acum_volume += compute_cluster_volume(
+            cluster_points, radius, same_sphere_tol,
+            max_depth, dim, n_subdivision
+        )
         
     print(f"Volume calculated. Lower bound : {acum_volume[0]} - Upper bound : {acum_volume[1]}")
     return acum_volume

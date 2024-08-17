@@ -56,8 +56,10 @@ def prepare_new_data(
         df[t_c[1]] = df[t[1]]
 
     res[f+t_c] = pd.DataFrame(treatment.scaler.inverse_transform(df[f+t_c].values), columns=f+t_c)
-    final_res = treatment.define_quality_of_data(data=res, specify_errors=False)
-    return final_res
+    # res = treatment.define_quality_of_data(data=res, specify_errors=True)
+    res = treatment.classify_quality_interest(res, data_is_scaled=False)
+    res = treatment.classify_quality_error(res, data_is_scaled=False)
+    return res
 
 
 def extract_percentage(initial_size, tot_size, n_slice, vals):
