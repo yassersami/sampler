@@ -77,3 +77,15 @@ def rename_folder(old_path: str):
         new_path = old_path + f'_{i}'
         folder_exists = os.path.isdir(new_path)
     os.rename(old_path, new_path)
+
+
+def store_df(df: pd.DataFrame, history_path: str, file_name: str) -> None:
+    
+    # Check if file name ends with tile extension
+    if not file_name.endswith('.csv'):
+        file_name += '.csv'
+
+    # Save file
+    file_path = os.path.abspath(os.path.join(history_path, file_name))
+    print(f'storing.store_df -> file_path: \n{file_path}')
+    df.to_csv(file_path, index=False)

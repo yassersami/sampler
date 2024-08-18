@@ -12,6 +12,7 @@ import itertools
 import pandas as pd
 import numpy as np
 
+from sampler.common.scalers import linear_tent
 from sampler.common.data_treatment import DataTreatment, initialize_dataset
 from sampler.common.storing import parse_results
 from sampler.models.fom_terms import SurrogateGP
@@ -257,40 +258,6 @@ class DACEModel:
             return self.expected_improvement(x)
         elif self.use_interest:
             return self.excpected_interest(x)
-
-
-def linear_tent(
-    x: np.ndarray, L: np.ndarray, U: np.ndarray, slope: float=1.0
-) -> np.ndarray:
-    """
-    Tent function equal to 1 on interval [L, U],
-    and decreasing linearly outside in both directions.
-
-    x: shape (n, p)
-    L and U: float or shape (1, p) if p > 1
-
-    test with:
-    L = array([[0.8003412 , 0.89822933]])
-    U = array([[0.85116726, 0.97268397]])
-    x = np.array([[0, 0], [0.8, 0.8], [0.85, 0.85], [0.9, 0.9], [1, 1]])
-
-    Output
-    ------
-    y: shaped(n, p)
-    """
-    x = np.atleast_2d(x)
-    if np.any(L >= U):
-        raise ValueError(f'L should be less than U \nL: \n{L} \nU: \n{U}')
-
-    center = (U+L)/2  # Center of interval
-    half_width = (U-L)/2  # Half interval width
-    dist_from_center = np.abs(x - center)  # >= 0
-    # x_dist is distance from interval: =0 inside [L, U] and >0 outside
-    x_dist = np.max([dist_from_center - half_width, np.zeros_like(x)], axis=0)
-
-    y = -slope*x_dist + 1
-
-    return y
 
 
 def tchebychev(y_pop: np.array, llambda: List[float]):

@@ -28,7 +28,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 sao_history_path='params:sao_history_path',
             ),
             outputs=dict(
-                history='sao_history',  # dummy output to run nodes in sequence but is used undirectly by aux_func.store_df
+                history='sao_history',  # dummy output to run nodes in sequence but is used undirectly by storing.store_df
                 optim_res='sao_optim_res',
             ),
             name='sao_sampling',

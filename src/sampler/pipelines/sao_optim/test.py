@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import sampler.pipelines.sao_optim.nodes as sao_optim_nodes
 from sampler.pipelines.sao_optim.plotly_utils import plot_line
+from sampler.common.scalers import linear_tent
 
 
 def parallel_jobs():
@@ -24,7 +25,7 @@ def test_bandpass_filter():
     if U not in x_values:
         x_values = np.concatenate((x_values[x_values <= U], [U], x_values[x_values > U]))
     # Compute f(x)
-    y_lin_tent = sao_optim_nodes.linear_tent(x_values, L, U, slope=1)
+    y_lin_tent = linear_tent(x_values, L, U, slope=1)
     y_sigmoid_tent_UL = sao_optim_nodes.sigmoid_tent(x_values, L, U, k=1/(U-L))
     y_sigmoid_tent_8UL = sao_optim_nodes.sigmoid_tent(x_values, L, U, k=8 * np.log(2) / (U - L))
     y_gaussian_tent = sao_optim_nodes.gaussian_tent(x_values, L, U, sigma=1)

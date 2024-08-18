@@ -4,7 +4,7 @@ from typing import List, Dict, Tuple
 import numpy as np
 import pandas as pd
 
-from sampler.common.scalers import MixedMinMaxScaler
+from sampler.common.scalers import MixedMinMaxScaler, scale_interest_region
 
 
 class DataTreatment:
@@ -23,7 +23,7 @@ class DataTreatment:
         self.variables_ranges = variables_ranges
         self.sim_time_cutoff = sim_time_cutoff
         self.interest_region = interest_region
-        self.scaled_interest_region = scale_interest_region(interest_region, self.scaler)
+        self.scaled_interest_region = scale_interest_region(interest_region, scaler)
 
     def select_in_bounds_feat(self, df_real: pd.DataFrame) -> pd.DataFrame:
         """
@@ -212,28 +212,6 @@ class DataTreatment:
         if specify_errors:
             data = self.classify_quality_error(data, data_is_scaled=False)
         return data
-
-
-def scale_interest_region(interest_region: Dict, scaler: MixedMinMaxScaler) -> Dict:
-    """ Scale values of the region of interest"""
-
-    lowers = [region[0] for region in interest_region.values()]
-    uppers = [region[1] for region in interest_region.values()]
-    scaled_bounds = scaler.transform_targets(X_tar=np.array([lowers, uppers]))
-
-    scaled_interest_region = {
-        key: list(scaled_bounds[:, i])
-        for i, key in enumerate(interest_region.keys())
-    }
-
-    for key, scaled_values in scaled_interest_region.items():
-        assert all(0 <= val <= 1 for val in scaled_values), (
-            f'Error! Region bounds {scaled_values} for key "{key}" not in range [0, 1]!'
-            + '\n prep.json must contain absolute bounds! (ie. all data and interest '
-            + 'regions values must be INSIDE those bounds)'
-        )
-
-    return scaled_interest_region
 
 
 def initialize_dataset(data: pd.DataFrame, treatment: DataTreatment) -> pd.DataFrame:

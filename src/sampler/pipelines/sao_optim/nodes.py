@@ -10,10 +10,10 @@ from typing import List, Dict, Tuple, Callable, Union
 
 import optuna
 
+from sampler.common.scalers import linear_tent
 from sampler.common.data_treatment import DataTreatment
+from sampler.common.storing import set_history_folder, store_df
 from sampler.models.wrapper_for_0d import SimulationProcessor
-from sampler.common.storing import set_history_folder
-from sampler.pipelines.sao_optim.aux_func import linear_tent, store_df
 
 
 RANDOM_STATE = 42

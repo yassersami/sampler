@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Dict
 
 import numpy as np
 import pandas as pd
@@ -103,3 +103,59 @@ class MixedMinMaxScaler:
                 x[:, j] = x_log_norm[:, j_log]
                 j_log += 1
         return x
+
+
+def scale_interest_region(interest_region: Dict, scaler: MixedMinMaxScaler) -> Dict:
+    """ Scale values of the region of interest"""
+
+    lowers = [region[0] for region in interest_region.values()]
+    uppers = [region[1] for region in interest_region.values()]
+    scaled_bounds = scaler.transform_targets(X_tar=np.array([lowers, uppers]))
+
+    scaled_interest_region = {
+        key: list(scaled_bounds[:, i])
+        for i, key in enumerate(interest_region.keys())
+    }
+
+    for key, scaled_values in scaled_interest_region.items():
+        assert all(0 <= val <= 1 for val in scaled_values), (
+            f'Error! Region bounds {scaled_values} for key "{key}" not in range [0, 1]!'
+            + '\n prep.json must contain absolute bounds! (ie. all data and interest '
+            + 'regions values must be INSIDE those bounds)'
+        )
+
+    return scaled_interest_region
+
+
+def linear_tent(
+    x: np.ndarray, L: np.ndarray, U: np.ndarray, slope: float=1.0
+) -> np.ndarray:
+    """
+    Tent function equal to 1 on interval [L, U],
+    and decreasing linearly outside in both directions.
+
+    x: shape (n, p)
+    L and U: float or shape (1, p) if p > 1
+
+    test with:
+    L = array([[0.8003412 , 0.89822933]])
+    U = array([[0.85116726, 0.97268397]])
+    x = np.array([[0, 0], [0.8, 0.8], [0.85, 0.85], [0.9, 0.9], [1, 1]])
+
+    Output
+    ------
+    y: shaped(n, p)
+    """
+    x = np.atleast_2d(x)
+    if np.any(L >= U):
+        raise ValueError(f'L should be less than U \nL: \n{L} \nU: \n{U}')
+
+    center = (U+L)/2  # Center of interval
+    half_width = (U-L)/2  # Half interval width
+    dist_from_center = np.abs(x - center)  # >= 0
+    # x_dist is distance from interval: =0 inside [L, U] and >0 outside
+    x_dist = np.max([dist_from_center - half_width, np.zeros_like(x)], axis=0)
+
+    y = -slope*x_dist + 1
+
+    return y
