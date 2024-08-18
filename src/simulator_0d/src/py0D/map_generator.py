@@ -31,7 +31,7 @@ def clean_map(MAP_DIR):
 
 
 #---- Fonction pour associer simulation/dossier : création du nom 0000X -------
-def label(sample):
+def set_simu_name(sample):
     return f'simu_{sample.name:05}'
 
 
@@ -70,7 +70,7 @@ def data_map_creation(fichier):
     df = pd.read_csv(fichier_path)
 
     # Rajout des colonnes manquantes à la dataFrame 
-    df["workdir"] = df.apply(label, axis=1)
+    df["workdir"] = df.apply(set_simu_name, axis=1)
     df["alpha_p"] = 0.3
     df["th_Al2O3"] = 5.12281599140251e-08
     df["heat_input_ths"] = 556000

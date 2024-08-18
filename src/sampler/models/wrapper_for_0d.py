@@ -1,3 +1,4 @@
+import os
 import warnings
 from multiprocessing.pool import Pool
 from typing import List, Dict, Tuple
@@ -7,15 +8,63 @@ import pandas as pd
 
 from sampler.common.data_treatment import DataTreatment
 from sampler.common.storing import set_history_folder
-import sampler.models.simulator_aux_functions as sim_aux
 
 import simulator_0d.src.py0D.main as simulator_0d
 from simulator_0d.src.py0D.functions_pp import DB_simu_pp as SimPostProc
+from simulator_0d.src.py0D.map_generator import set_simu_name, map_generator
+from simulator_0d.src.pypp.launch import set_inputs_dic, adapt_inputs_dic
+
+
+def map_creation(df: pd.DataFrame, map_dir: str = 'default'):
+    df["workdir"] = df.apply(set_simu_name, axis=1)
+
+    constants = {
+        "alpha_p": 0.3,
+        "th_Al2O3": 5.12281599140251e-08,
+        "heat_input_ths": 556000,
+        "power_input": 20000000,
+        "coeff_contact": 0.01,
+        "Ea_D_Ox": 50000,
+        "Ea_Al2O3_decomp": 400000,
+        "Ea_MeO_decomp": 50000,
+        "k0_D_Ox": 0.000008,
+        "k0_Al2O3_decomp": 1520000,
+        "k0_MeO_decomp": 30000000,
+        "bool_kin": 'false'
+    }
+    
+    # don't set a feature constant if it's an input
+    for col, val in constants.items():
+        if col not in df.columns:
+            df[col] = val
+
+    if map_dir == 'default':
+        df.apply(map_generator, axis=1)
+    else:
+        df.apply(lambda sample: map_generator(sample, map_dir), axis=1)
+
+
+def define_initial_params(index: int, x: pd.DataFrame, map_dir: str):
+    """Create json files at map_dir/simu_# that will be input for the simulator"""
+    new_idx = [index + idx for idx in x.index]
+    map_creation(
+        df=pd.DataFrame(data=x.values, columns=x.columns, index=new_idx),
+        map_dir=map_dir
+    )
+    folders = [f'{map_dir}/simu_{idx:05}' for idx in new_idx]
+    return folders
+
+
+def define_in_out(input_dir: str):
+    inputs_dic = set_inputs_dic(input_dir)
+    inputs_dic = adapt_inputs_dic(inputs_dic)
+    output_dir = os.path.abspath(os.path.join(input_dir, 'outputs'))
+    return inputs_dic, output_dir
 
 
 def launch_0d(input_dir: str) -> Dict[str, float]:
     # Define input and output directories
-    inputs_dic, output_dir = sim_aux.define_in_out(input_dir)
+    inputs_dic, output_dir = define_in_out(input_dir)
 
     # Warn about the maximum simulation time
     max_simu_time_sec = inputs_dic.get("max_simu_time", 0)
@@ -53,17 +102,6 @@ def launch_0d(input_dir: str) -> Dict[str, float]:
         return error_res
 
     return res_dict
-
-
-def define_initial_params(index: int, x: pd.DataFrame, map_dir: str):
-    """Create json files at map_dir/simu_# that will be input for the simulator"""
-    new_idx = [index + idx for idx in x.index]
-    sim_aux.map_creation(
-        df=pd.DataFrame(data=x.values, columns=x.columns, index=new_idx),
-        map_dir=map_dir
-    )
-    folders = [f'{map_dir}/simu_{idx:05}' for idx in new_idx]
-    return folders
 
 
 def run_parallel_simulation(folders: List[str], n_proc: int=None):

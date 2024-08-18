@@ -32,11 +32,10 @@ def run_parego(
     llambda_s: int, num_generations: int, tent_slope: float=10,
     experience: str="parEGO_maxIpr"
 ):
-    lambda_gen = LambdaGenerator(k=len(targets), s=llambda_s)
     dace = DACEModel(
         features=features, targets=targets,
-        scaled_regions=treatment.scaled_interest_region, tent_slope=tent_slope,
-        experience=experience
+        scaled_regions=treatment.scaled_interest_region, llambda_s=llambda_s,
+        tent_slope=tent_slope, experience=experience
     )
     simulator = SimulationProcessor(
         features=features, targets=targets, additional_values=additional_values,
@@ -68,10 +67,9 @@ def run_parego(
         clean_res = res.dropna(subset=targets)
         x_pop = clean_res[features].values
         y_pop = clean_res[targets].values
-        llambda = lambda_gen.choose_uniform_lambda()
 
         # Prepare train data and train GP
-        dace.update_model(x_pop, y_pop, llambda)
+        dace.update_model(x_pop, y_pop)
         
         # Search new candidates to add to res dataset
         new_x = EvolAlg(dace, num_generations=num_generations, batch_size=batch_size)
@@ -85,7 +83,9 @@ def run_parego(
         # Add interesting informations about samples choice
         prediction = dace.model.predict(new_df[features].values)
         prediction_cols = [f'pred_{t}' for t in dace.model_targets]
-        new_df[prediction_cols] = np.atleast_2d(prediction)
+        new_df[prediction_cols] = (
+            prediction.reshape(-1, 1) if prediction.ndim == 1 else prediction
+        )
         score = dace.get_score(new_df[features].values)
         new_df["obj_score"] = score
         new_df = treatment.classify_quality_interest(new_df, data_is_scaled=True)
@@ -131,12 +131,13 @@ def run_parego(
 class DACEModel:
     def __init__(
         self, features: List[str], targets: List[str], scaled_regions: dict,
-        tent_slope= float, experience: str="parEGO_maxIpr"
+        llambda_s: int, tent_slope= float, experience: str="parEGO_maxIpr"
     ):
         self.features = features
         self.targets = targets
-        self.tent_slope = tent_slope
+        self.lambda_gen = LambdaGenerator(k=len(targets), s=llambda_s)
         self.llambda = None
+        self.tent_slope = tent_slope
         self.y_max = None
         self.model = None
         self.model_targets = None
@@ -156,7 +157,7 @@ class DACEModel:
             self.use_interest = True
         elif experience == 'parEGO_Tent':  # not pareto, scalarizing with tent
             self.use_linear_tent = True
-            self.use_tcheby = True
+            self.use_tcheby = False
             self.use_maxIpr = True
             self.use_interest = False
         elif experience == 'parEGO_GP':  # Very different
@@ -165,16 +166,22 @@ class DACEModel:
             self.use_maxIpr = False
             self.use_interest = True
 
-    def update_model(self, x_pop: np.array, y_pop: np.array, llambda: tuple):
-        # Update llambda
-        self.llambda = llambda
+    def update_model(self, x_pop: np.array, y_pop: np.array):
 
         # Prepare target to train on
         if self.use_linear_tent:
-            y_pop = linear_tent(y_pop, L=self.L.reshape(1, -1), U=self.U.reshape(1, -1), slope=self.tent_slope)
-        if self.use_tcheby:
+            # Scalarize targets with linear tent =1 on interest region
+            y_pop = linear_tent(
+                y_pop, L=self.L.reshape(1, -1), U=self.U.reshape(1, -1),
+                slope=self.tent_slope
+            )
+            y_pop = y_pop.mean(axis=1)  # mean to ensure max = 1
+            self.model_targets = ['f_tent']
+        elif self.use_tcheby:
+            # Scalarize using pareto chosing different weights at each iteration
+            self.llambda = self.lambda_gen.choose_uniform_lambda()
             y_pop = tchebychev(y_pop, self.llambda)
-            self.model_targets = ['f_llambda']
+            self.model_targets = ['f_pareto']
         else:
             self.model_targets = self.targets
 
@@ -195,7 +202,9 @@ class DACEModel:
 
     def get_tchebychev_region(self):
         # Find right region to get ei_interest addapted for f_llambda (tchebychev)
-        hypercube_vertices = itertools.product(*[self.scaled_regions[target] for target in self.targets])
+        hypercube_vertices = itertools.product(*[
+            self.scaled_regions[target] for target in self.targets
+        ])
         hypercube_vertices = np.array(list(hypercube_vertices))
         segment_endpoints = tchebychev(hypercube_vertices, self.llambda)
         Ltcheby, Utcheby = segment_endpoints.min(), segment_endpoints.max()
@@ -250,7 +259,9 @@ class DACEModel:
             return self.excpected_interest(x)
 
 
-def linear_tent(x, L, U, slope: float=1.0):
+def linear_tent(
+    x: np.ndarray, L: np.ndarray, U: np.ndarray, slope: float=1.0
+) -> np.ndarray:
     """
     Tent function equal to 1 on interval [L, U],
     and decreasing linearly outside in both directions.
@@ -284,13 +295,22 @@ def linear_tent(x, L, U, slope: float=1.0):
 
 def tchebychev(y_pop: np.array, llambda: List[float]):
     p = 0.05
-    max_llambdaf = np.array([np.max([llambda[j] * y_pop[i, j] for j in range(y_pop.shape[1])]) for i in range(y_pop.shape[0])])
-    sum_llambdaf = np.sum([llambda[j] * y_pop[:, j] for j in range(y_pop.shape[1])], axis=0)
+    max_llambdaf = np.array([
+        np.max([llambda[j] * y_pop[i, j] for j in range(y_pop.shape[1])])
+        for i in range(y_pop.shape[0])
+    ])
+    sum_llambdaf = np.sum(
+        [llambda[j] * y_pop[:, j] for j in range(y_pop.shape[1])],
+        axis=0
+    )
     y_pop_tchebychev = max_llambdaf + p * sum_llambdaf
     return y_pop_tchebychev
 
 
-def EvolAlg(dace: DACEModel, num_generations: int=1000, population_size: int=20, batch_size: int=1):
+def EvolAlg(
+    dace: DACEModel, num_generations: int=1000, population_size: int=20,
+    batch_size: int=1
+) -> np.ndarray:
     dimensions = len(dace.features)
 
     def fitness_function(x):
@@ -303,15 +323,21 @@ def EvolAlg(dace: DACEModel, num_generations: int=1000, population_size: int=20,
 
     # Initialize the Genetic Algorithm for minimzation
     # Basic GA, I don't have implemented the real algoritmh from paper (it's not important)
-    ga = GA(func=fitness_function,
-            n_dim=dimensions,
-            size_pop=population_size,
-            max_iter=num_generations,
-            prob_mut=0.1,
-            lb=[0] * dimensions,  # Lower bounds
-            ub=[1] * dimensions)  # Upper bounds
+    ga = GA(
+        func=fitness_function,
+        n_dim=dimensions,
+        size_pop=population_size,
+        max_iter=num_generations,
+        prob_mut=0.1,
+        lb=[0] * dimensions,  # Lower bounds
+        ub=[1] * dimensions  # Upper bounds
+    )
 
-    print(f'EvolAlg -> Searching for good candidates using the fitness function through {num_generations} generations...')
+    print(
+        'EvolAlg -> Searching for good candidates using the fitness function '
+        f'through {num_generations} generations of {population_size} '
+        'population size...'
+    )
     ga.run()
     population = ga.chrom2x(ga.Chrom)
     fitness = np.array([fitness_function(ind) for ind in population])
@@ -320,7 +346,10 @@ def EvolAlg(dace: DACEModel, num_generations: int=1000, population_size: int=20,
     best_indices = sorted_indices[:batch_size]
     best_solutions = population[best_indices]
     
-    print('EvolAlg -> Selected points to be input to the simulator:\n', best_solutions)
+    print(
+        'EvolAlg -> Selected points to be input to the simulator:\n'
+        f'{best_solutions}'
+    )
 
     return best_solutions
 
