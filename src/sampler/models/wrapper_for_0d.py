@@ -216,8 +216,9 @@ class SimulationProcessor:
     def adapt_targets(self, data: pd.DataFrame) -> pd.DataFrame:
         # If using fake simulator change targets values
         if not self.use_simulator:
+            # Set index = 1 to avoid spice_on for initial data
             scaled_data = self.process_data(
-                data[self.features].values, real_x=False, index=0, treat_output=True
+                data[self.features].values, real_x=False, index=1, treat_output=True
             )
             data[self.targets] = scaled_data[self.targets].values
         return data

@@ -28,6 +28,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 run_condition='params:run_condition',
                 
                 llambda_s='params:parego_llambda_s',
+                population_size='params:parego_population_size',
                 num_generations='params:parego_num_generations',
                 tent_slope='params:parego_tent_slope',
                 experience='params:parego_experience',

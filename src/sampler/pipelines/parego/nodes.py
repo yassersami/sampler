@@ -6,16 +6,16 @@ from datetime import datetime
 import random
 from typing import List, Dict, Tuple
 from tqdm import tqdm
-import warnings
 import itertools
 
 import pandas as pd
 import numpy as np
+from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.gaussian_process.kernels import RationalQuadratic
 
 from sampler.common.scalers import linear_tent
 from sampler.common.data_treatment import DataTreatment, initialize_dataset
 from sampler.common.storing import parse_results
-from sampler.models.fom_terms import SurrogateGP
 from sampler.models.wrapper_for_0d import SimulationProcessor
 
 from scipy.stats import norm
@@ -30,8 +30,8 @@ def run_parego(
     data: pd.DataFrame, treatment: DataTreatment,
     features: List[str], targets: List[str], additional_values: List[str],
     simulator_env: Dict, batch_size: int, run_condition: Dict,
-    llambda_s: int, num_generations: int, tent_slope: float=10,
-    experience: str="parEGO_maxIpr"
+    llambda_s: int, population_size: int, num_generations: int,
+    tent_slope: float=10, experience: str="parEGO_maxIpr"
 ):
     dace = DACEModel(
         features=features, targets=targets,
@@ -73,7 +73,10 @@ def run_parego(
         dace.update_model(x_pop, y_pop)
         
         # Search new candidates to add to res dataset
-        new_x = EvolAlg(dace, num_generations=num_generations, batch_size=batch_size)
+        new_x = EvolAlg(
+            dace, population_size=population_size,
+            num_generations=num_generations, batch_size=batch_size
+        )
         
         # Launch time expensive simulations
         new_df = simulator.process_data(new_x, real_x=False, index=n_total, treat_output=True)
@@ -140,11 +143,17 @@ class DACEModel:
         self.llambda = None
         self.tent_slope = tent_slope
         self.y_max = None
-        self.model = None
+        self.model = GaussianProcessRegressor(
+            kernel=RationalQuadratic(length_scale_bounds=(1e-5, 2)),
+            random_state=RANDOM_STATE
+        )
         self.model_targets = None
         self.scaled_regions = scaled_regions
         self.L = np.array([scaled_regions[target][0] for target in targets])
         self.U = np.array([scaled_regions[target][1] for target in targets])
+        self.set_experience(experience)
+
+    def set_experience(self, experience):
         # Set conditions that defines parego pipeline operations 
         if experience == 'parEGO_maxIpr':  # True parEGO
             self.use_linear_tent = False
@@ -187,8 +196,7 @@ class DACEModel:
             self.model_targets = self.targets
 
         # Train GP model
-        self.model = SurrogateGP(features=self.features, targets=self.model_targets)
-        self.model.fit(X_train=x_pop, y_train=y_pop)
+        self.model.fit(x_pop, y_pop)
 
         # Set y_max if maximizing improvement
         if self.use_maxIpr:
@@ -220,9 +228,7 @@ class DACEModel:
 
         CDF: cumulative distribution function P(X <= x)
         '''
-        x = x.reshape(1, -1) if len(x.shape) == 1 else x
-        if self.model is None:
-            raise ValueError("The model must be fitted before calling get_score.")
+        x = np.atleast_2d(x)
 
         y_hat, y_std = self.model.predict(x, return_std=True)
         point_norm = norm(loc=y_hat, scale=y_std)
@@ -275,7 +281,7 @@ def tchebychev(y_pop: np.array, llambda: List[float]):
 
 
 def EvolAlg(
-    dace: DACEModel, num_generations: int=1000, population_size: int=20,
+    dace: DACEModel, population_size: int=50, num_generations: int=1000,
     batch_size: int=1
 ) -> np.ndarray:
     dimensions = len(dace.features)
@@ -285,8 +291,6 @@ def EvolAlg(
         x_reshaped = x.reshape(1, -1)
         score = dace.get_score(x_reshaped)
         return -score.item()
-        # return -np.mean(ei)
-
 
     # Initialize the Genetic Algorithm for minimzation
     # Basic GA, I don't have implemented the real algoritmh from paper (it's not important)

@@ -11,17 +11,14 @@
     },
     "local_density": {
       "apply": true,
-      "include_outliers": true,
       "decay_dist": 0.04
     },
     "outlier_proximity": {
       "apply": true,
-      "dist_threshold": 1e-5
+      "exclusion_radius": 1e-5
     },
-    "std_x": {
-      "apply": false,
-      "use_threshold": false,
-      "inlier_proba_threshold": 0.8
+    "inlier_bstd": {
+      "apply": false
     }
   }
 }

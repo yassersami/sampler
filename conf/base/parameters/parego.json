@@ -1,5 +1,6 @@
 {
-    "parego_llambda_s": 1000,
+    "parego_llambda_s": 100,
+    "parego_population_size": 20,
     "parego_num_generations": 1000,
     "parego_tent_slope": 10,
     "parego_experience": "parEGO_GP",
