@@ -109,8 +109,8 @@ class FigureOfMerit:
         # Train KDE
         # if self.terms["kde"]["apply"]:
         #     self.kde.fit(data[self.features].values)
-        #     # Update maximum density for normalization
-        #     self.kde.update_max_density(use_mean_shift=True)
+        #     # Update minimum density for normalization
+        #     self.kde.update_min_density(**optimizer_kwargs)
 
     def set_fom(self):
         # def score_to_loss(x: np.ndarray) -> np.ndarray: return 1-x
@@ -121,6 +121,7 @@ class FigureOfMerit:
         # sigmoid_density: compute_sigmoid_local_density
         # outlier_proximity (OutlierExcluder):  self.excluder.detect_outlier_proximity
         # gpc_inlier_bstd (InlierOutlierGPC): 1 - get_inlier_bstd
+        # gpc_inlier_entropy (InlierOutlierGPC): 1 - get_inlier_entropy
         
         # surrogate_gpc_std SurrogateGPC
         # surrogate_gpc_std (SurrogateGPC): 1 - self.surrogate_gpc.get_norm_std

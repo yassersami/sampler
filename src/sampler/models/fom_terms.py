@@ -174,14 +174,37 @@ def compute_sigmoid_local_density(
 
 
 class KDEModel:
+    """
+    A cool website to visualize KDE.
+    https://mathisonian.github.io/kde/
+    """
     def __init__(self, kernel='gaussian'):
         self.kernel = kernel
         self.kde = None
         self.data = None
+        self.modes = None
         self.bandwidth = None
-        self.max_density = None
+        self.min_density = None
 
     def search_bandwidth(self, X, log_bounds=(-4, 0), n_iter=20, cv=5, random_state=0):
+        """
+        TODO: Find a better score than likelihood to select bandwidth.
+        
+        For example:
+        - The optimal bandwidth is the largest possible width for which the
+        minimum density over the design space [0, 1]^p is equal to 0. In terms
+        of class attributes:
+        
+                best_bandwidth = max({bandwidth | min_density < tol})
+        
+        - The optimal bandwidth is the largest possible width for which the
+        density at the modes is above a threshold equal to 0.8. Since the
+        locations of the modes do not change, it's computationaly more
+        convenient to express this in terms of maximum density rather than
+        minimum density. Formally:
+        
+                best_bandwidth = max({bandwidth | density_at_modes > 0.8})
+        """
         # Define a range of bandwidths to search over using log scale
         bandwidths = np.logspace(log_bounds[0], log_bounds[1], 100)
 
@@ -215,23 +238,37 @@ class KDEModel:
         self.kde = KernelDensity(kernel=self.kernel, bandwidth=bandwidth)
         self.kde.fit(X)
 
-    def update_max_density(self, use_mean_shift=True):
+    def update_modes(self):
+        """
+        Update modes of data clusters using Mean shift to later compute maximum
+        modes density.
+        """
         if self.kde is None:
             raise RuntimeError("Model must be fitted before searching for max density.")
         
-        if use_mean_shift:
-            mean_shift = MeanShift(bandwidth=self.bandwidth)
-            mean_shift.fit(self.data)
-            
-            # Get modes (highest density points)
-            modes = mean_shift.cluster_centers_
-            
-            # Get maximum of modes densities
-            self.max_density = self.predict_proba(modes).max()
-        else:
-            # Calculate max density over the training data
-            densities = self.predict_proba(self.data)
-            self.max_density = np.max(densities)
+        mean_shift = MeanShift(bandwidth=self.bandwidth)
+        mean_shift.fit(self.data)
+        
+        # Get modes (highest density points)
+        self.modes = mean_shift.cluster_centers_
+    
+    def update_min_density(self, shgo_iters: int = 5, shgo_n: int = 1000):
+        """
+        Update minimum density in [0, 1]^p space using SHGO minimizer to search
+        for minimum density (anti-modes minimal density).
+        """
+        if self.kde is None:
+            raise RuntimeError("Model must be fitted before searching for min density.")
+
+        print("KDEModel.update_min_density -> Searching for minimum density")
+
+        result = shgo(
+            self.predict_proba, bounds=[(0, 1)]*self.data.shape[1],
+            iters=shgo_iters, n=shgo_n, sampling_method='simplicial'
+        )
+        self.min_density = result.fun
+
+        print(f"KDEModel.update_min_density -> Minimum density: {self.min_density}")
 
     def predict_proba(self, X):
         if self.kde is None:
@@ -239,12 +276,18 @@ class KDEModel:
         log_density = self.kde.score_samples(X)
         return np.exp(log_density)
 
-    def predict_score(self, X):
+    def predict_anti_density_score(self, X):
+        """
+        Score encourages regions with low density.
+
+        Note: this is not (1 - density_score) as we normalize by different
+        quantities: (1 - min_density) != max_density.
+        """
         X = np.atleast_2d(X)
-        if self.max_density is None:
-            raise RuntimeError("max_density must be updated before predicting scores.")
+        if self.min_density is None:
+            raise RuntimeError("min_density must be updated before predicting scores.")
         densities = self.predict_proba(X)
-        return densities / self.max_density
+        return (1 - densities) / (1 - self.min_density)
 
 
 class OutlierExcluder:
@@ -341,12 +384,13 @@ class InlierOutlierGPC(GaussianProcessClassifier):
         
                 f(P) = alpha * P * sqrt(P*(1-P))
     
-        Where P = P(x is inlier) the probability that a sample is an inlier. The
-        term sqrt(P*(1-P)) quantifies the predication uncertainty in the
-        predicted class outcome (0, 1), not the uncertainty provided by latent
-        function values (logit space). And alpha is a scaling factor such that
-        the maximum value of f over the interval [0, 1] is 1.
-        With x_max = argmax[0, 1](f) = 3/4.
+        Where:
+        - P = P(x is inlier) is the probability that a sample is an inlier.
+        - sqrt(P*(1-P)) is Bernoulli standard deviation. It quantifies the
+        predication uncertainty in the predicted class outcome (0, 1), not the
+        uncertainty provided by latent function values (logit space).
+        - alpha is a scaling factor such that the maximum value of f over the
+        interval [0, 1] is 1. With P_max = argmax[0, 1](f) = 3/4.
         """
         X = np.atleast_2d(X)
         
@@ -362,5 +406,30 @@ class InlierOutlierGPC(GaussianProcessClassifier):
 
         # Compute the score using the given formula
         score = alpha * proba * np.sqrt(proba * (1 - proba))
+
+        return score
+
+    def predict_inlier_entropy(self, X):
+        """
+        Compute the entropy weighed by the inlier proba for each input sample.
+        
+        This function computes the score using the formula:
+        
+            f(P) = alpha * P * (-P*log(P) - (1-P)*log(1-P))
+
+        Note:
+        - Entropy is a measure of uncertainty. Higher values indicate more
+        uncertainty. For binary classification, the maximum entropy is
+        ln(2) ≈ 0.693.
+        """
+        # Get probabilities for the "inlier" class
+        proba = self.predict_proba(X)[:, self.class_to_index["inlier"]]
+
+        # Clip probabilities to avoid log(0)
+        proba = np.clip(proba, 1e-15, 1 - 1e-15)
+
+        # Compute entropy
+        entropy = -proba * np.log(proba) - (1 - proba) * np.log(1 - proba)
+        score = 1/0.1858 * proba * entropy
 
         return score
