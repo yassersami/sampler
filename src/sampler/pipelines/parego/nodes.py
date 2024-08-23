@@ -16,7 +16,7 @@ from sklearn.gaussian_process.kernels import RationalQuadratic
 from sampler.common.scalers import linear_tent
 from sampler.common.data_treatment import DataTreatment, initialize_dataset
 from sampler.common.storing import parse_results
-from sampler.models.wrapper_for_0d import SimulationProcessor
+from sampler.common.simulator import SimulationProcessor
 
 from scipy.stats import norm
 from sko.GA import GA

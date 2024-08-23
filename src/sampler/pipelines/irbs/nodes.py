@@ -11,8 +11,8 @@ import pandas as pd
 
 from sampler.common.data_treatment import DataTreatment, initialize_dataset
 from sampler.common.storing import parse_results
-from sampler.models.wrapper_for_0d import SimulationProcessor
-from sampler.models.fom import FigureOfMerit
+from sampler.common.simulator import SimulationProcessor
+from sampler.fom.fom import FigureOfMerit
 
 RANDOM_STATE = 42
 

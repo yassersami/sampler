@@ -1,12 +1,10 @@
 from typing import List, Tuple, Dict, Union
 import numpy as np
 import pandas as pd
-from scipy.stats import norm
 from scipy.optimize import shgo
 
-from sampler.models.fom_terms import (
-    SurrogateGPR, InlierOutlierGPC, OutlierExcluder, compute_sigmoid_local_density
-)
+from sampler.fom.surrogate import SurrogateGPR, InlierOutlierGPC
+from sampler.fom.spatial import OutlierExcluder, compute_sigmoid_local_density
 
 
 def zeros_like_rows(x: np.ndarray) -> np.ndarray:

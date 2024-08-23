@@ -7,7 +7,7 @@ from tqdm import tqdm
 from scipy.stats import qmc
 
 from sampler.common.data_treatment import DataTreatment
-from sampler.models.wrapper_for_0d import SimulationProcessor
+from sampler.common.simulator import SimulationProcessor
 from sampler.common.storing import parse_results
 
 RANDOM_STATE = 42

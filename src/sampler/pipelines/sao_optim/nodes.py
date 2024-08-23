@@ -13,7 +13,7 @@ import optuna
 from sampler.common.scalers import linear_tent
 from sampler.common.data_treatment import DataTreatment
 from sampler.common.storing import set_history_folder, store_df
-from sampler.models.wrapper_for_0d import SimulationProcessor
+from sampler.common.simulator import SimulationProcessor
 
 
 RANDOM_STATE = 42
