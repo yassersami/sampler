@@ -1,5 +1,5 @@
 """
-This is a boilerplate pipeline 'init_lhs'
+This is a boilerplate pipeline 'run_sim'
 generated using Kedro 0.18.5
 """
 

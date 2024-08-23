@@ -1,5 +1,5 @@
 """
-This is a boilerplate pipeline 'init_lhs'
+This is a boilerplate pipeline 'run_sim'
 generated using Kedro 0.18.5
 """
 
@@ -19,14 +19,14 @@ def create_pipeline(**kwargs) -> Pipeline:
                 treatment='treatment',
                 features='params:features',
                 targets='params:targets',
-                use_lhs='params:initLHS_use_lhs',
-                num_samples='params:initLHS_num_lhs_samples',
+                use_lhs='params:run_sim_use_lhs',
+                num_samples='params:run_sim_num_lhs_samples',
                 variables_ranges='params:variables_ranges',
-                csv_file='params:initLHS_input_csv_file',
-                csv_is_real='params:initLHS_input_csv_is_real',
+                csv_file='params:run_sim_input_csv_file',
+                csv_is_real='params:run_sim_input_csv_is_real',
             ),
             outputs='df_inputs',
-            name='initLHS_prepare_inputs',
+            name='run_sim_prepare_inputs',
         ),
         node(
             func=evaluate_inputs,
@@ -39,21 +39,21 @@ def create_pipeline(**kwargs) -> Pipeline:
                 simulator_env='params:simulator_env',
                 batch_size='params:batch_size',
                 
-                n_proc='params:initLHS_n_proc',
-                output_is_real='params:initLHS_output_is_real'
+                n_proc='params:run_sim_n_proc',
+                output_is_real='params:run_sim_output_is_real'
             ),
-            # outputs="initLHS_output_data",
-            outputs="initLHS_history",
-            name='initLHS_evaluate',
+            # outputs="run_sim_output_data",
+            outputs="run_sim_history",
+            name='run_sim_evaluate',
         ),
         node(
             func=join_history,
             inputs=dict(
-                history='initLHS_history',
+                history='run_sim_history',
                 run_condition='params:run_condition',
                 initial_size='params:initial_size'
             ),
-            outputs='initLHS_increased_data',
+            outputs='run_sim_increased_data',
             name='irbs_retrieve_outputs',
         )
     ])

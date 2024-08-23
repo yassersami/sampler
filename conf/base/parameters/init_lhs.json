@@ -1,8 +1,0 @@
-{
-    "initLHS_use_lhs": true,
-    "initLHS_num_lhs_samples": 100,
-    "initLHS_input_csv_file": "data/07_model_output/base/irbs_increased_data.csv",
-    "initLHS_input_csv_is_real": false,
-    "initLHS_n_proc": null,
-    "initLHS_output_is_real": true
-}

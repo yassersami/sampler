@@ -51,13 +51,13 @@ metrics_plots:
   type: kedro.extras.datasets.matplotlib.MatplotlibWriter
   filepath: data/08_reporting/base
 
-###### init_lhs ######
-initLHS_history:
+###### run_sim ######
+run_sim_history:
   type: IncrementalDataSet
-  path: data/07_model_output/base/initLHS_history
+  path: data/07_model_output/base/run_sim_history
   dataset: pandas.CSVDataSet
   filename_suffix: .csv
 
-initLHS_increased_data:
+run_sim_increased_data:
   type: pandas.CSVDataSet
-  filepath: data/07_model_output/base/initLHS_increased_data.csv
+  filepath: data/07_model_output/base/run_sim_increased_data.csv

@@ -1,0 +1,8 @@
+{
+    "run_sim_use_lhs": true,
+    "run_sim_num_lhs_samples": 100,
+    "run_sim_input_csv_file": "data/07_model_output/base/irbs_increased_data.csv",
+    "run_sim_input_csv_is_real": false,
+    "run_sim_n_proc": null,
+    "run_sim_output_is_real": true
+}

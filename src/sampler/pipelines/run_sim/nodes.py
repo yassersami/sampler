@@ -1,4 +1,8 @@
-import sys
+"""
+This is a boilerplate pipeline 'run_sim'
+generated using Kedro 0.18.5
+"""
+
 from typing import List, Dict
 
 import numpy as np

@@ -1,4 +1,4 @@
-# Pipeline init_lhs
+# Pipeline run_sim
 
 > *Note:* This is a `README.md` boilerplate generated using `Kedro 0.18.5`.
 
