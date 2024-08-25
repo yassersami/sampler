@@ -49,7 +49,7 @@ class DataTreatment:
         providing clean data for regression. This NaN exclusion to get 'clean
         data' is utilized in the following contexts:
             - `FigureOfMerit.update`: Extracts `clean_regr_data`.
-            - `OutlierExcluder.update_outliers_set`: Extracts `ignored_rows`.
+            - `OutlierProximityDetector.fit`: Extracts `outlier_points`.
             - Main sampling node: Updates `n_new_inliers`.
 
         Note: This function does not handle out-of-bounds features, as it is

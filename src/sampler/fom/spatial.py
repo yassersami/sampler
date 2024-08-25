@@ -1,4 +1,4 @@
-from typing import List, Tuple, Dict, Union, Optional
+from typing import List, Tuple, Dict, Any, Union, Optional, ClassVar
 import warnings
 import numpy as np
 import pandas as pd
@@ -9,65 +9,87 @@ from sklearn.model_selection import RandomizedSearchCV
 from sklearn.cluster import MeanShift
 from scipy.optimize import shgo
 
+from .base import FittableFOMTerm, FOMTermRegistry
+
 RANDOM_STATE = 42
 
-
-def compute_sigmoid_local_density(
-    x: np.ndarray, dataset_points: np.ndarray, decay_dist: float=0.04
-) -> np.ndarray:
+@FOMTermRegistry.register("sigmoid_density")
+class SigmoidLocalDensity(FittableFOMTerm):
     """
-    Compute the decay score and apply a sigmoid transformation to obtain a 
-    density-like value.
+    A fittable FOM term that computes the sigmoid local density.
+    """
+    fit_params: ClassVar[Dict[str, bool]] = {'X_only': True, 'drop_nan': False}
 
-    Parameters:
-    - decay_dist (delta): A float representing the characteristic distance at 
-    which the decay effect becomes significant. This parameter controls the 
-    rate at which the influence of a reference point decreases with distance. 
-    Lower values allow for the inclusion of farther points, effectively 
-    shifting the sigmoid curve horizontally. Note that for x_half = delta * 
-    np.log(2), we have np.exp(-x_half/delta) = 1/2, indicating the distance 
-    at which the decay effect reduces to half its initial value.
+    def __init__(self, apply: bool, decay_dist: float = 0.04):
+        super().__init__(apply=apply)
+        self.decay_dist = decay_dist
+        self.dataset_points = None
     
-    Note: an efficient decay with sigmoid is at decay_dist = 0.04
+    def fit(self, X: np.ndarray) -> None:
+        self.dataset_points = X
 
-    Returns:
-    - A float representing the transformed score after applying the decay and 
-    sigmoid functions.
+    def predict_score(self, X: np.ndarray) -> np.ndarray:
+        """
+        Compute the decay score and apply a sigmoid transformation to obtain a 
+        density-like value.
 
-    Explanation:
-    - Sigmoid Effect: The sigmoid function is applied to the decay score to 
-    compress it into a range between 0 and 1. This transformation makes the 
-    score resemble a density measure, where values close to 1 indicate a 
-    densely populated area.
-    - Sigmoid Parameters: The sigmoid position and sigmoid speed are fixed at 5
-    and 1, respectively. The sigmoid_pos determines the midpoint of the sigmoid
-    curve, while the sigmoid_speed controls its steepness. In our context, these
-    parameters do not have significantly different effects compared to
-    decay_dist, hence they are fixed values. Also adequate sigmoid parameters
-    are very hard to find.
-    """
-    x = np.atleast_2d(x)
+        Parameters:
+        - decay_dist (delta): A float representing the characteristic distance
+        at which the decay effect becomes significant. This parameter controls
+        the rate at which the influence of a reference point decreases with
+        distance. Lower values allow for the inclusion of farther points,
+        effectively shifting the sigmoid curve horizontally. Note that for
+        x_half = delta * np.log(2), we have np.exp(-x_half/delta) = 1/2,
+        indicating the distance at which the decay effect reduces to half its
+        initial value.
+        
+        Note: an efficient decay with sigmoid is at decay_dist = 0.04
 
-    # Compute for each x_row distances to every dataset point
-    # Element at position [i, j] is d(x_i, dataset_points_j)
-    distances = distance.cdist(x, dataset_points, metric="euclidean")
+        Returns:
+        - A float representing the transformed score after applying the decay
+        and sigmoid functions.
 
-    # Compute the decay score weights for all distances
-    # decay score =0 for big distance, =1 for small distance
-    decay_scores = np.exp(-distances / decay_dist)
+        Explanation:
+        - Sigmoid Effect: The sigmoid function is applied to the decay score to
+        compress it into a range between 0 and 1. This transformation makes the
+        score resemble a density measure, where values close to 1 indicate a
+        densely populated area.
+        - Sigmoid Parameters: The sigmoid position and sigmoid speed are fixed
+        at 5 and 1, respectively. The sigmoid_pos determines the midpoint of the
+        sigmoid curve, while the sigmoid_speed controls its steepness. In our
+        context, these parameters do not have significantly different effects
+        compared to decay_dist, hence they are fixed values. Also adequate
+        sigmoid parameters are very hard to find.
+        """
+        X = np.atleast_2d(X)
 
-    # Sum the decay scores across each row (for each point)
-    # At each row the sum is supported mainly by closer points having greater effect
-    cumulated_scores = decay_scores.sum(axis=1)
+        # Compute for each x_row distances to every dataset point
+        # Element at position [i, j] is d(x_i, dataset_points_j)
+        distances = distance.cdist(X, self.dataset_points, metric="euclidean")
 
-    # Fix sigmoid parameters
-    pos = 5
-    speed = 1
+        # Compute the decay score weights for all distances
+        # decay score =0 for big distance, =1 for small distance
+        decay_scores = np.exp(-distances / self.decay_dist)
 
-    # Apply sigmoid to combined scores to get scores in [0, 1]
-    transformed_decays = 1 / (1 + np.exp(-(cumulated_scores - pos) * speed))
+        # Sum the decay scores across each row (for each point)
+        # At each row the sum is supported mainly by closer points having greater effect
+        cumulated_scores = decay_scores.sum(axis=1)
 
-    return transformed_decays
+        # Fix sigmoid parameters
+        pos = 5
+        speed = 1
+
+        # Apply sigmoid to combined scores to get scores in [0, 1]
+        # sigmoid_decays is 1 when it's a bad region that is already densely populated
+        sigmoid_decays = 1 / (1 + np.exp(-(cumulated_scores - pos) * speed))
+        
+        # Score is 0 for bad regions, and equal to one for good empty regions
+        scores = 1 - sigmoid_decays
+
+        return scores
+    
+    def get_parameters(self) -> Dict[str, float]:
+        return dict(decay_dist=self.decay_dist)
 
 
 class KDEModel:
@@ -189,54 +211,58 @@ class KDEModel:
         return (1 - densities) / (1 - self.min_density)
 
 
-class OutlierExcluder:
-    def __init__(
-        self, features: List[str], targets: List[str]
-    ):
-        
-        self.features = features
-        self.targets = targets
-        # Points to be avoided as they result in erroneous simulations
-        self.ignored_df = pd.DataFrame(columns=self.features)
+@FOMTermRegistry.register("outlier_proximity")
+class OutlierProximityDetector(FittableFOMTerm):
     
-    def update_outliers_set(self, df: pd.DataFrame):
-        """ Add bad points (in feature space) to the set of ignored points. """
+    fit_params: ClassVar[Dict[str, bool]] = {'X_only': False, 'drop_nan': False}
+
+    def __init__(self, apply: bool, exclusion_radius: float = 1e-5):
+        super().__init__(apply=apply)
+        self.exclusion_radius = exclusion_radius
+        self.outlier_points = None
+    
+    def fit(self, X: np.ndarray, y: np.ndarray) -> None:
+        """ Detect outliers to avoid (in feature space). """
+        y = np.atleast_2d(y.T).T  # Ensure y is 2D with shape (n_samples, n_targets)
+        
         # Identify rows where any target column has NaN
-        ignored_rows = df[df[self.targets].isna().any(axis=1)]
+        nan_mask = np.isnan(y).any(axis=1)
 
         # Extract feature values from these rows
-        new_ignored_df = ignored_rows[self.features]
+        self.outlier_points = X[nan_mask]
 
-        # Concatenate the new ignored points with the existing ones
-        self.ignored_df = pd.concat([self.ignored_df, new_ignored_df]).drop_duplicates()
-        self.ignored_df = self.ignored_df.reset_index(drop=True)
-
-    def detect_outlier_proximity(
-        self, x: np.ndarray, exclusion_radius: float = 1e-5
-    ) -> np.ndarray:
+    def predict_score(self, X: np.ndarray) -> np.ndarray:
         """
-        Proximity Exclusion Condition: Determine if the given point is
+        Proximity Avoidance Condition: Determine if the given point is
         sufficiently distant from any point with erroneous simulations. Points
         located within a specified exclusion radius around known problematic
-        points are excluded from further processing.
+        points render a low score (0) to be excluded from further processing.
         
-        This condition is necessary because surrogate GP does not update around
-        failed samples.
+        This condition is necessary because surrogate GPR does not fit on failed
+        samples.
         """
-        x = np.atleast_2d(x)
-        
-        if self.ignored_df.empty:
-            return np.zeros(x.shape[0], dtype=bool)
-    
+        X = np.atleast_2d(X)
+
+        if self.outlier_points.size == 0:
+            return np.ones(X.shape[0])
+
         # Compute distances based on the specified metric
-        distances = distance.cdist(x, self.ignored_df.values, "euclidean")
+        distances = distance.cdist(X, self.outlier_points, "euclidean")
 
         # Determine which points should be ignored based on tolerance
-        should_ignore = np.any(distances < exclusion_radius, axis=1)
+        should_avoid = np.any(distances < self.exclusion_radius, axis=1)
 
-        # Log ignored points
-        for i, ignore in enumerate(should_ignore):
-            if ignore:
-                print(f"OutlierProximityHandler.should_ignore -> Point {x[i]} was ignored.")
+        # Log points that will be avoided
+        if np.any(should_avoid):
+            print(
+                "The following points are in outlier proximity regions:\n"
+                f"{X[should_avoid]}"
+            )
 
-        return should_ignore
+        # Score is 0 for bad rows that FOM should avoid
+        score = 1 - should_avoid.astype(float)
+        
+        return score
+    
+    def get_parameters(self) -> Dict[str, Any]:
+        return dict(exclusion_radius=self.exclusion_radius)

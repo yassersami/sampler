@@ -3,8 +3,8 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import shgo
 
-from sampler.fom.surrogate import SurrogateGPR, InlierOutlierGPC
-from sampler.fom.spatial import OutlierExcluder, compute_sigmoid_local_density
+from .surrogate import SurrogateGPR, InlierOutlierGPC
+from .spatial import OutlierProximityDetector, SigmoidLocalDensity
 
 
 def zeros_like_rows(x: np.ndarray) -> np.ndarray:
@@ -53,8 +53,11 @@ class FigureOfMerit:
         # Initialize GP surrogate model
         self.gp_surrogate = SurrogateGPR(features, targets, interest_region)
         
+        # Instanciate Simdmoig local density
+        self.sigmoid = SigmoidLocalDensity()
+        
         # Initialize outliers handler
-        self.excluder = OutlierExcluder(features, targets)
+        self.outlier_detector = OutlierProximityDetector(features, targets)
         
         # Initialize GP fitted on 0|1 values
         self.gp_classifier = InlierOutlierGPC()
@@ -97,6 +100,10 @@ class FigureOfMerit:
                 # Update max_std of current surrogate GP
                 self.gp_surrogate.update_max_std(**optimizer_kwargs)
 
+        # Give sigmoide dataset points
+        if self.terms["sigmoid_density"]["apply"]:
+            self.sigmoid.fit(X=data[self.features].values)
+
         # Train another GP to find unexplored inlier regions
         if self.terms["inlier_bstd"]["apply"]:
             self.gp_classifier.fit(
@@ -117,7 +124,7 @@ class FigureOfMerit:
         # surrogate_gpr_interest (SurrogateGPR): 1 - self.surrogate_gpr.predict_interest_proba
 
         # sigmoid_density: compute_sigmoid_local_density
-        # outlier_proximity (OutlierExcluder):  self.excluder.detect_outlier_proximity
+        # outlier_proximity (OutlierProximityDetector):  self.outlier_detector.detect_outlier_proximity
         # gpc_inlier_bstd (InlierOutlierGPC): 1 - get_inlier_bstd
         # gpc_inlier_entropy (InlierOutlierGPC): 1 - get_inlier_entropy
         
@@ -154,7 +161,6 @@ class FigureOfMerit:
         else:
             self.calc_std = zeros_like_rows
 
-
     def set_interest(self, apply: bool) -> callable:
         """
         Given an n-dimensional x returns the sum of the probabilities to be in
@@ -181,16 +187,15 @@ class FigureOfMerit:
         
         def space_local_density(x: np.ndarray):
             dataset_points = self.data[self.features].values
-            loss = compute_sigmoid_local_density(
-                x, dataset_points, decay_dist,
-            )
+            self.sigmoid.decay_dist = decay_dist
+            loss = self.sigmoid.predict_score(x)
             return loss
         
         if apply:
             self.calc_local_density = space_local_density
         else:
             self.calc_local_density = zeros_like_rows
-    
+
     def set_outlier_proximity(
         self, apply: bool, exclusion_radius: float
     ) -> callable:
@@ -204,7 +209,7 @@ class FigureOfMerit:
 
         def outlier_proximity(x: np.ndarray) -> np.ndarray:
             # Get boolean array of candidates too close to an outlier
-            should_ignore = self.excluder.detect_outlier_proximity(
+            should_ignore = self.outlier_detector.predict_score(
                 x, exclusion_radius
             )
             # if sample is bad (near outlier), loss is 1, and 0 if not

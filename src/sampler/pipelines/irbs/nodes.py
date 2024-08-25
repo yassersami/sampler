@@ -68,9 +68,6 @@ def irbs_sampling(
 
         # Launch time expensive simulations
         new_df = simulator.process_data(new_x, real_x=False, index=n_total, treat_output=True)
-        
-        # Update outliers set
-        model.excluder.update_outliers_set(new_df)
 
         print(f'Round {iteration:03} (continued): simulation results' + '-'*49)
         print(f'irbs_sampling -> New samples after simulation:\n {new_df}')

@@ -1,4 +1,4 @@
-from typing import List, Tuple, Dict, Union, Optional
+from typing import List, Tuple, Dict, Union, Optional, ClassVar
 import warnings
 import numpy as np
 import pandas as pd
@@ -8,7 +8,11 @@ from sklearn.gaussian_process import (
     GaussianProcessRegressor, GaussianProcessClassifier
 )
 from sklearn.gaussian_process.kernels import RationalQuadratic, RBF
+from sklearn.utils.validation import check_is_fitted
+from scipy.linalg import solve
 from scipy.optimize import shgo
+
+from .base import FOMTermRegistry, FittableFOMTerm
 
 RANDOM_STATE = 42
 
@@ -19,55 +23,33 @@ class SurrogateGPR(GaussianProcessRegressor):
         features: List[str], 
         targets: List[str],
         interest_region: Dict[str, Tuple[float, float]],
-        kernel=None,
-        random_state=RANDOM_STATE,
+        shgo_n: int = 1000,
+        shgo_iters: int = 5,
+        random_state: int = RANDOM_STATE,
         **kwargs
     ):
-        if kernel is None:
-            kernel = RationalQuadratic(length_scale_bounds=(1e-5, 2))
-        
+        kernel = RationalQuadratic(length_scale_bounds=(1e-5, 2))
         super().__init__(kernel=kernel, random_state=random_state, **kwargs)
 
+        self.apply_interest_score = True
+        self.apply_std_score = True
         self.features = features
         self.targets = targets
         self.interest_region = interest_region
+        self.shgo_n = shgo_n
+        self.shgo_iters = shgo_iters
         
         self.lowers = [region[0] for region in interest_region.values()]
         self.uppers = [region[1] for region in interest_region.values()]
 
         # To normalize std of coverage function to be between 0 and 1
         self.max_std = None
-    
-    def predict_interest_proba(self, x: np.ndarray) -> np.ndarray:
-        '''
-        Computes the probability of being in the region of interest.
-        CDF: cumulative distribution function P(X <= x)
-        '''
-        x = np.atleast_2d(x)
-
-        y_hat, y_std = self.predict(x, return_std=True)
-
-        point_norm = norm(loc=y_hat, scale=y_std)
-
-        probabilities = point_norm.cdf(self.uppers) - point_norm.cdf(self.lowers)
         
-        if y_hat.ndim == 1:
-            return probabilities
-        return np.prod(probabilities, axis=1)
 
     def get_std(self, x: np.ndarray) -> np.ndarray:
         """
         Compute the combined standard deviation for a GP regressor with multiple
         targets.
-
-        Note: In previous implementations, the mean of the Gaussian Process (GP)
-        standard deviations was computed for the Figure of Merit (FOM). However,
-        the maximum standard deviation was determined using only the first
-        target's standard deviation (y_std[:, 1]). Then the max_std was computed
-        using max of stadard deviations, but this approach was still lacking
-        consistency. This function unifies the approach by consistently
-        combining the standard deviations for both the determination of the
-        maximum standard deviation and the application of FOM constraints.
         """
         # Predict standard deviations for each target
         _, y_std = self.predict(x, return_std=True)
@@ -76,14 +58,8 @@ class SurrogateGPR(GaussianProcessRegressor):
         y_std_combined = y_std.mean(axis=1)
 
         return y_std_combined
-
-    def get_norm_std(self, x: np.ndarray) -> np.ndarray:
-        x = np.atleast_2d(x)
-        if self.max_std is None:
-            raise RuntimeError("max_std must be updated before predicting scores.")
-        return self.get_std(x) / self.max_std
     
-    def update_max_std(self, shgo_iters: int = 5, shgo_n: int = 1000):
+    def update_max_std(self):
         """
         Update maximum standard deviation of the Gaussian Process for points
         between 0 and 1.
@@ -102,7 +78,8 @@ class SurrogateGPR(GaussianProcessRegressor):
 
         bounds = [(0, 1)]*len(self.features)
         result = shgo(
-            get_opposite_std, bounds, iters=shgo_iters, n=shgo_n, sampling_method='simplicial'
+            get_opposite_std, bounds, iters=self.shgo_iters, n=self.shgo_n,
+            sampling_method='simplicial'
         )
 
         max_std = -1 * result.fun
@@ -110,9 +87,117 @@ class SurrogateGPR(GaussianProcessRegressor):
         self.max_std = max_std
 
         print(f"SurrogateGPR.update_max_std -> Maximum GP std: {max_std}")
+    
+    def fit(self, X: np.ndarray, y: np.ndarray) -> None:
+        super().fit(X, y)
+        if self.apply_std_score:
+            # Update max_std of current surrogate GP
+            self.update_max_std()
+    
+    def predict_interest_score(self, x: np.ndarray) -> np.ndarray:
+        '''
+        Computes the probability of being in the region of interest.
+        CDF: cumulative distribution function P(X <= x)
+        '''
+        x = np.atleast_2d(x)
+
+        y_hat, y_std = self.predict(x, return_std=True)
+
+        point_norm = norm(loc=y_hat, scale=y_std)
+
+        probabilities = point_norm.cdf(self.uppers) - point_norm.cdf(self.lowers)
+        
+        if y_hat.ndim == 1:
+            return probabilities
+        return np.prod(probabilities, axis=1)
+
+    def predict_std_score(self, X: np.ndarray) -> np.ndarray:
+        X = np.atleast_2d(X)
+        if self.max_std is None:
+            raise RuntimeError("max_std must be updated before predicting scores.")
+        return self.get_std(X) / self.max_std
 
 
-class InlierOutlierGPC(GaussianProcessClassifier):
+# TODO: manage when the double use of SurrogateGPR term interest/std 
+@FOMTermRegistry.register("surrogate_gpr")
+class SurrogateGPRTerm(FittableFOMTerm, SurrogateGPR):
+    
+    fit_params: ClassVar[Dict[str, bool]] = {'X_only': False, 'drop_nan': True}
+    
+    def __init__(self, apply: bool, **gpr_kwargs):
+        FittableFOMTerm.__init__(self, apply=apply)
+        SurrogateGPR.__init__(self, **gpr_kwargs)
+    
+    def fit(self, X: np.ndarray, y: np.ndarray) -> None:
+        return SurrogateGPR.fit(self, X, y)
+    
+    def predict_score(self, X: np.ndarray) -> np.ndarray:
+        # return SurrogateGPR.predict_std_score(self, X)
+        return SurrogateGPR.predict_interest_score(self, X)
+    
+
+class GPCModel(GaussianProcessClassifier):
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def predict_a(
+        self, X: np.ndarray, return_std: bool = False
+    ) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
+        """
+        Return estimates of the latent function for X.
+        
+        Notes:
+        ------
+        - For binary classification (n_classes = 2), the output shape is
+        (n_samples,).
+        - For multi-class classification, the output shape is (n_samples,
+        n_classes) when multi_class="one_vs_rest", and is shaped (n_samples,
+        n_classes*(n_classes - 1)/2) when multi_class="one_vs_one". In other
+        terms, There are as many columns as trained Binary GPC sub-models.
+        - The number of classes (n_classes) is determined by the number of
+        unique target values in the training data.
+        """
+        check_is_fitted(self)
+
+        if self.n_classes_ > 2:  # Multi-class case
+            f_stars = []
+            std_f_stars = []
+            for estimator, kernel in zip(self.base_estimator_.estimators_, self.kernel_.kernels):
+                if not return_std:
+                    f_star = self._binary_predict_a(estimator, kernel, X, return_std)
+                    f_stars.append(f_star)
+                else:
+                    f_star, std_f_star = self._binary_predict_a(estimator, kernel, X, return_std)
+                    f_stars.append(f_star)
+                    std_f_stars.append(std_f_star)
+
+            if not return_std:
+                return np.array(f_stars).T
+
+            return np.array(f_stars).T, np.array(std_f_stars).T
+        else:  # Binary case
+            return self._binary_predict_a(self.base_estimator_, self.kernel_, X, return_std)
+
+    @staticmethod
+    def _binary_predict_a(estimator, kernel, X, return_std):
+        """ Return mean and std of the latent function estimates for X. """
+        check_is_fitted(estimator)
+
+        # Based on Algorithm 3.2 of GPML
+        K_star = kernel(estimator.X_train_, X)  # K_star = k(x_star)
+        f_star = K_star.T.dot(estimator.y_train_ - estimator.pi_)  # Line 4
+        if not return_std:
+            return f_star
+
+        v = solve(estimator.L_, estimator.W_sr_[:, np.newaxis] * K_star)  # Line 5
+        # Line 6 (compute np.diag(v.T.dot(v)) via einsum)
+        var_f_star = kernel.diag(X) - np.einsum("ij,ij->j", v, v)
+
+        return f_star, np.sqrt(var_f_star)
+
+
+class InlierOutlierGPC(GPCModel):
     def __init__(self, kernel=None, random_state=RANDOM_STATE):
         if kernel is None:
             kernel = 1.0 * RBF(length_scale=1.0)

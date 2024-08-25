@@ -2,13 +2,13 @@
   "irbs_opt_sampling_points": 1000,
   "irbs_opt_iters": 5,
   "irbs_fom_terms": {
-    "std": {
+    "gpr_std": {
       "apply": true
     },
-    "interest": {
+    "gpr_interest": {
       "apply": true
     },
-    "local_density": {
+    "sigmoid_density": {
       "apply": true,
       "decay_dist": 0.04
     },
@@ -16,7 +16,7 @@
       "apply": true,
       "exclusion_radius": 1e-5
     },
-    "inlier_bstd": {
+    "gpc_inlier_bstd": {
       "apply": false
     }
   }
