@@ -89,7 +89,64 @@ class SigmoidLocalDensity(FittableFOMTerm):
         return scores
     
     def get_parameters(self) -> Dict[str, float]:
-        return dict(decay_dist=self.decay_dist)
+        return {'decay_dist': self.decay_dist}
+
+
+@FOMTermRegistry.register("outlier_proximity")
+class OutlierProximityDetector(FittableFOMTerm):
+    
+    fit_params: ClassVar[Dict[str, bool]] = {'X_only': False, 'drop_nan': False}
+
+    def __init__(self, apply: bool, exclusion_radius: float = 1e-5):
+        super().__init__(apply=apply)
+        self.exclusion_radius = exclusion_radius
+        self.outlier_points = None
+    
+    def fit(self, X: np.ndarray, y: np.ndarray) -> None:
+        """ Detect outliers to avoid (in feature space). """
+        y = np.atleast_2d(y.T).T  # Ensure y is 2D with shape (n_samples, n_targets)
+        
+        # Identify rows where any target column has NaN
+        nan_mask = np.isnan(y).any(axis=1)
+
+        # Extract feature values from these rows
+        self.outlier_points = X[nan_mask]
+
+    def predict_score(self, X: np.ndarray) -> np.ndarray:
+        """
+        Proximity Avoidance Condition: Determine if the given point is
+        sufficiently distant from any point with erroneous simulations. Points
+        located within a specified exclusion radius around known problematic
+        points render a low score (0) to be excluded from further processing.
+        
+        This condition is necessary because surrogate GPR does not fit on failed
+        samples.
+        """
+        X = np.atleast_2d(X)
+
+        if self.outlier_points.size == 0:
+            return np.ones(X.shape[0])
+
+        # Compute distances based on the specified metric
+        distances = distance.cdist(X, self.outlier_points, "euclidean")
+
+        # Determine which points should be ignored based on tolerance
+        should_avoid = np.any(distances < self.exclusion_radius, axis=1)
+
+        # Log points that will be avoided
+        if np.any(should_avoid):
+            print(
+                "The following points are in outlier proximity regions:\n"
+                f"{X[should_avoid]}"
+            )
+
+        # Score is 0 for bad rows that FOM should avoid
+        score = 1 - should_avoid.astype(float)
+        
+        return score
+    
+    def get_parameters(self) -> Dict[str, Any]:
+        return {'exclusion_radius': self.exclusion_radius}
 
 
 class KDEModel:
@@ -106,7 +163,7 @@ class KDEModel:
         self.min_density = None
 
     def search_bandwidth(
-        self, X, log_bounds=(-4, 0), n_iter=20, cv=5, random_state=RANDOM_STATE
+        self, X, log_bounds=(-4, 0), n_iter=20,
     ):
         """
         TODO: Find a better score than likelihood to select bandwidth.
@@ -134,8 +191,8 @@ class KDEModel:
             KernelDensity(kernel=self.kernel),
             {'bandwidth': bandwidths},
             n_iter=n_iter,
-            cv=cv,
-            random_state=random_state,
+            cv=5,  # Using cv here has no sense
+            random_state=RANDOM_STATE,
             # scoring=None => use KDE.score which is log-likelihood
         )
         random_search.fit(X)
@@ -209,60 +266,3 @@ class KDEModel:
             raise RuntimeError("min_density must be updated before predicting scores.")
         densities = self.predict_proba(X)
         return (1 - densities) / (1 - self.min_density)
-
-
-@FOMTermRegistry.register("outlier_proximity")
-class OutlierProximityDetector(FittableFOMTerm):
-    
-    fit_params: ClassVar[Dict[str, bool]] = {'X_only': False, 'drop_nan': False}
-
-    def __init__(self, apply: bool, exclusion_radius: float = 1e-5):
-        super().__init__(apply=apply)
-        self.exclusion_radius = exclusion_radius
-        self.outlier_points = None
-    
-    def fit(self, X: np.ndarray, y: np.ndarray) -> None:
-        """ Detect outliers to avoid (in feature space). """
-        y = np.atleast_2d(y.T).T  # Ensure y is 2D with shape (n_samples, n_targets)
-        
-        # Identify rows where any target column has NaN
-        nan_mask = np.isnan(y).any(axis=1)
-
-        # Extract feature values from these rows
-        self.outlier_points = X[nan_mask]
-
-    def predict_score(self, X: np.ndarray) -> np.ndarray:
-        """
-        Proximity Avoidance Condition: Determine if the given point is
-        sufficiently distant from any point with erroneous simulations. Points
-        located within a specified exclusion radius around known problematic
-        points render a low score (0) to be excluded from further processing.
-        
-        This condition is necessary because surrogate GPR does not fit on failed
-        samples.
-        """
-        X = np.atleast_2d(X)
-
-        if self.outlier_points.size == 0:
-            return np.ones(X.shape[0])
-
-        # Compute distances based on the specified metric
-        distances = distance.cdist(X, self.outlier_points, "euclidean")
-
-        # Determine which points should be ignored based on tolerance
-        should_avoid = np.any(distances < self.exclusion_radius, axis=1)
-
-        # Log points that will be avoided
-        if np.any(should_avoid):
-            print(
-                "The following points are in outlier proximity regions:\n"
-                f"{X[should_avoid]}"
-            )
-
-        # Score is 0 for bad rows that FOM should avoid
-        score = 1 - should_avoid.astype(float)
-        
-        return score
-    
-    def get_parameters(self) -> Dict[str, Any]:
-        return dict(exclusion_radius=self.exclusion_radius)

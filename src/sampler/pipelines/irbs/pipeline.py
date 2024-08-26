@@ -27,8 +27,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 run_condition='params:run_condition',
                 
                 fom_terms='params:irbs_fom_terms',
-                opt_iters='params:irbs_opt_iters',
-                opt_points='params:irbs_opt_sampling_points',
+                shgo_args='params:irbs_shgo',
             ),
             outputs='irbs_history',
             name='irbs_sampling',

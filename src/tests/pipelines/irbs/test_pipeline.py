@@ -61,11 +61,13 @@ def test_fom_class_initialization(kedro_session):
         terms_config=terms_config
     )
     
+    n_active_terms = len(fom_instance.terms)
+    n_scores = len(fom_instance.get_score_names())
+    
     # Active terms assertion
-    assert len(fom_instance.terms) == sum([v['apply'] for v in terms_config.values()]), (
+    assert n_active_terms == sum([v['apply'] for v in terms_config.values()]), (
         "Number of terms mismatch"
     )
-    n_active_terms = len(fom_instance.terms)
     
     # Set fake simulator
     def multi_dim_x_sin_x(X: np.ndarray) -> np.ndarray:
@@ -73,7 +75,8 @@ def test_fom_class_initialization(kedro_session):
         return np.mean(0.5 * (X * np.sin(10 * np.pi * X**2) + 1), axis=1)
     
     # Set train and test datasets
-    n_train, n_test, p = 20, 5, 3
+    p = 3
+    n_train, n_test = 80, 20
     sampler = LatinHypercube(p)
     X_train = sampler.random(n_train)
     y_train = multi_dim_x_sin_x(X_train)
@@ -98,8 +101,8 @@ def test_fom_class_initialization(kedro_session):
     assert scores.shape == (n_test,), (
         f"Expected scores shape ({n_test},), but got {scores.shape}"
     )
-    assert scores_df.shape == (n_test, n_active_terms), (
-        f"Expected scores_df shape ({n_test}, {n_active_terms}), "
+    assert scores_df.shape == (n_test, n_scores), (
+        f"Expected scores_df shape ({n_test}, {n_scores}), "
         f"but got {scores_df.shape}"
     )
     # Outlier proximity detection
@@ -107,5 +110,6 @@ def test_fom_class_initialization(kedro_session):
         "Artificially set outlier at position 1 was not detected."
     )
 
-    fom_term_params = fom_instance.get_parameters()
-    print(f"All terms parameters: \n{fom_term_params}")
+    print(f"All terms parameters: \n{fom_instance.get_parameters()}")
+
+    print(f"All terms parameters json: \n{fom_instance.get_parameters_str()}")

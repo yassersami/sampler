@@ -12,23 +12,29 @@ import pandas as pd
 from sampler.common.data_treatment import DataTreatment, initialize_dataset
 from sampler.common.storing import parse_results
 from sampler.common.simulator import SimulationProcessor
-from sampler.fom.fom import FigureOfMerit
+from sampler.fom.base import FOM
+from sampler.fom.optimizer import SHGOOptimizer
 
-RANDOM_STATE = 42
+# These are to activate FOMTermRegistry decorators
+from sampler.fom.surrogate import SurrogateGPRTerm
+from sampler.fom.spatial import SigmoidLocalDensity, OutlierProximityDetector
 
 
 def irbs_sampling(
     data: pd.DataFrame, treatment: DataTreatment,
     features: List[str], targets: List[str], additional_values: List[str],
     simulator_env: Dict, batch_size: int, run_condition: Dict,
-    fom_terms: Dict, opt_iters: int, opt_points: int,
+    fom_terms: Dict, shgo_args: Dict[str, int]
 ):
 
     # Set figure of merite (acquisition function)
-    model = FigureOfMerit(
-        features=features, targets=targets, terms=fom_terms,
-        interest_region=treatment.scaled_interest_region
+    model = FOM(
+        interest_region=treatment.scaled_interest_region,
+        terms_config=fom_terms
     )
+
+    # Set optimizer
+    optimizer = SHGOOptimizer(batch_size, **shgo_args)
 
     # Set simulator environement
     simulator = SimulationProcessor(
@@ -61,10 +67,10 @@ def irbs_sampling(
 
     while should_continue:
         # Set the new model that will be used in next iteration
-        model.update(res, optimizer_kwargs=dict(shgo_iters=opt_iters, shgo_n=opt_points))
+        model.fit(X=res[features].values, y=res[targets].values)
 
         # Search new candidates to add to res dataset
-        new_x, scores = model.optimize(batch_size=batch_size, shgo_iters=opt_iters, shgo_n=opt_points)
+        new_x, scores = optimizer.optimize(model)
 
         # Launch time expensive simulations
         new_df = simulator.process_data(new_x, real_x=False, index=n_total, treat_output=True)
@@ -80,10 +86,10 @@ def irbs_sampling(
         new_df = pd.concat([new_df, scores], axis=1, join='inner', ignore_index=False)
 
         # Add maximum found value for surrogate GP combined std
-        new_df['max_std'] = model.gp_surrogate.max_std
+        new_df['max_std'] = model.terms['surrogate_gpr'].max_std
 
         # Add model prediction to selected (already simulated) points
-        prediction = model.gp_surrogate.predict(new_df[features].values)
+        prediction = model.terms['surrogate_gpr'].predict(new_df[features].values)
         prediction_cols = [f"pred_{t}" for t in targets]
         new_df[prediction_cols] = np.atleast_2d(prediction)
 

@@ -1,12 +1,13 @@
 {
-  "irbs_opt_sampling_points": 1000,
-  "irbs_opt_iters": 5,
+  "irbs_shgo": {"n": 1000, "iters": 5},
+  "irbs_ga": {"size_pop": 20, "max_iter": 1000},
   "irbs_fom_terms": {
-    "gpr_std": {
-      "apply": true
-    },
-    "gpr_interest": {
-      "apply": true
+    "surrogate_gpr": {
+      "apply": true,
+      "apply_interest": true,
+      "apply_std": true,
+      "shgo_n": 1000,
+      "shgo_iters": 5
     },
     "sigmoid_density": {
       "apply": true,

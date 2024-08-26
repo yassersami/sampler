@@ -16,48 +16,64 @@ from .base import FOMTermRegistry, FittableFOMTerm
 
 RANDOM_STATE = 42
 
-
+# TODO:
+# - adapt bounds and predict_interest_score for 1D y
+# - updat_max_std has problems with 2D X
 class SurrogateGPR(GaussianProcessRegressor):
     def __init__(
         self, 
-        features: List[str], 
-        targets: List[str],
         interest_region: Dict[str, Tuple[float, float]],
         shgo_n: int = 1000,
         shgo_iters: int = 5,
-        random_state: int = RANDOM_STATE,
         **kwargs
     ):
-        kernel = RationalQuadratic(length_scale_bounds=(1e-5, 2))
-        super().__init__(kernel=kernel, random_state=random_state, **kwargs)
+        kernel = RationalQuadratic(length_scale_bounds=(1e-5, 10))
+        super().__init__(kernel=kernel, random_state=RANDOM_STATE, **kwargs)
 
-        self.apply_interest_score = True
-        self.apply_std_score = True
-        self.features = features
-        self.targets = targets
+        self.is_trained = False
         self.interest_region = interest_region
         self.shgo_n = shgo_n
         self.shgo_iters = shgo_iters
-        
+
         self.lowers = [region[0] for region in interest_region.values()]
         self.uppers = [region[1] for region in interest_region.values()]
 
         # To normalize std of coverage function to be between 0 and 1
         self.max_std = None
-        
 
-    def get_std(self, x: np.ndarray) -> np.ndarray:
+    def fit(self, X: np.ndarray, y: np.ndarray) -> None:
+
+        # Check if y is 1D or 2D
+        if y.ndim == 1:
+            n_targets = 1
+        elif y.ndim == 2:
+            n_targets = y.shape[1]
+        else:
+            raise ValueError(f"Unexpected shape for y: {y.shape}")
+
+        # Validate that bounds match the target dimension
+        if len(self.lowers) != n_targets or len(self.uppers) != n_targets:
+            raise ValueError(
+                f"Number of bounds ({len(self.lowers)}/{len(self.uppers)}) "
+                f"does not match the number of targets ({n_targets})"
+            )
+
+        super().fit(X, y)
+        self.is_trained = True
+
+    def get_std(self, X: np.ndarray) -> np.ndarray:
         """
         Compute the combined standard deviation for a GP regressor with multiple
         targets.
         """
         # Predict standard deviations for each target
-        _, y_std = self.predict(x, return_std=True)
+        _, y_std = self.predict(X, return_std=True)
 
-        # Combine standard deviations using the mean
-        y_std_combined = y_std.mean(axis=1)
-
-        return y_std_combined
+        # If 1D, it's already the standard deviation for a single target
+        if y_std.ndim == 1:
+            return y_std
+        # If 2D, combine standard deviations using the mean across targets
+        return y_std.mean(axis=1)
     
     def update_max_std(self):
         """
@@ -68,6 +84,9 @@ class SurrogateGPR(GaussianProcessRegressor):
             "SurrogateGPR.update_max_std -> Searching for the maximum standard "
             "deviation of the surrogate..."
         )
+        if not self.is_trained:
+            raise RuntimeError("The model must be trained before calling update_max_std.")
+
         search_error = 0.01
 
         def get_opposite_std(x):
@@ -76,9 +95,9 @@ class SurrogateGPR(GaussianProcessRegressor):
             y_std = self.get_std(x)
             return -1 * y_std
 
-        bounds = [(0, 1)]*len(self.features)
+        bounds = [(0, 1)]*self.n_features_in_
         result = shgo(
-            get_opposite_std, bounds, iters=self.shgo_iters, n=self.shgo_n,
+            get_opposite_std, bounds, n=self.shgo_n, iters=self.shgo_iters,
             sampling_method='simplicial'
         )
 
@@ -88,26 +107,20 @@ class SurrogateGPR(GaussianProcessRegressor):
 
         print(f"SurrogateGPR.update_max_std -> Maximum GP std: {max_std}")
     
-    def fit(self, X: np.ndarray, y: np.ndarray) -> None:
-        super().fit(X, y)
-        if self.apply_std_score:
-            # Update max_std of current surrogate GP
-            self.update_max_std()
-    
-    def predict_interest_score(self, x: np.ndarray) -> np.ndarray:
+    def predict_interest_score(self, X: np.ndarray) -> np.ndarray:
         '''
         Computes the probability of being in the region of interest.
         CDF: cumulative distribution function P(X <= x)
         '''
-        x = np.atleast_2d(x)
+        X = np.atleast_2d(X)
 
-        y_hat, y_std = self.predict(x, return_std=True)
+        y_mean, y_std = self.predict(X, return_std=True)
 
-        point_norm = norm(loc=y_hat, scale=y_std)
+        point_norm = norm(loc=y_mean, scale=y_std)
 
         probabilities = point_norm.cdf(self.uppers) - point_norm.cdf(self.lowers)
         
-        if y_hat.ndim == 1:
+        if y_mean.ndim == 1:
             return probabilities
         return np.prod(probabilities, axis=1)
 
@@ -118,22 +131,92 @@ class SurrogateGPR(GaussianProcessRegressor):
         return self.get_std(X) / self.max_std
 
 
-# TODO: manage when the double use of SurrogateGPR term interest/std 
 @FOMTermRegistry.register("surrogate_gpr")
 class SurrogateGPRTerm(FittableFOMTerm, SurrogateGPR):
     
-    fit_params: ClassVar[Dict[str, bool]] = {'X_only': False, 'drop_nan': True}
+    required_args = ["interest_region"]
+    fit_params = {'X_only': False, 'drop_nan': True}
     
-    def __init__(self, apply: bool, **gpr_kwargs):
+    def __init__(
+        self,
+        apply: bool,
+        apply_interest: bool,
+        apply_std: bool,
+        interest_region: Dict[str, Tuple[float, float]],
+        shgo_n: int,
+        shgo_iters: int,
+        **gpr_kwargs
+    ):
         FittableFOMTerm.__init__(self, apply=apply)
-        SurrogateGPR.__init__(self, **gpr_kwargs)
+        SurrogateGPR.__init__(
+            self, interest_region=interest_region,
+            shgo_n=shgo_n, shgo_iters=shgo_iters,
+            **gpr_kwargs
+        )
+        self.apply_interest = apply_interest
+        self.apply_std = apply_std
     
+    @property
+    def score_names(self) -> List[str]:
+        score_names = []
+        if self.apply_interest:
+            score_names.append('gpr_interest')
+        if self.apply_std:
+            score_names.append('gpr_std')
+        return score_names
+
     def fit(self, X: np.ndarray, y: np.ndarray) -> None:
-        return SurrogateGPR.fit(self, X, y)
-    
-    def predict_score(self, X: np.ndarray) -> np.ndarray:
-        # return SurrogateGPR.predict_std_score(self, X)
-        return SurrogateGPR.predict_interest_score(self, X)
+        SurrogateGPR.fit(self, X, y)
+        if self.apply_std:
+            # Update max_std of current surrogate GP
+            self.update_max_std()
+
+    def predict_score(self, X: np.ndarray) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
+        if self.apply_interest and self.apply_std:
+            return self.predict_interest_score(X), self.predict_std_score(X)
+        elif self.apply_interest:
+            return self.predict_interest_score(X)
+        elif self.apply_std:
+            return self.predict_std_score(X)
+        else:
+            raise AttributeError("At least one of apply_interest or apply_std must be True")
+
+    def get_parameters(self, add_details: bool = False):
+        params = {
+            'kernel': self.kernel_.get_params(),
+            'kernel_str': str(self.kernel_),
+        }
+
+        if self.is_trained:
+            params.update({
+                'log_marginal_likelihood': self.log_marginal_likelihood_value_,
+                'n_features': self.n_features_in_,
+                'n_train': self.X_train_.shape[0],
+            })
+
+        if not add_details:
+            return params
+
+        params.update({
+            'alpha': self.alpha,
+            'optimizer': self.optimizer,
+            'n_restarts_optimizer': self.n_restarts_optimizer,
+            'normalize_y': self.normalize_y,
+            'copy_X_train': self.copy_X_train,
+            'random_state': self.random_state,
+        })
+
+        if self.is_trained:
+            params.update({
+                'noise_level': self.noise_,
+                'optimizer_results': {
+                    'fun': self._optimizer_results.fun,
+                    'nit': self._optimizer_results.nit,
+                    'message': self._optimizer_results.message,
+                }
+            })
+
+        return params
     
 
 class GPCModel(GaussianProcessClassifier):
@@ -164,13 +247,12 @@ class GPCModel(GaussianProcessClassifier):
             f_stars = []
             std_f_stars = []
             for estimator, kernel in zip(self.base_estimator_.estimators_, self.kernel_.kernels):
+                result = self._binary_predict_a(estimator, kernel, X, return_std)
                 if not return_std:
-                    f_star = self._binary_predict_a(estimator, kernel, X, return_std)
-                    f_stars.append(f_star)
+                    f_stars.append(result)
                 else:
-                    f_star, std_f_star = self._binary_predict_a(estimator, kernel, X, return_std)
-                    f_stars.append(f_star)
-                    std_f_stars.append(std_f_star)
+                    f_stars.append(result[0])
+                    std_f_stars.append(result[1])
 
             if not return_std:
                 return np.array(f_stars).T
@@ -198,10 +280,10 @@ class GPCModel(GaussianProcessClassifier):
 
 
 class InlierOutlierGPC(GPCModel):
-    def __init__(self, kernel=None, random_state=RANDOM_STATE):
+    def __init__(self, kernel=None):
         if kernel is None:
             kernel = 1.0 * RBF(length_scale=1.0)
-        super().__init__(kernel=kernel, random_state=random_state)
+        super().__init__(kernel=kernel, random_state=RANDOM_STATE)
         self.is_trained = False
 
         # Map class labels to indices
