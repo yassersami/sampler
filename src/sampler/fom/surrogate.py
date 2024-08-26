@@ -12,7 +12,7 @@ from sklearn.utils.validation import check_is_fitted
 from scipy.linalg import solve
 from scipy.optimize import shgo
 
-from .base import FOMTermRegistry, FittableFOMTerm
+from .base import FittableFOMTerm
 
 RANDOM_STATE = 42
 
@@ -131,7 +131,6 @@ class SurrogateGPR(GaussianProcessRegressor):
         return self.get_std(X) / self.max_std
 
 
-@FOMTermRegistry.register("surrogate_gpr")
 class SurrogateGPRTerm(FittableFOMTerm, SurrogateGPR):
     
     required_args = ["interest_region"]
@@ -279,12 +278,13 @@ class GPCModel(GaussianProcessClassifier):
         return f_star, np.sqrt(var_f_star)
 
 
-class InlierOutlierGPCTerm(GPCModel):
+class OutlierGPCTerm(GPCModel):
     def __init__(self, kernel=None):
         if kernel is None:
             kernel = 1.0 * RBF(length_scale=1.0)
         super().__init__(kernel=kernel, random_state=RANDOM_STATE)
         self.is_trained = False
+        self.score_names = 'gpc_inlier_bstd'
 
         # Map class labels to indices
         self.class_to_index = {"outlier": 0, "inlier": 1}

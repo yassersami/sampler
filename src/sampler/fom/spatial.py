@@ -9,11 +9,11 @@ from sklearn.model_selection import RandomizedSearchCV
 from sklearn.cluster import MeanShift
 from scipy.optimize import shgo
 
-from .base import FittableFOMTerm, FOMTermRegistry
+from .base import FittableFOMTerm
 
 RANDOM_STATE = 42
 
-@FOMTermRegistry.register("sigmoid_density")
+
 class SigmoidLocalDensityTerm(FittableFOMTerm):
     """
     A fittable FOM term that computes the sigmoid local density.
@@ -92,8 +92,7 @@ class SigmoidLocalDensityTerm(FittableFOMTerm):
         return {'decay_dist': self.decay_dist}
 
 
-@FOMTermRegistry.register("outlier_proximity")
-class OutlierProximityDetectorTerm(FittableFOMTerm):
+class OutlierProximityTerm(FittableFOMTerm):
     
     fit_params: ClassVar[Dict[str, bool]] = {'X_only': False, 'drop_nan': False}
 

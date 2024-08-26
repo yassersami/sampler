@@ -17,7 +17,7 @@
       "apply": true,
       "exclusion_radius": 1e-5
     },
-    "gpc_inlier_bstd": {
+    "outlier_gpc": {
       "apply": false
     }
   }

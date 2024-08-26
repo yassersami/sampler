@@ -29,21 +29,21 @@ class BaseFOMTerm(ABC):
         self.apply = apply
     
     @classmethod
-    def _set_registry_name(cls, name: str):
-        """Set the registry name for this FOM term."""
-        cls._registry_name = name
+    def _set_term_name(cls, name: str):
+        """Set term name used in FOM TERM_CLASSES."""
+        cls._term_name = name
     
     @property
     def score_names(self) -> List[str]:
         """
         Return the names of the scores produced by this term.
         
-        By default, it returns a list with the registry name.
+        By default, it returns a list with the term name.
         Override this property in subclasses if you need multiple score_names.
         """
-        if self._registry_name is None:
+        if self._term_name is None:
             raise ValueError("This FOM term has not been registered with a name.")
-        return [self._registry_name]
+        return [self._term_name]
 
     def _validate_predicted_score(
         self,
@@ -179,17 +179,11 @@ FOMTermType = Union[Type[FittableFOMTerm], Type[NonFittableFOMTerm]]
 FOMTermInstance = Union[FittableFOMTerm, NonFittableFOMTerm]
 
 
-class FOMTermRegistry:
-    _registry: Dict[str, FOMTermType] = {}
-
-    @classmethod
-    def register(cls, name: str):
-        def decorator(term_class: FOMTermType) -> FOMTermType:
-            cls._registry[name] = term_class
-            term_class._set_registry_name(name)
-            return term_class
-        return decorator
-
-    @classmethod
-    def get_term(cls, name: str) -> FOMTermType:
-        return cls._registry.get(name)
+class FOMTermAccessor:
+    def __init__(self, terms: Dict[str, FOMTermInstance]):
+        self._terms = terms
+    
+    def __getattr__(self, name):
+        if name not in self._terms:
+            raise AttributeError(f"Term '{name}' is not active or does not exist.")
+        return self._terms[name]

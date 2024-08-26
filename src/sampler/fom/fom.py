@@ -3,21 +3,27 @@ import numpy as np
 import pandas as pd
 import json
 
-from .base import FittableFOMTerm, FOMTermType, FOMTermInstance, FOMTermRegistry
-from .surrogate import SurrogateGPRTerm, InlierOutlierGPCTerm
-from .spatial import OutlierProximityDetectorTerm, SigmoidLocalDensityTerm
+from .base import FittableFOMTerm, FOMTermAccessor, FOMTermType, FOMTermInstance
+from .surrogate import SurrogateGPRTerm, OutlierGPCTerm
+from .spatial import OutlierProximityTerm, SigmoidLocalDensityTerm
 
 
 class FigureOfMerit:
+    TERM_CLASSES: Dict[str, FOMTermType] = {
+        'surrogate_gpr': SurrogateGPRTerm,
+        'sigmoid_density': SigmoidLocalDensityTerm,
+        'outlier_proximity': OutlierProximityTerm,
+        'outlier_gpc': OutlierGPCTerm,
+    }
+
     def __init__(
         self,
         interest_region: Dict[str, Tuple[float, float]],
-        terms_config: Dict[str, Dict[str, Union[float, str]]]
+        terms_config: Dict[str, Dict]
     ):
         self.interest_region = interest_region
-        
         self.terms_config = terms_config
-        self.terms: Dict[str, FOMTermInstance] = {}  # Only active terms
+        self._terms: Dict[str, FOMTermInstance] = {}
         
         self.n_samples = None
         self.n_features = None
@@ -25,17 +31,23 @@ class FigureOfMerit:
         
         # Set terms
         for term_name, term_args in self.terms_config.items():
-            TermClass = FOMTermRegistry.get_term(term_name)
+            TermClass = self.TERM_CLASSES.get(term_name)
             self._validate_term(term_name, term_args, TermClass)
-            
-            if term_args['apply']:
+
+            if term_args.get('apply', False):
+                # Set term name class attribute
+                TermClass._set_term_name(term_name)
+
                 # Add required args from self
                 term_args.update({
                     arg: getattr(self, arg) for arg in TermClass.required_args
                 })
 
                 # Initialize the term instance
-                self.terms[term_name] = TermClass(**term_args)
+                self._terms[term_name] = TermClass(**term_args)
+
+        # Create the accessor
+        self.terms = FOMTermAccessor(self._terms)
 
     def _validate_term(
         self, term_name: str, term_args: Dict[str, Union[float, str]],
@@ -88,7 +100,7 @@ class FigureOfMerit:
         self.n_features = X.shape[1]
         self.n_targets = n_targets
 
-        for term in self.terms.values():
+        for term in self._terms.values():
             if isinstance(term, FittableFOMTerm):
                 fit_params = term.fit_params
 
@@ -126,7 +138,7 @@ class FigureOfMerit:
 
     def predict_score(self, X: np.ndarray) -> np.ndarray:
         all_scores = []
-        for term in self.terms.values():
+        for term in self._terms.values():
             scores = term.predict_score(X)
             if isinstance(scores, tuple):
                 all_scores.extend(scores)
@@ -136,7 +148,7 @@ class FigureOfMerit:
 
     def predict_scores_df(self, X: np.ndarray) -> pd.DataFrame:
         scores_dict = {}
-        for term in self.terms.values():
+        for term in self._terms.values():
             scores = term.predict_score(X)
             score_names = term.score_names
             if isinstance(scores, np.ndarray):
@@ -147,12 +159,12 @@ class FigureOfMerit:
 
     def get_score_names(self) -> List[str]:
         score_names = []
-        for term in self.terms.values():
+        for term in self._terms.values():
             score_names.extend(term.score_names)
         return score_names
 
     def get_parameters(self) -> Dict[str, Dict[str, Any]]:
-        return {name: term.get_parameters() for name, term in self.terms.items()}
+        return {name: term.get_parameters() for name, term in self._terms.items()}
     
     def get_parameters_str(self) -> str:
         return json.dumps(

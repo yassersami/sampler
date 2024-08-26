@@ -12,12 +12,8 @@ import pandas as pd
 from sampler.common.data_treatment import DataTreatment, initialize_dataset
 from sampler.common.storing import parse_results
 from sampler.common.simulator import SimulationProcessor
-from sampler.fom.base import FigureOfMerit
+from sampler.fom.fom import FigureOfMerit
 from sampler.fom.optimizer import SHGOOptimizer
-
-# These are to activate FOMTermRegistry decorators
-from sampler.fom.surrogate import SurrogateGPRTerm
-from sampler.fom.spatial import SigmoidLocalDensityTerm, OutlierProximityDetectorTerm
 
 
 def irbs_sampling(
@@ -86,10 +82,10 @@ def irbs_sampling(
         new_df = pd.concat([new_df, scores], axis=1, join='inner', ignore_index=False)
 
         # Add maximum found value for surrogate GP combined std
-        new_df['max_std'] = model.terms['surrogate_gpr'].max_std
+        new_df['max_std'] = model.terms.surrogate_gpr.max_std
 
         # Add model prediction to selected (already simulated) points
-        prediction = model.terms['surrogate_gpr'].predict(new_df[features].values)
+        prediction = model.terms.surrogate_gpr.predict(new_df[features].values)
         prediction_cols = [f"pred_{t}" for t in targets]
         new_df[prediction_cols] = np.atleast_2d(prediction)
 

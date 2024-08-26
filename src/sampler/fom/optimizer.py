@@ -5,7 +5,7 @@ import pandas as pd
 from scipy.optimize import shgo
 from sko.GA import GA
 
-from .base import FOM
+from .fom import FigureOfMerit
 
 class MultiModalOptimizer(ABC):
     def __init__(self, batch_size):
@@ -13,12 +13,12 @@ class MultiModalOptimizer(ABC):
         self.n_features = None
 
     @abstractmethod
-    def optimize(self, fom: FOM) -> Tuple[np.ndarray, pd.DataFrame]:
+    def optimize(self, fom: FigureOfMerit) -> Tuple[np.ndarray, pd.DataFrame]:
         self.n_features = fom.n_features
         bounds = [(0, 1)]*self.n_features
         pass
 
-    def objective_function(self, x: np.ndarray, fom: FOM) -> float:
+    def objective_function(self, x: np.ndarray, fom: FigureOfMerit) -> float:
         return fom.predict_score(x.reshape(1, -1)).item()
 
 
@@ -52,7 +52,7 @@ class SHGOOptimizer(MultiModalOptimizer):
         else:
             return self.choose_min(size, unique_minimums)
 
-    def optimize(self, fom: FOM) -> Tuple[np.ndarray, pd.DataFrame]:
+    def optimize(self, fom: FigureOfMerit) -> Tuple[np.ndarray, pd.DataFrame]:
         print(
             f"SHGOOptimizer -> n: {self.n}, iters: {self.iters} - "
             "Searching for good candidates..."
@@ -90,7 +90,7 @@ class GAOptimizer(MultiModalOptimizer):
         self.size_pop = size_pop  # Population size
         self.max_iter = max_iter  # Number of generations
 
-    def optimize(self, fom: FOM):
+    def optimize(self, fom: FigureOfMerit):
 
         self.n_features = fom.n_features
 
