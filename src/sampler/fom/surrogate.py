@@ -138,7 +138,6 @@ class SurrogateGPRTerm(FittableFOMTerm, SurrogateGPR):
     
     def __init__(
         self,
-        apply: bool,
         apply_interest: bool,
         apply_std: bool,
         interest_region: Dict[str, Tuple[float, float]],
@@ -146,7 +145,6 @@ class SurrogateGPRTerm(FittableFOMTerm, SurrogateGPR):
         shgo_iters: int,
         **gpr_kwargs
     ):
-        FittableFOMTerm.__init__(self, apply=apply)
         SurrogateGPR.__init__(
             self, interest_region=interest_region,
             shgo_n=shgo_n, shgo_iters=shgo_iters,

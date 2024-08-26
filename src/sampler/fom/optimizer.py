@@ -1,11 +1,13 @@
-from typing import List, Tuple, Dict, Union, Optional, ClassVar
+from typing import List, Dict, Tuple, Type, Union, Optional, ClassVar
 from abc import ABC, abstractmethod
 import numpy as np
 import pandas as pd
+from scipy.spatial.distance import pdist
 from scipy.optimize import shgo
 from sko.GA import GA
 
 from .fom import FigureOfMerit
+
 
 class MultiModalOptimizer(ABC):
     def __init__(self, batch_size):
@@ -22,9 +24,46 @@ class MultiModalOptimizer(ABC):
         return fom.predict_score(x.reshape(1, -1)).item()
 
 
+class OptimizerFactory:
+    _optimizers: Dict[str, Type[MultiModalOptimizer]] = {}
+
+    @classmethod
+    def register(cls, name: str):
+        def decorator(optimizer_class: Type[MultiModalOptimizer]):
+            cls._optimizers[name] = optimizer_class
+            return optimizer_class
+        return decorator
+
+    @classmethod
+    def create_from_config(cls, batch_size: int, optimizer_config: Dict[str, Dict]) -> MultiModalOptimizer:
+         # Check if all configs have the 'apply' key
+        for name, config in optimizer_config.items():
+            if 'apply' not in config:
+                raise KeyError(f"Optimizer '{name}' is missing the 'apply' key in its configuration.")
+
+        applied_optimizers = [name for name, config in optimizer_config.items() if config['apply']]
+        
+        if len(applied_optimizers) != 1:
+            raise ValueError(f"Exactly one optimizer must be applied. Found {len(applied_optimizers)}")
+        
+        optimizer_name = applied_optimizers[0]
+        optimizer_args = optimizer_config[optimizer_name]
+        optimizer_args.pop('apply')
+        
+        if optimizer_name not in cls._optimizers:
+            raise ValueError(f"Unknown optimizer: {optimizer_name}")
+        
+        return cls._optimizers[optimizer_name](batch_size=batch_size, **optimizer_args)
+
+    @classmethod
+    def list_optimizers(cls):
+        return list(cls._optimizers.keys())
+
+
+@OptimizerFactory.register("shgo")
 class SHGOOptimizer(MultiModalOptimizer):
 
-    def __init__(self, batch_size, n=100, iters=1):
+    def __init__(self, batch_size: int, n: int, iters: int):
         super().__init__(batch_size)
         self.n = n
         self.iters = iters
@@ -58,12 +97,11 @@ class SHGOOptimizer(MultiModalOptimizer):
             "Searching for good candidates..."
         )
 
-        self.n_features = fom.n_features
-        bounds = [(0, 1)]*self.n_features
+        self.n_features = fom.n_features  # Used in self.sort_by_relevance
         
         result = shgo(
             lambda x: -self.objective_function(x, fom),  # Negate here for minimization
-            bounds,
+            [(0, 1)]*self.n_features,
             n=self.n,
             iters=self.iters,
             sampling_method='simplicial'
@@ -84,34 +122,34 @@ class SHGOOptimizer(MultiModalOptimizer):
         return X_candidates, df_scores
 
 
+@OptimizerFactory.register("ga")
 class GAOptimizer(MultiModalOptimizer):
-    def __init__(self, bounds, batch_size, size_pop=50, max_iter=100):
-        super().__init__(bounds, batch_size)
-        self.size_pop = size_pop  # Population size
-        self.max_iter = max_iter  # Number of generations
+    def __init__(self, batch_size: int, population_size: int, generations: int):
+        super().__init__(batch_size)
+        self.population_size  = population_size
+        self.generations = generations
 
     def optimize(self, fom: FigureOfMerit):
+        print(
+            f"GAOptimizer -> population_size: {self.population_size}, generations: {self.generations} - "
+            "Searching for good candidates..."
+        )
 
         self.n_features = fom.n_features
 
         ga = GA(
             func=lambda x: self.objective_function(x, fom),  # No negation needed
             n_dim=self.n_features, 
-            size_pop=self.size_pop,
-            max_iter=self.max_iter, 
+            size_pop=self.population_size ,
+            max_iter=self.generations, 
             prob_mut=0.1,
             lb=[0] * self.n_features,  # Lower bounds
             ub=[1] * self.n_features  # Upper bounds
         )
-        
-        print(
-            f"GAOptimizer -> size_pop: {self.size_pop}, max_iter: {self.max_iter} - "
-            "Searching for good candidates. size_pop"
-        )
 
         ga.run()
         population = ga.chrom2x(ga.Chrom)
-        score = np.array([fom.predict_score(ind) for ind in population])
+        score = np.array([fom.predict_score(ind).item() for ind in population])
         sorted_indices = np.argsort(score)
 
         best_indices = sorted_indices[:self.batch_size]
@@ -130,24 +168,28 @@ class GAOptimizer(MultiModalOptimizer):
         return X_candidates, df_scores
 
 
-import numpy as np
-from scipy.optimize import shgo
-from scipy.spatial.distance import pdist, squareform
-
-class SHGOOptimizer_TODO(MultiModalOptimizer):
-    def __init__(self, bounds, batch_size, n=100, iters=1, diversity_threshold=0.1):
-        super().__init__(bounds, batch_size)
+@OptimizerFactory.register("shgo_2")
+class SHGOOptimizer_2(MultiModalOptimizer):
+    def __init__(self, batch_size, n, iters, diversity_threshold):
+        super().__init__(batch_size)
         self.n = n
         self.iters = iters
         self.diversity_threshold = diversity_threshold
 
     def optimize(self, fom):
+        print(
+            f"SHGOOptimizer_2 -> n: {self.n}, iters: {self.iters}, diversity_threshold: {self.diversity_threshold} - "
+            "Searching for good candidates..."
+        )
+
+        self.n_features = fom.n_features
+
         result = shgo(
             lambda x: -self.objective_function(x, fom),  # Negate for minimization
-            self.bounds, 
+            [(0, 1)]*self.n_features,
             n=self.n, 
             iters=self.iters, 
-            options={'ftol': 1e-6, 'maxev': 1000}
+            # options={'ftol': 1e-6, 'maxev': 1000}
         )
 
         # Get all local minima found by SHGO
@@ -178,7 +220,15 @@ class SHGOOptimizer_TODO(MultiModalOptimizer):
             remaining_indices = set(range(len(candidates))) - set(selected_indices)
             selected_indices.append(min(remaining_indices, key=lambda i: scores[i]))
 
-        selected_candidates = candidates[selected_indices]
-        selected_scores = scores[selected_indices]
+        X_candidates = candidates[selected_indices]
+        df_scores = fom.predict_scores_df(X_candidates)
+        
+        feature_cols = [f'feature_{i+1}' for i in range(fom.n_features)]
+        df_candidates = pd.DataFrame(X_candidates, columns=feature_cols)
+        df_print = pd.concat([df_candidates, df_scores], axis=1, ignore_index=False)
+        print(
+            "SHGOOptimizer_2 -> Selected points to be input to the simulator:\n",
+            df_print
+        )
 
-        return selected_candidates, selected_scores
+        return X_candidates, df_scores

@@ -33,8 +33,9 @@ class FigureOfMerit:
         for term_name, term_args in self.terms_config.items():
             TermClass = self.TERM_CLASSES.get(term_name)
             self._validate_term(term_name, term_args, TermClass)
+            apply = term_args.pop('apply')
 
-            if term_args.get('apply', False):
+            if apply:
                 # Set term name class attribute
                 TermClass._set_term_name(term_name)
 

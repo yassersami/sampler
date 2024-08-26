@@ -20,8 +20,7 @@ class SigmoidLocalDensityTerm(FittableFOMTerm):
     """
     fit_params: ClassVar[Dict[str, bool]] = {'X_only': True, 'drop_nan': False}
 
-    def __init__(self, apply: bool, decay_dist: float = 0.04):
-        super().__init__(apply=apply)
+    def __init__(self, decay_dist: float = 0.04):
         self.decay_dist = decay_dist
         self.dataset_points = None
     
@@ -96,8 +95,7 @@ class OutlierProximityTerm(FittableFOMTerm):
     
     fit_params: ClassVar[Dict[str, bool]] = {'X_only': False, 'drop_nan': False}
 
-    def __init__(self, apply: bool, exclusion_radius: float = 1e-5):
-        super().__init__(apply=apply)
+    def __init__(self, exclusion_radius: float = 1e-5):
         self.exclusion_radius = exclusion_radius
         self.outlier_points = None
     

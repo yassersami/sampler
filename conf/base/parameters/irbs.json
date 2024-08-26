@@ -1,7 +1,17 @@
 {
-  "irbs_shgo": {"n": 1000, "iters": 5},
-  "irbs_ga": {"size_pop": 20, "max_iter": 1000},
-  "irbs_fom_terms": {
+  "irbs_optimizer_config": {
+    "shgo": {
+        "apply": true,
+        "n": 1000,
+        "iters": 5
+    },
+    "ga": {
+        "apply": false,
+        "population_size": 20,
+        "generations": 1000
+    }
+  },
+  "irbs_fom_terms_config": {
     "surrogate_gpr": {
       "apply": true,
       "apply_interest": true,

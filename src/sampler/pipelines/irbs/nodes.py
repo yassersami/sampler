@@ -13,24 +13,24 @@ from sampler.common.data_treatment import DataTreatment, initialize_dataset
 from sampler.common.storing import parse_results
 from sampler.common.simulator import SimulationProcessor
 from sampler.fom.fom import FigureOfMerit
-from sampler.fom.optimizer import SHGOOptimizer
+from sampler.fom.optimizer import OptimizerFactory
 
 
 def irbs_sampling(
     data: pd.DataFrame, treatment: DataTreatment,
     features: List[str], targets: List[str], additional_values: List[str],
     simulator_env: Dict, batch_size: int, run_condition: Dict,
-    fom_terms: Dict, shgo_args: Dict[str, int]
+    fom_terms_config: Dict[str, Dict], optimizer_config: Dict[str, Dict]
 ):
 
     # Set figure of merite (acquisition function)
     model = FigureOfMerit(
         interest_region=treatment.scaled_interest_region,
-        terms_config=fom_terms
+        terms_config=fom_terms_config
     )
 
     # Set optimizer
-    optimizer = SHGOOptimizer(batch_size, **shgo_args)
+    optimizer = OptimizerFactory.create_from_config(batch_size, optimizer_config)
 
     # Set simulator environement
     simulator = SimulationProcessor(
@@ -52,7 +52,7 @@ def irbs_sampling(
     n_total = 0  # counting all simulations
     n_inliers = 0  # counting only inliers
     n_interest = 0  # counting only interesting inliers
-    iteration = 0
+    iteration = 1
     should_continue = True
 
     # Initialize tqdm progress bar with estimated time remaining
@@ -62,6 +62,7 @@ def irbs_sampling(
     )
 
     while should_continue:
+        print(f"\nRound {iteration:03} (start) " + "-"*78)
         # Set the new model that will be used in next iteration
         model.fit(X=res[features].values, y=res[targets].values)
 
@@ -71,8 +72,8 @@ def irbs_sampling(
         # Launch time expensive simulations
         new_df = simulator.process_data(new_x, real_x=False, index=n_total, treat_output=True)
 
-        print(f'Round {iteration:03} (continued): simulation results' + '-'*49)
-        print(f'irbs_sampling -> New samples after simulation:\n {new_df}')
+        print(f"Round {iteration:03} (continued) - simulation results " + "-"*37)
+        print(f"irbs_sampling -> New samples after simulation:\n {new_df}")
 
         # ----- Add more cols than features, targets and additional_values -----
 
@@ -113,8 +114,13 @@ def irbs_sampling(
         n_interest += n_new_interest
         iteration += 1
 
-        # Update progress bar based on the condition
-        progress_bar.update(n_new_inliers if run_until_max_size else n_new_interest)
+        # Print iteration details
+        print(
+            f"Round {iteration - 1:03} (end) - Report count: "
+            f"Total: {n_total}, "
+            f"Inliers: {n_inliers}, "
+            f"Interest: {n_interest}"
+        )
 
         # Determine the end condition
         should_continue = (
@@ -122,12 +128,10 @@ def irbs_sampling(
             (n_interest < n_interest_max)
         )
 
-        # Print iteration details
-        print(
-            f"Report count of iteration {iteration - 1:03}: "
-            f"Total: {n_total}, "
-            f"Inliers: {n_inliers}, "
-            f"Interest: {n_interest}"
+        # Update progress bar based on the condition
+        progress_bar.update(
+            n_new_inliers - max(0, n_inliers - max_size) if run_until_max_size else
+            n_new_interest - max(0, n_interest - n_interest_max)
         )
     progress_bar.close()
 

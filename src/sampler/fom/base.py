@@ -16,17 +16,9 @@ class BaseFOMTerm(ABC):
         be provided by the FOM class, not from the JSON config. For example:
         ['features', 'targets', 'interest_region']. Subclasses should override
         this list as needed.
-
-    Attributes:
-        - apply (bool): Whether this term is active in FOM calculations. Set
-        during initialization based on the pipeline JSON configuration.
-
     """
 
     required_args: ClassVar[List[str]] = []
-
-    def __init__(self, apply: bool):
-        self.apply = apply
     
     @classmethod
     def _set_term_name(cls, name: str):
@@ -132,9 +124,6 @@ class FittableFOMTerm(BaseFOMTerm):
         Inherits all attributes from BaseFOMTerm.
     """
     fit_params: ClassVar[Dict[str, Optional[bool]]] = {'X_only': None, 'drop_nan': None}
-    
-    def __init__(self, apply: bool):
-        super().__init__(apply=apply)
 
     @classmethod
     def _validate_fit_params(cls) -> None:
@@ -168,8 +157,6 @@ class NonFittableFOMTerm(BaseFOMTerm):
     Non-fittable terms are typically used for static calculations or
     predefined metrics that don't need to be trained on data.
     """
-    def __init__(self, apply: bool):
-        super().__init__(apply=apply)
 
 
 # Create custom type for classes

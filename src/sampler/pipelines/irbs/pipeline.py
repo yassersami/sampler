@@ -26,8 +26,8 @@ def create_pipeline(**kwargs) -> Pipeline:
                 batch_size='params:batch_size',
                 run_condition='params:run_condition',
                 
-                fom_terms='params:irbs_fom_terms',
-                shgo_args='params:irbs_shgo',
+                fom_terms_config='params:irbs_fom_terms_config',
+                optimizer_config='params:irbs_optimizer_config',
             ),
             outputs='irbs_history',
             name='irbs_sampling',
