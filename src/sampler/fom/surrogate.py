@@ -279,7 +279,7 @@ class GPCModel(GaussianProcessClassifier):
         return f_star, np.sqrt(var_f_star)
 
 
-class InlierOutlierGPC(GPCModel):
+class InlierOutlierGPCTerm(GPCModel):
     def __init__(self, kernel=None):
         if kernel is None:
             kernel = 1.0 * RBF(length_scale=1.0)

@@ -1,333 +1,162 @@
-from typing import List, Tuple, Dict, Union
+from typing import List, Tuple, Dict, Union, Type, Any, Optional, ClassVar
 import numpy as np
 import pandas as pd
-from scipy.optimize import shgo
+import json
 
-from .surrogate import SurrogateGPR, InlierOutlierGPC
-from .spatial import OutlierProximityDetector, SigmoidLocalDensity
-
-
-def zeros_like_rows(x: np.ndarray) -> np.ndarray:
-    x = np.atleast_2d(x)
-    return np.zeros(x.shape[0])
+from .base import FittableFOMTerm, FOMTermType, FOMTermInstance, FOMTermRegistry
+from .surrogate import SurrogateGPRTerm, InlierOutlierGPCTerm
+from .spatial import OutlierProximityDetectorTerm, SigmoidLocalDensityTerm
 
 
 class FigureOfMerit:
-    """
-    The FigureOfMerit class (also called acquisition function) is responsible
-    for evaluating and selecting interesting candidates for simulation in the
-    adaptive sampling process.
-
-    This class uses a Gaussian Process model to assess the potential value
-    of sampling points based on criteria such as standard deviation, interest,
-    and local density. The evaluation is guided by specified FOM terms and
-    regions of interest, allowing for dynamic and informed decision-making
-    in the sampling strategy.
-
-    Attributes:
-        - gp_surrogate (SurrogateGPR): A surrogate model used to identify
-        unexplored areas
-        by evaluating the standard deviation, focusing on interesting pointsfor
-        further exploration. This model does not train on outliers or errors,
-        necessitating an alternative method for avoiding poor regions.
-        - gp_classifier (InlierOutlierGPC): A classifier designed to detect
-        unexplored inlierregions by assessing the standard deviation. It aids in
-        identifying promisingareas while ensuring that regions with potential
-        errors or outliers are avoided.
-    """
-
     def __init__(
-        self, features: List[str], targets: List[str],
-        terms: Dict[str, Dict], interest_region: Dict[str, Tuple[float, float]]
+        self,
+        interest_region: Dict[str, Tuple[float, float]],
+        terms_config: Dict[str, Dict[str, Union[float, str]]]
     ):
-        """
-        Initializes the FigureOfMerit class.
+        self.interest_region = interest_region
+        
+        self.terms_config = terms_config
+        self.terms: Dict[str, FOMTermInstance] = {}  # Only active terms
+        
+        self.n_samples = None
+        self.n_features = None
+        self.n_targets = None
+        
+        # Set terms
+        for term_name, term_args in self.terms_config.items():
+            TermClass = FOMTermRegistry.get_term(term_name)
+            self._validate_term(term_name, term_args, TermClass)
+            
+            if term_args['apply']:
+                # Add required args from self
+                term_args.update({
+                    arg: getattr(self, arg) for arg in TermClass.required_args
+                })
 
-        Parameters:
-        - features: List of feature column names.
-        - targets: List of target column names.
-        - terms: Terms of FOM such as for standard deviation, interest, and
-        local density calculations.
-        - interest_region: Parameters defining the region of interest.
-        """
-        # Initialize GP surrogate model
-        self.gp_surrogate = SurrogateGPR(features, targets, interest_region)
-        
-        # Instanciate Simdmoig local density
-        self.sigmoid = SigmoidLocalDensity()
-        
-        # Initialize outliers handler
-        self.outlier_detector = OutlierProximityDetector(features, targets)
-        
-        # Initialize GP fitted on 0|1 values
-        self.gp_classifier = InlierOutlierGPC()
-        
-        # Data attributes
-        self.features = features
-        self.targets = targets
-        self.data = None
-        
-        # Store terms kwargs 
-        self.terms = terms
+                # Initialize the term instance
+                self.terms[term_name] = TermClass(**term_args)
 
-        # Set terms calculation methods
-        # self.set_fom()
-        self.set_std(**terms["std"])
-        self.set_interest(**terms["interest"])
-        self.set_local_density(**terms["local_density"])
-        self.set_outlier_proximity(**terms["outlier_proximity"])
-        self.set_inlier_bstd(**terms["inlier_bstd"])
+    def _validate_term(
+        self, term_name: str, term_args: Dict[str, Union[float, str]],
+        TermClass: Union[FOMTermType, None]
+    ) -> None:
+        """
+        Validate the arguments for a FOM term.
+
+        This method checks if:
+        1. The 'apply' parameter is present in term_args.
+        2. The TermClass is not None if the term is to be used.
+        3. All required arguments for the term are available in the FOM instance.
+        4. If FittableFOMTerm, check fit_parms are all booleans.
         
-    def update(self, data: pd.DataFrame, optimizer_kwargs: Dict):
+        Raises:
+            ValueError: If any validation check fails.
         """
-        Updates the Gaussian Process model with new data, excluding rows with
-        NaN target values.
-
-        Parameters:
-        - data (DataFrame): Total available data.
-        """
-        # Update current available dataset
-        self.data = data
-
-        # Filter out rows with NaN target values for GP training
-        if self.terms["std"]["apply"] or self.terms["interest"]["apply"]:
-            clean_regr_data = data.dropna(subset=self.targets)
-            self.gp_surrogate.fit(
-                X=clean_regr_data[self.features].values,
-                y=clean_regr_data[self.targets].values
+        if 'apply' not in term_args:
+            raise ValueError(
+                f"Term '{term_name}' is missing the required 'apply' parameter"
             )
-            if self.terms["std"]["apply"]:
-                # Update max_std of current surrogate GP
-                self.gp_surrogate.update_max_std(**optimizer_kwargs)
+        if term_args['apply']:
+            # Check if TermClass exists
+            if TermClass is None:
+                raise ValueError(f"Unknown term: {term_name}")
 
-        # Give sigmoide dataset points
-        if self.terms["sigmoid_density"]["apply"]:
-            self.sigmoid.fit(X=data[self.features].values)
+            # Check if required args from FOM are available
+            for arg in TermClass.required_args:
+                if not hasattr(self, arg):
+                    raise ValueError(
+                        f"Required argument '{arg}' for term '{term_name}' is "
+                        "not available in FOM"
+                    )
 
-        # Train another GP to find unexplored inlier regions
-        if self.terms["inlier_bstd"]["apply"]:
-            self.gp_classifier.fit(
-                X=data[self.features].values,
-                y=data[self.targets].values
-            )
+            # If fittable term, check if fit_params are well defined
+            if issubclass(TermClass, FittableFOMTerm):
+                TermClass._validate_fit_params()
 
-        # Train KDE
-        # if self.terms["kde"]["apply"]:
-        #     self.kde.fit(data[self.features].values)
-        #     # Update minimum density for normalization
-        #     self.kde.update_min_density(**optimizer_kwargs)
+    def fit(self, X: np.ndarray, y: np.ndarray) -> None:
 
-    def set_fom(self):
-        # def score_to_loss(x: np.ndarray) -> np.ndarray: return 1-x
+        # Check if y is 1D or 2D
+        if y.ndim == 1:
+            n_targets = 1
+        elif y.ndim == 2:
+            n_targets = y.shape[1]
+        else:
+            raise ValueError(f"Unexpected shape for y: {y.shape}")
+
+        self.n_samples = X.shape[0]
+        self.n_features = X.shape[1]
+        self.n_targets = n_targets
+
+        for term in self.terms.values():
+            if isinstance(term, FittableFOMTerm):
+                fit_params = term.fit_params
+
+                # Adapt input data for fittable term
+                if fit_params['X_only']:
+                    term.fit(X)
+                elif fit_params['drop_nan']:
+                    X_clean, y_clean = self._drop_target_nans(X, y)
+                    term.fit(X_clean, y_clean)
+                else:
+                    term.fit(X, y)
+
+                # Validate scoring process
+                dummy_X = X[:5]
+                dummy_score = term.predict_score(dummy_X)
+                term._validate_predicted_score(dummy_X, dummy_score)
+
+    @staticmethod
+    def _drop_target_nans(X: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Drop rows with NaN values in the target (y) and corresponding rows in
+        features (X). We only check for NaNs in y because the pipeline ensures X
+        doesn't contain NaNs.
+        """
+        # Find rows where y is not NaN
+        if y.ndim == 1:
+            valid_rows = ~np.isnan(y)
+        elif y.ndim == 2:
+            valid_rows = ~np.isnan(y).any(axis=1)
+        else:
+            raise ValueError(f"Unexpected shape for y: {y.shape}")
+            
+        # Apply the mask to both X and y
+        return X[valid_rows], y[valid_rows]
+
+    def predict_score(self, X: np.ndarray) -> np.ndarray:
+        all_scores = []
+        for term in self.terms.values():
+            scores = term.predict_score(X)
+            if isinstance(scores, tuple):
+                all_scores.extend(scores)
+            else:
+                all_scores.append(scores)
+        return np.sum(all_scores, axis=0)
+
+    def predict_scores_df(self, X: np.ndarray) -> pd.DataFrame:
+        scores_dict = {}
+        for term in self.terms.values():
+            scores = term.predict_score(X)
+            score_names = term.score_names
+            if isinstance(scores, np.ndarray):
+                scores = (scores,)  # Convert single array to tuple for consistent handling
+            for score, score_name in zip(scores, score_names):
+                scores_dict[score_name] = score
+        return pd.DataFrame(scores_dict)
+
+    def get_score_names(self) -> List[str]:
+        score_names = []
+        for term in self.terms.values():
+            score_names.extend(term.score_names)
+        return score_names
+
+    def get_parameters(self) -> Dict[str, Dict[str, Any]]:
+        return {name: term.get_parameters() for name, term in self.terms.items()}
     
-        # surrogate_gpr_std (SurrogateGPR): 1 - self.surrogate_gpr.get_norm_std
-        # surrogate_gpr_interest (SurrogateGPR): 1 - self.surrogate_gpr.predict_interest_proba
-
-        # sigmoid_density: compute_sigmoid_local_density
-        # outlier_proximity (OutlierProximityDetector):  self.outlier_detector.detect_outlier_proximity
-        # gpc_inlier_bstd (InlierOutlierGPC): 1 - get_inlier_bstd
-        # gpc_inlier_entropy (InlierOutlierGPC): 1 - get_inlier_entropy
-        
-        # surrogate_gpc_std SurrogateGPC
-        # surrogate_gpc_std (SurrogateGPC): 1 - self.surrogate_gpc.get_norm_std
-        # surrogate_gpc_interest (SurrogateGPC): 1 - self.surrogate_gpc.predict_interest_proba
-        # surrogate_gpc_inlier (SurrogateGPC): 1 - self.surrogate_gpc.get_inlier_bstd
-        
-        # SurrogateMLPC
-        # KDE.predict_score
-        
-        # Chose interest
-        # Chose density
-        # Chose optimizer
-        
-        # self.active_terms = {
-        #     k: d["kwargs"] for k, d in self.terms.items() if d["apply"]
-        # }
-        pass
-
-    def set_std(self, apply: bool) -> callable:
-        """
-        Set the standard deviation function, encourges to find points with high
-        uncertainty. Computes the combined standard deviation over all target
-        dimensions for a given input x and stretches it to reach the entire
-        range of [0, 1].
-        """
-        def std(x):
-            loss = 1 - self.gp_surrogate.get_norm_std(x)
-            return loss
-        
-        if apply:
-            self.calc_std = std
-        else:
-            self.calc_std = zeros_like_rows
-
-    def set_interest(self, apply: bool) -> callable:
-        """
-        Given an n-dimensional x returns the sum of the probabilities to be in
-        the interest region.
-        """
-        
-        def interest(x):
-            # Minimize loss to maximize probability of being interest region
-            loss = 1 - self.gp_surrogate.predict_interest_proba(x)
-            return loss
-        
-        if apply:
-            self.calc_interest = interest
-        else:
-            self.calc_interest = zeros_like_rows
-
-    def set_local_density(
-        self, apply: bool, decay_dist: float
-    ) -> callable:
-        """
-        Set the local density function, which penalizes near points in already
-        crowded region, promoting the exploration (coverage) of the space.
-        """
-        
-        def space_local_density(x: np.ndarray):
-            dataset_points = self.data[self.features].values
-            self.sigmoid.decay_dist = decay_dist
-            loss = self.sigmoid.predict_score(x)
-            return loss
-        
-        if apply:
-            self.calc_local_density = space_local_density
-        else:
-            self.calc_local_density = zeros_like_rows
-
-    def set_outlier_proximity(
-        self, apply: bool, exclusion_radius: float
-    ) -> callable:
-        """
-        Proximity Exclusion Condition: Determine if the given points are near
-        any pointswith erroneous simulations. Points located within a very small
-        vicinity around outliers are excluded from further processing. This
-        condition is necessary because the surrogate GP does not update around
-        failed samples.
-        """
-
-        def outlier_proximity(x: np.ndarray) -> np.ndarray:
-            # Get boolean array of candidates too close to an outlier
-            should_ignore = self.outlier_detector.predict_score(
-                x, exclusion_radius
-            )
-            # if sample is bad (near outlier), loss is 1, and 0 if not
-            loss = should_ignore.astype(float)
-
-            return loss
-    
-        if apply:
-            self.calc_outlier_proximity = outlier_proximity
-        else:
-            self.calc_outlier_proximity = zeros_like_rows
-
-    def set_inlier_bstd(self, apply: bool) -> callable:
-        """
-        Set the loss from InlierOutlierGPC. This classifier predicts whether a
-        sample is an inlier or outlier. It trains on all data, not just inliers
-        like the SurrogateGPR class. It calculates losses based on inlier
-        probability and Bernoulli standard deviation.
-        """
-        
-        def inlier_bstd(x):
-            loss = 1 - self.gp_classifier.get_inlier_bstd(x)
-            return loss
-    
-        if apply:
-            self.calc_inlier_bstd = inlier_bstd
-        else:
-            self.calc_inlier_bstd = zeros_like_rows
-
-    def target_function(self, x: np.ndarray) -> float:
-        """
-        Acquisition function.
-        Each term can be independently turned on or off from conf file.
-        """
-        x = np.atleast_2d(x)
-        assert x.shape[0] == 1, "Input x must be a single point!"
-
-        loss = (
-            self.calc_std(x)
-            + self.calc_interest(x)
-            + self.calc_local_density(x)
-            + self.calc_outlier_proximity(x)
-            + self.calc_inlier_bstd(x)
+    def get_parameters_str(self) -> str:
+        return json.dumps(
+            obj=self.get_parameters(),
+            default=lambda o: ' '.join(repr(o).split()),
+            indent=4
         )
-        return loss.item()
-    
-    def get_losses(self, new_xs: np.ndarray) -> pd.DataFrame:
-        new_xs = np.atleast_2d(new_xs)
-        losses = pd.DataFrame(
-            data=np.array([
-                self.calc_std(new_xs),
-                self.calc_interest(new_xs),
-                self.calc_local_density(new_xs),
-                self.calc_outlier_proximity(new_xs),
-                self.calc_inlier_bstd(new_xs),
-            ]).T,
-            columns=["std", "interest", "local_density", "exclusion", "inlier_bstd"]
-        )
-        return losses
-
-    def sort_by_relevance(self, mask: np.ndarray, unique_min: np.ndarray) -> List:
-        n_feat = len(self.features)
-        bounds = [[] for _ in range(n_feat + 1)]
-        for val, cond in zip(unique_min, mask):
-            cond_sum = cond.sum()
-            for local_sum in range(n_feat + 1):
-                if cond_sum == local_sum:
-                    bounds[local_sum].append(val)
-        return [item for val in bounds for item in val]
-
-    def choose_min(self, size: int, unique_min: np.ndarray) -> np.ndarray:
-        mask = (np.isclose(unique_min, 0) | np.isclose(unique_min, 1))
-        res = self.sort_by_relevance(mask, unique_min)
-        return np.array(res[:size])
-
-    def choose_results(self, minimums: np.ndarray, size: int) -> np.ndarray:
-        unique_min = np.unique(minimums, axis=0)
-        if size == 1:
-            return self.choose_min(1, unique_min)
-        elif len(unique_min) <= size:
-            return minimums
-        else:
-            return self.choose_min(size, unique_min)
-
-    def optimize(
-        self, batch_size: int = 1, shgo_iters: int = 5, shgo_n: int = 1000
-    ) -> Tuple[np.ndarray, pd.DataFrame]:
-        """
-        Optimize the FOM to find the best candidates for simulation.
-
-        Parameters:
-        - batch_size (int): Number of points to select for simulation.
-        - iters (int): Number of iterations used in the construction of the
-        simplicial complex of SHGO optimizer.
-        - n (int): Number of sampling points for the SHGO optimizer.
-
-        Returns:
-            Tuple[np.ndarray, pd.DataFrame]: Selected points and their losses.
-        """
-
-        print("FOM.optimize -> Searching for good candidates...")
-
-        bounds = [(0, 1)]*len(self.features)
-        
-        result = shgo(
-            self.target_function, bounds, iters=shgo_iters, n=shgo_n,
-            sampling_method='simplicial'
-        )
-        res = result.xl if result.success else result.x.reshape(1, -1)
-        new_xs = self.choose_results(minimums=res, size=batch_size)
-        
-        losses = self.get_losses(new_xs=new_xs)
-
-        df_new_xs = pd.DataFrame(new_xs, columns=self.features)
-        df_print = pd.concat([df_new_xs, losses], axis=1, ignore_index=False)
-        print(
-            "FOM.optimize -> Selected points to be input to the simulator:\n",
-            df_print
-        )
-
-        return new_xs, losses

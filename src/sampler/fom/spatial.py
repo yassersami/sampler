@@ -14,7 +14,7 @@ from .base import FittableFOMTerm, FOMTermRegistry
 RANDOM_STATE = 42
 
 @FOMTermRegistry.register("sigmoid_density")
-class SigmoidLocalDensity(FittableFOMTerm):
+class SigmoidLocalDensityTerm(FittableFOMTerm):
     """
     A fittable FOM term that computes the sigmoid local density.
     """
@@ -93,7 +93,7 @@ class SigmoidLocalDensity(FittableFOMTerm):
 
 
 @FOMTermRegistry.register("outlier_proximity")
-class OutlierProximityDetector(FittableFOMTerm):
+class OutlierProximityDetectorTerm(FittableFOMTerm):
     
     fit_params: ClassVar[Dict[str, bool]] = {'X_only': False, 'drop_nan': False}
 

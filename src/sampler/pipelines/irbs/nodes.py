@@ -12,12 +12,12 @@ import pandas as pd
 from sampler.common.data_treatment import DataTreatment, initialize_dataset
 from sampler.common.storing import parse_results
 from sampler.common.simulator import SimulationProcessor
-from sampler.fom.base import FOM
+from sampler.fom.base import FigureOfMerit
 from sampler.fom.optimizer import SHGOOptimizer
 
 # These are to activate FOMTermRegistry decorators
 from sampler.fom.surrogate import SurrogateGPRTerm
-from sampler.fom.spatial import SigmoidLocalDensity, OutlierProximityDetector
+from sampler.fom.spatial import SigmoidLocalDensityTerm, OutlierProximityDetectorTerm
 
 
 def irbs_sampling(
@@ -28,7 +28,7 @@ def irbs_sampling(
 ):
 
     # Set figure of merite (acquisition function)
-    model = FOM(
+    model = FigureOfMerit(
         interest_region=treatment.scaled_interest_region,
         terms_config=fom_terms
     )
