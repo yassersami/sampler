@@ -144,30 +144,30 @@ class ASVD:
         riqr_x = (np.percentile(self.simplices_volumes_x, 75) - np.percentile(self.simplices_volumes_x, 25))/simplices_mean_x
         riqr_xy = (np.percentile(self.simplices_volumes_xy, 75) - np.percentile(self.simplices_volumes_xy, 25))/simplices_mean_xy
         return {
-            "count": self.vertices_x.shape[0],
-            "sum_x": simplices_sum_x,
-            "sum_xy": simplices_sum_xy,
-            "mean_x": self.stars_volumes_x.mean(),  # Mean over number of vertices
-            "mean_xy": self.stars_volumes_xy.mean(),  # Mean over number of aumengted vertices
-            "sum_augm": sum_augm,
-            "rsd_x": rsd_x,
-            "rsd_xy": rsd_xy,
-            "rsd_augm": rsd_augm,
-            "riqr_x": riqr_x,
-            "riqr_xy": riqr_xy,
+            'count': self.vertices_x.shape[0],
+            'sum_x': simplices_sum_x,
+            'sum_xy': simplices_sum_xy,
+            'mean_x': self.stars_volumes_x.mean(),  # Mean over number of vertices
+            'mean_xy': self.stars_volumes_xy.mean(),  # Mean over number of aumengted vertices
+            'sum_augm': sum_augm,
+            'rsd_x': rsd_x,
+            'rsd_xy': rsd_xy,
+            'rsd_augm': rsd_augm,
+            'riqr_x': riqr_x,
+            'riqr_xy': riqr_xy,
         }
 
     def compute_statistics(self):
         # Simplex Volume scores dicts
         simplices_scores_x = describe_volumes(self.simplices_volumes_x)
         simplices_scores_xy = describe_volumes(self.simplices_volumes_xy)
-        simplices_scores_xy["sum_augm"] = simplices_scores_xy['sum'] / simplices_scores_x['sum']
-        simplices_scores_xy["rsd_augm"] = simplices_scores_xy['rsd'] - simplices_scores_x['rsd']
+        simplices_scores_xy['sum_augm'] = simplices_scores_xy['sum'] / simplices_scores_x['sum']
+        simplices_scores_xy['rsd_augm'] = simplices_scores_xy['rsd'] - simplices_scores_x['rsd']
         # Fractional Vertex Star Volume scores dicts
         stars_scores_x = describe_volumes(self.stars_volumes_x)
         stars_scores_xy = describe_volumes(self.stars_volumes_xy)
-        stars_scores_xy["sum_augm"] = stars_scores_xy['sum'] / stars_scores_x['sum']
-        stars_scores_xy["rsd_augm"] = stars_scores_xy['rsd'] - stars_scores_x['rsd']
+        stars_scores_xy['sum_augm'] = stars_scores_xy['sum'] / stars_scores_x['sum']
+        stars_scores_xy['rsd_augm'] = stars_scores_xy['rsd'] - stars_scores_x['rsd']
 
         df_scores = pd.DataFrame({
             ('simplices', 'volumes_x'): simplices_scores_x,
@@ -176,7 +176,7 @@ class ASVD:
             ('stars', 'volumes_xy'): stars_scores_xy,
         })
         # Reorder rows
-        df_scores = insert_row_in_order(df_scores, [("sum_augm", 2), ('rsd_augm', 6)])
+        df_scores = insert_row_in_order(df_scores, [('sum_augm', 2), ('rsd_augm', 6)])
     
         return df_scores
 
@@ -263,13 +263,13 @@ def describe_volumes(volumes: np.ndarray) -> pd.DataFrame:
     df_scores = pd.DataFrame(volumes).describe()
 
     # Add metrics
-    df_scores.loc["sum", 0] = volumes.sum()
-    df_scores.loc["rsd", 0] = volumes.std() / volumes.mean()  # relative standard deviation (RSD) or coefficient of variation (CV)
-    df_scores.loc["iqr", 0] = np.percentile(volumes, 75) - np.percentile(volumes, 25)  #  interquartile range (IQR)
-    df_scores.loc["skewness", 0] = skew(volumes)
-    df_scores.loc["kurtosis", 0] = kurtosis(volumes)
+    df_scores.loc['sum', 0] = volumes.sum()
+    df_scores.loc['rsd', 0] = volumes.std() / volumes.mean()  # relative standard deviation (RSD) or coefficient of variation (CV)
+    df_scores.loc['iqr', 0] = np.percentile(volumes, 75) - np.percentile(volumes, 25)  #  interquartile range (IQR)
+    df_scores.loc['skewness', 0] = skew(volumes)
+    df_scores.loc['kurtosis', 0] = kurtosis(volumes)
     
-    df_scores = insert_row_in_order(df_scores, [("sum", 1), ("rsd", 4)])
+    df_scores = insert_row_in_order(df_scores, [('sum', 1), ('rsd', 4)])
     dict_scores = df_scores.iloc[:, 0].to_dict()
     return dict_scores
 
@@ -346,7 +346,7 @@ def compute_response_curve_augmentation(
 
     # Compute the volume using numerical integration with custom options
     with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=IntegrationWarning)
+        warnings.filterwarnings('ignore', category=IntegrationWarning)
         volume, _ = nquad(_integrand, region, opts={
             'limit': n_points,
             'epsabs': error_tolerance,
@@ -359,7 +359,7 @@ def compute_response_curve_augmentation(
     return augmentation
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     # Example usage: compute_stars_volumes
     vertices_idx = np.array([0, 1, 2, 3])
     simplices_idx = np.array([[0, 1, 2], [1, 2, 3], [0, 2, 3]])

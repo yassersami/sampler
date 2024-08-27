@@ -31,7 +31,7 @@ def run_parego(
     features: List[str], targets: List[str], additional_values: List[str],
     simulator_env: Dict, batch_size: int, run_condition: Dict,
     llambda_s: int, population_size: int, num_generations: int,
-    tent_slope: float=10, experience: str="parEGO_maxIpr"
+    tent_slope: float=10, experience: str='parEGO_maxIpr'
 ):
     dace = DACEModel(
         features=features, targets=targets,
@@ -91,7 +91,7 @@ def run_parego(
             prediction.reshape(-1, 1) if prediction.ndim == 1 else prediction
         )
         score = dace.get_score(new_df[features].values)
-        new_df["obj_score"] = score
+        new_df['obj_score'] = score
         new_df = treatment.classify_quality_interest(new_df, data_is_scaled=True)
         timenow = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         new_df['datetime'] = timenow
@@ -135,7 +135,7 @@ def run_parego(
 class DACEModel:
     def __init__(
         self, features: List[str], targets: List[str], scaled_regions: dict,
-        llambda_s: int, tent_slope= float, experience: str="parEGO_maxIpr"
+        llambda_s: int, tent_slope= float, experience: str='parEGO_maxIpr'
     ):
         self.features = features
         self.targets = targets
@@ -220,14 +220,14 @@ class DACEModel:
         return Ltcheby, Utcheby
 
     def excpected_interest(self, x: np.array):
-        '''
+        """
         This score computes the probability of being in the region of interest.
 
         x.shape = (p,) => sigma float
         x.shape = (n, p) => sigma.shape = (n,)
 
         CDF: cumulative distribution function P(X <= x)
-        '''
+        """
         x = np.atleast_2d(x)
 
         y_hat, y_std = self.model.predict(x, return_std=True)
@@ -240,11 +240,11 @@ class DACEModel:
         return imp
 
     def expected_improvement(self, x: np.array):
-        '''
+        """
         This score is inspired from EGO (Efficient Global Optimization)
         x.shape = (p,) => sigma float
         x.shape = (n, p) => sigma.shape = (n,)
-        '''
+        """
         x = x.reshape(1, -1) if len(x.shape) == 1 else x
         if self.y_max is None:
             raise ValueError("The model must be updated before calling get_score.")
@@ -336,8 +336,11 @@ class LambdaGenerator:
         random.seed(self.seed)
 
     def gen_comb(self, comb: List[int], remaining_terms: int, s: int, l_comb: List[List[int]]) -> None:
-        '''Generate all combinations of positive integers (including 0) that sum to s, with k terms, with order
-           Recursive function that generates all possible combinations, not optimized'''
+        """
+        Generate all combinations of positive integers (including 0) that sum to
+        s, with k terms, with order Recursive function that generates all
+        possible combinations, not optimized
+        """
         sum_comb = sum(comb)
         if remaining_terms == 0:
             if sum_comb == s:
@@ -348,12 +351,12 @@ class LambdaGenerator:
             self.gen_comb(comb + [i], remaining_terms - 1, s, l_comb)
 
     def gen_lambda_set(self, k: int, s: int) -> List[Tuple[float]]:
-        '''Generate all possible lambda vectors with k terms that sum to 1 according to parameter s.'''
+        """Generate all possible lambda vectors with k terms that sum to 1 according to parameter s."""
         l_comb = []
         self.gen_comb([], k, s, l_comb)
         l_vec = [tuple(map(lambda x: x / s, comb)) for comb in l_comb]
         return l_vec
 
     def choose_uniform_lambda(self) -> Tuple[float]:
-        '''Select a random lambda (belongs to R^k) uniformly'''
+        """Select a random lambda (belongs to R^k) uniformly"""
         return random.choice(self.lambda_set)

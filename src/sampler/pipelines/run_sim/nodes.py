@@ -42,8 +42,8 @@ def prepare_simulator_inputs(
         samples_0_1 = sampler.random(n=num_samples)
         
         # Scale the samples to the specified bounds
-        l_bounds = [variables_ranges[feature]["bounds"][0] for feature in features]
-        u_bounds = [variables_ranges[feature]["bounds"][1] for feature in features]
+        l_bounds = [variables_ranges[feature]['bounds'][0] for feature in features]
+        u_bounds = [variables_ranges[feature]['bounds'][1] for feature in features]
         samples_real = qmc.scale(samples_0_1, l_bounds, u_bounds)
         
         df_real = pd.DataFrame(samples_real, columns=features)
@@ -73,7 +73,7 @@ def evaluate_inputs(
     simulator_env: Dict, batch_size: int, n_proc: int, output_is_real: bool
 ):
     # Ensure 'r_ext_pMeO' is in features by copying 'r_ext_pAl' if necessary
-    if "r_ext_pMeO" not in features:
+    if 'r_ext_pMeO' not in features:
         data['r_ext_pMeO'] = data['r_ext_pAl']
     
     # Initialize the simulation processor, n_proc to None to use cpu_count()

@@ -2,11 +2,11 @@ import numpy as np
 
 
 def schaffer(p):
-    '''
+    """
     This function has plenty of local minimum, with strong shocks
     global minimum at (0,0) with value 0
     https://en.wikipedia.org/wiki/Test_functions_for_optimization
-    '''
+    """
     x1, x2 = p
     part1 = np.square(x1) - np.square(x2)
     part2 = np.square(x1) + np.square(x2)

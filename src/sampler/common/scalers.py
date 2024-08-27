@@ -17,12 +17,12 @@ class MixedMinMaxScaler:
 
         self.scale = scale
         if scale is not None:
-            assert all(v in ["lin", "log"] for v in scale), (
+            assert all(v in ['lin', 'log'] for v in scale), (
                 "Only allowed values for scale are 'lin' or 'log', but got:\n"
                 f"{list(zip(features + targets, scale))}"
             )
-            self.lin_vars = np.array([v == "lin" for v in scale])
-            self.log_vars = np.array([v == "log" for v in scale])
+            self.lin_vars = np.array([v == 'lin' for v in scale])
+            self.log_vars = np.array([v == 'log' for v in scale])
 
         self.lin_on = self.log_on = False
         if self.lin_vars.any():
@@ -119,9 +119,9 @@ def scale_interest_region(interest_region: Dict, scaler: MixedMinMaxScaler) -> D
 
     for key, scaled_values in scaled_interest_region.items():
         assert all(0 <= val <= 1 for val in scaled_values), (
-            f'Error! Region bounds {scaled_values} for key "{key}" not in range [0, 1]!'
-            + '\n prep.json must contain absolute bounds! (ie. all data and interest '
-            + 'regions values must be INSIDE those bounds)'
+            f"Error! Region bounds {scaled_values} for key '{key}' not in range [0, 1]!"
+            "\n prep.json must contain absolute bounds! (ie. all data and interest "
+            "regions values must be INSIDE those bounds)"
         )
 
     return scaled_interest_region
@@ -148,7 +148,7 @@ def linear_tent(
     """
     x = np.atleast_2d(x)
     if np.any(L >= U):
-        raise ValueError(f'L should be less than U \nL: \n{L} \nU: \n{U}')
+        raise ValueError(f"L should be less than U \nL: \n{L} \nU: \n{U}")
 
     center = (U+L)/2  # Center of interval
     half_width = (U-L)/2  # Half interval width

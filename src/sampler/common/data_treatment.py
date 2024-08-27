@@ -38,7 +38,7 @@ class DataTreatment:
         masks = self.get_outliers_masks(df_real)
 
         # Keep only rows with in-bound features
-        return df_real[~masks["out_of_bounds_feat"]]
+        return df_real[~masks['out_of_bounds_feat']]
 
 
     def treat_real_data(self, df_real: pd.DataFrame) -> pd.DataFrame:
@@ -69,7 +69,7 @@ class DataTreatment:
         masks = self.get_outliers_masks(df_real)
         
         # Check for out-of-bounds features and raise an error if detected
-        features_mask = masks["out_of_bounds_feat"]
+        features_mask = masks['out_of_bounds_feat']
         if features_mask.any():
             df_out_of_bounds_features = df_real.loc[
                 features_mask,
@@ -115,9 +115,9 @@ class DataTreatment:
 
         # Identify all rows with outliers
         bad_rows_mask = (
-            masks["time_out"] |
-            masks["sim_error"] |
-            masks["out_of_bounds_tar"]
+            masks['time_out'] |
+            masks['sim_error'] |
+            masks['out_of_bounds_tar']
         )
 
         # Set target columns to NaN for bad rows
@@ -138,7 +138,7 @@ class DataTreatment:
         masks['out_of_bounds_tar'] = False
         
         for key, val in self.variables_ranges.items():
-            bounds = [val["bounds"][0] - tol, val["bounds"][1] + tol]
+            bounds = [val['bounds'][0] - tol, val['bounds'][1] + tol]
             mask = ~(df_real[key].between(*bounds))
             
             if key in self.features:
@@ -147,7 +147,7 @@ class DataTreatment:
                 masks['out_of_bounds_tar'] |= mask
         
         # Create masks for time_out and sim_error
-        masks['time_out'] = df_real["sim_time"].round() >= self.sim_time_cutoff
+        masks['time_out'] = df_real['sim_time'].round() >= self.sim_time_cutoff
         masks['sim_error'] = df_real[self.targets].isna().any(axis=1)
         
         return masks
@@ -174,7 +174,7 @@ class DataTreatment:
         )
 
         # Set 'quality' column based on interest conditions
-        data["quality"] = np.where(interest_cond, "interest", "not_interesting")
+        data['quality'] = np.where(interest_cond, 'interest', 'no_interest')
 
         return data
 
@@ -203,7 +203,7 @@ class DataTreatment:
 
         # Update 'quality' column based on outlier masks
         for key, mask in outliers_masks.items():
-            data.loc[mask, "quality"] = key
+            data.loc[mask, 'quality'] = key
 
         return data
 

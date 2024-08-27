@@ -18,7 +18,7 @@ This pipeline processes experimental data, calculates various metrics, and gener
   - `color`: To distinguish experiments
   - `name`: For legends
   - `path`: To retrieve information to plot
-  - `scale`: To put results in a physical scale ("classify" or "real-inverse")
+  - `scale`: To put results in a physical scale ('classify' or 'real-inverse')
 - `params:names`: Names of features and targets to display on plots
 - `params:features`: Physical variables known, limited by the design space
 - `params:targets`: Physical variables of interest, to be known after simulating
@@ -90,12 +90,12 @@ There is also a plot analyzing all the variables (features and targets) with res
 * **Node: prepare_data_to_analyze**
   * experiments: Experiments to compare (at least one), defined in 'parameters/analysis:experiments'. 
   It's a dictionary that should include a key (for each experiment) and the following values:
-    * "color", to distinguish experiment,
-    *  "name", to add on legends,
-    *  "path", to retrieve information to plot (this could be the path to 'history' if the run is not completed, or to 
+    * 'color', to distinguish experiment,
+    *  'name', to add on legends,
+    *  'path', to retrieve information to plot (this could be the path to 'history' if the run is not completed, or to 
     the final csv file)
-    *  "scale", to put all the results in a physical scale. It could be "classify" to data already on a physical scale, 
-    or "real-inverse" to data from the simulator that is scaled between 0 and 1.
+    *  'scale', to put all the results in a physical scale. It could be 'classify' to data already on a physical scale, 
+    or 'real-inverse' to data from the simulator that is scaled between 0 and 1.
   * names: Name of features and targets to display on the plots, defined in 'parameters/analysis:names',
   * features: Physical variables known, limited by the design space, defined in 'parameters:features',
   * targets: Physical variables of interest, which cannot be fixed but are to be known after simulating, defined in 'parameters:targets',

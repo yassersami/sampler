@@ -62,7 +62,7 @@ def irbs_sampling(
     )
 
     while should_continue:
-        print(f"\nRound {iteration:03} (start) " + "-"*78)
+        print(f"\nRound {iteration:03} (start) " + "-"*62)
         # Set the new model that will be used in next iteration
         model.fit(X=res[features].values, y=res[targets].values)
 
@@ -87,7 +87,7 @@ def irbs_sampling(
 
         # Add model prediction to selected (already simulated) points
         prediction = model.terms.surrogate_gpr.predict(new_df[features].values)
-        prediction_cols = [f"pred_{t}" for t in targets]
+        prediction_cols = [f'pred_{t}' for t in targets]
         new_df[prediction_cols] = np.atleast_2d(prediction)
 
         # Add column is_interest with True if targets are inside the interest region

@@ -33,27 +33,27 @@ def test_bandpass_filter():
     y_gaussian_tent_UL = sao_optim_nodes.gaussian_tent(x_values, L, U, sigma=(U - L) / np.sqrt(8 * np.log(2)))
     # Prepare for plot
     df = pd.DataFrame({
-        "x": x_values,
-        "y_lin_tent": y_lin_tent,
-        "y_sigmoid_tent_UL": y_sigmoid_tent_UL,
-        "y_sigmoid_tent_8UL": y_sigmoid_tent_8UL,
-        "y_gaussian_tent": y_gaussian_tent,
-        "y_gaussian_tent_10": y_gaussian_tent_10,
-        "y_gaussian_tent_UL": y_gaussian_tent_UL,
+        'x': x_values,
+        'y_lin_tent': y_lin_tent,
+        'y_sigmoid_tent_UL': y_sigmoid_tent_UL,
+        'y_sigmoid_tent_8UL': y_sigmoid_tent_8UL,
+        'y_gaussian_tent': y_gaussian_tent,
+        'y_gaussian_tent_10': y_gaussian_tent_10,
+        'y_gaussian_tent_UL': y_gaussian_tent_UL,
     })
     fig = plot_line(
-        df=df, x="x", mode='lines',
+        df=df, x='x', mode='lines',
         y=[
-            # "y_lin_tent",
-            "y_sigmoid_tent_UL",
-            "y_sigmoid_tent_8UL",
-            # "y_gaussian_tent",
-            # "y_gaussian_tent_10",
-            "y_gaussian_tent_UL",
+            # 'y_lin_tent',
+            'y_sigmoid_tent_UL',
+            'y_sigmoid_tent_8UL',
+            # 'y_gaussian_tent',
+            # 'y_gaussian_tent_10',
+            'y_gaussian_tent_UL',
         ]
     )
     fig.show()
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     # test_bandpass_filter()
     parallel_jobs()

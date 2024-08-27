@@ -6,7 +6,7 @@ from sampler.pipelines.sao_optim.plotly_utils import plot_line
 from sampler.pipelines.parego.nodes import LambdaGenerator, tchebychev
 
 def set_2d_space():
-    targets = ["Pg_f", "Tg_Tmax"]
+    targets = ['Pg_f', 'Tg_Tmax']
     lambda_gen = LambdaGenerator(k=len(targets), s=1000)  # TODO : set s  as a parameter in conf
     llambda = lambda_gen.choose_uniform_lambda()
 

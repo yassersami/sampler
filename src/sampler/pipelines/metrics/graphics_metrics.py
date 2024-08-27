@@ -58,7 +58,7 @@ def pair_grid_for_all_variables(data, features, targets):
     df_to_plot = pd.concat([v['inliers'].assign(identity=v['name']) for v in data.values()])
     g = sns.PairGrid(
         df_to_plot[features + targets + ['identity']],
-        hue="identity", palette=[val['color'] for val in data.values()], diag_sharey=False
+        hue='identity', palette=[val['color'] for val in data.values()], diag_sharey=False
     )
     g.map_lower(sns.scatterplot, alpha=0.3)
     g.map_upper(sns.kdeplot, levels=4, linewidths=2)
@@ -134,8 +134,8 @@ def targets_kde(data: Dict, targets: List[str], region: Dict):
 
 
 def plot_2d(data: Dict, features_dic: Dict, volume: Dict):
-    features = features_dic["str"]
-    features_latex = features_dic["latex"]
+    features = features_dic['str']
+    features_latex = features_dic['latex']
     feature_pairs = list(combinations(features, 2))
     n_exp = len(data)
     n_rows = len(feature_pairs)
@@ -148,7 +148,7 @@ def plot_2d(data: Dict, features_dic: Dict, volume: Dict):
     #     axs = axs[0]
 
     for n_col, (k, v) in enumerate(data.items()):
-        num_not_interesting = v['not_interesting'].shape[0]
+        num_no_interest = v['no_interest'].shape[0]
         num_interest = v['interest'].shape[0]
         num_outliers = v['outliers'].shape[0]
         interest_colors = plt.cm.autumn(np.linspace(1, 0, num_interest))
@@ -156,19 +156,19 @@ def plot_2d(data: Dict, features_dic: Dict, volume: Dict):
         for n_row, (x, y) in enumerate(feature_pairs):
             idx = (n_row, n_col) if n_exp > 1 else n_row
             axs[idx].scatter(
-                x=v['not_interesting'][x],
-                y=v['not_interesting'][y],
-                c='gray', alpha=0.3, label="Not interesting"
+                x=v['no_interest'][x],
+                y=v['no_interest'][y],
+                c='gray', alpha=0.3, label='No interest'
             )
             axs[idx].scatter(
                 x=v['outliers'][x],
                 y=v['outliers'][y],
-                c='black', alpha=0.7, marker='x', label="Outliers"
+                c='black', alpha=0.7, marker='x', label='Outlier'
             )
             axs[idx].scatter(
                 x=v['interest'][x],
                 y=v['interest'][y],
-                c=interest_colors, alpha=0.5, label="Interest"
+                c=interest_colors, alpha=0.5, label='Interest'
             )
             axs[idx].set_xticks(np.arange(11))
             axs[idx].set_xticklabels(['0', '', '2', '', '4', '', '6', '', '8', '', '10'])
@@ -182,7 +182,7 @@ def plot_2d(data: Dict, features_dic: Dict, volume: Dict):
         # Create a handle for the 'interest' marker
         interest_marker = plt.Line2D(
             [0], [0], marker='o', color='w', markerfacecolor='red',
-            alpha=0.7, label=""
+            alpha=0.7, label=''
         )
 
         # Initialize handles and labels for the legend
@@ -190,7 +190,7 @@ def plot_2d(data: Dict, features_dic: Dict, volume: Dict):
         legend_labels = [
             f'n_Itr: {num_interest}\n'
             f'V_Itr_bound: [{volume[k][0]:.2e}, {volume[k][1]:.2e}]',
-            f'n_noItr: {num_not_interesting}',
+            f'n_noItr: {num_no_interest}',
         ]
 
         # Add outliers to the legend if present
@@ -202,7 +202,7 @@ def plot_2d(data: Dict, features_dic: Dict, volume: Dict):
         axs[idx_legend].legend(
             handles=legend_handles, labels=legend_labels,
             loc='lower center', bbox_to_anchor=(0.5, 1.0),
-            title=v["name"], title_fontsize='large'
+            title=v['name'], title_fontsize='large'
         )
     
     # Add a vertical color bar with custom ticks outside the subplots
@@ -231,8 +231,8 @@ def plot_feat_tar(data: Dict, features: List[str], targets: List[str], only_inte
                 )
                 if not only_interest:
                     axs[n_row, n_col].scatter(
-                        x=v['not_interesting'][feat],
-                        y=v['not_interesting'][tar],
+                        x=v['no_interest'][feat],
+                        y=v['no_interest'][tar],
                         c='gray', marker='.', alpha=0.3, label='Not int'
                     )
             axs[1, n_col].set_xlabel(feat)
@@ -325,9 +325,9 @@ def plot_asvd_scores(
             for metric in metrics_for_table:
                 value = experiments[exp_name].get(metric, 'N/A')
                 if isinstance(value, int):
-                    row.append(f"{value}")
+                    row.append(f'{value}')
                 elif isinstance(value, float):
-                    row.append(f"{value:.2e}")
+                    row.append(f'{value:.2e}')
                 else:
                     row.append(str(value))
             table_data.append(row)

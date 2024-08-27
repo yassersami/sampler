@@ -60,7 +60,7 @@ class OptimizerFactory:
         return list(cls._optimizers.keys())
 
 
-@OptimizerFactory.register("shgo")
+@OptimizerFactory.register('shgo')
 class SHGOOptimizer(MultiModalOptimizer):
 
     def __init__(self, batch_size: int, n: int, iters: int):
@@ -122,7 +122,7 @@ class SHGOOptimizer(MultiModalOptimizer):
         return X_candidates, df_scores
 
 
-@OptimizerFactory.register("ga")
+@OptimizerFactory.register('ga')
 class GAOptimizer(MultiModalOptimizer):
     def __init__(self, batch_size: int, population_size: int, generations: int):
         super().__init__(batch_size)
@@ -168,7 +168,7 @@ class GAOptimizer(MultiModalOptimizer):
         return X_candidates, df_scores
 
 
-@OptimizerFactory.register("shgo_2")
+@OptimizerFactory.register('shgo_2')
 class SHGOOptimizer_2(MultiModalOptimizer):
     def __init__(self, batch_size, n, iters, diversity_threshold):
         super().__init__(batch_size)

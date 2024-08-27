@@ -48,9 +48,9 @@ def join_history(
 
 
 def set_history_folder(history_path: str, should_rename: bool = True):
-    '''
+    """
     Set history folder where explored samples are incrementally stored.
-    '''
+    """
     # Check if the folder already exists
     folder_exists = os.path.isdir(history_path)
     
@@ -65,10 +65,10 @@ def set_history_folder(history_path: str, should_rename: bool = True):
 
 
 def rename_folder(old_path: str):
-    '''
+    """
     Rename folder and avoid duplicate.
     If folder already exists, add _i suffix.
-    '''
+    """
     i = 1
     new_path = old_path + f'_{i}'
     folder_exists = os.path.isdir(new_path)

@@ -22,7 +22,7 @@ def prepare_treatment(
     treatment = DataTreatment(
         features=features, targets=targets, scaler=scaler,
         variables_ranges=variables_ranges, interest_region=interest_region,
-        sim_time_cutoff=simulator_env["sim_time_cutoff"],
+        sim_time_cutoff=simulator_env['sim_time_cutoff'],
     )
     return treatment
 

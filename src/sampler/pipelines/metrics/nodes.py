@@ -27,8 +27,8 @@ def prepare_data_metrics(
     """
     data = {}
     # New names for data columns
-    feature_aliases = names["features"]["str"]
-    target_aliases = names["targets"]["str"]
+    feature_aliases = names['features']['str']
+    target_aliases = names['targets']['str']
     column_renaming = {
         orig: alias for orig, alias in 
         zip(features + targets, feature_aliases + target_aliases)
@@ -37,7 +37,7 @@ def prepare_data_metrics(
     targets_pred = [f'{target}_hat' for target in targets]
 
     for exp_id, exp_config in experiments.items():
-        file_path = exp_config["path"]
+        file_path = exp_config['path']
         
         # Import data, etiher from a folder or a csv file
         if os.path.isdir(file_path):
@@ -55,14 +55,14 @@ def prepare_data_metrics(
         df = df.rename(columns=column_renaming)
 
         data[exp_id] = categorize_df_by_quality(
-            df=df, name=exp_config["name"], color=exp_config["color"]
+            df=df, name=exp_config['name'], color=exp_config['color']
         )
 
     return {
-        "exp_data": data,
-        "features": feature_aliases,
-        "targets": target_aliases,
-        "targets_prediction": targets_pred
+        'exp_data': data,
+        'features': feature_aliases,
+        'targets': target_aliases,
+        'targets_prediction': targets_pred
     }
 
 
@@ -81,13 +81,13 @@ def get_metrics(
     
     for key, value in data.items():
         # Scale all data
-        XY = value["df"][features+targets].values
+        XY = value['df'][features+targets].values
         scaled_data = pd.DataFrame(
             treatment.scaler.transform(XY),
             columns=features+targets
         )
         # Scale interest data
-        XY_interest = value["interest"][features+targets].values
+        XY_interest = value['interest'][features+targets].values
         scaled_data_interest = pd.DataFrame(
             treatment.scaler.transform(XY_interest),
             columns=features+targets
@@ -96,12 +96,12 @@ def get_metrics(
         scaled_y_interest = scaled_data_interest[targets]
 
         # Get number of interesting samples
-        n_interest[key] = len(value["interest"])
+        n_interest[key] = len(value['interest'])
         
         # Get volume of interesting samples
-        if key in params_volume["default"]:
-            volume[key] = params_volume["default"][key]
-        elif params_volume["compute_volume"]:
+        if key in params_volume['default']:
+            volume[key] = params_volume['default'][key]
+        elif params_volume['compute_volume']:
             volume[key] = covered_space_bound(
                 scaled_x_interest, radius, params_volume, len(features)
             )
@@ -118,22 +118,22 @@ def get_metrics(
 
         # Get Voronoi volume
         volume_voronoi[key] = {
-            "features": np.array([0]*n_interest[key]),
-            "targets": np.array([0]*n_interest[key])
+            'features': np.array([0]*n_interest[key]),
+            'targets': np.array([0]*n_interest[key])
         }
-        if params_voronoi["compute_voronoi"]["features"]:
-            volume_voronoi[key]["features"] = get_volume_voronoi(
+        if params_voronoi['compute_voronoi']['features']:
+            volume_voronoi[key]['features'] = get_volume_voronoi(
                 scaled_x_interest,
                 dim=len(features),
-                tol=params_voronoi["tol"],
-                isFilter=params_voronoi["isFilter"]
+                tol=params_voronoi['tol'],
+                isFilter=params_voronoi['isFilter']
             )
-        if params_voronoi["compute_voronoi"]["targets"]:
-            volume_voronoi[key]["targets"] = get_volume_voronoi(
+        if params_voronoi['compute_voronoi']['targets']:
+            volume_voronoi[key]['targets'] = get_volume_voronoi(
                 scaled_y_interest,
                 dim=len(features+targets),
-                tol=params_voronoi["tol"],
-                isFilter=params_voronoi["isFilter"]
+                tol=params_voronoi['tol'],
+                isFilter=params_voronoi['isFilter']
             )
 
     return dict(
@@ -150,17 +150,17 @@ def scale_data_for_plots(
     targets_prediction: List[str], scales: Dict, interest_region: Dict
 ):
     """Scales data in place for visualization purposes."""
-    df_names = ["interest", "not_interesting", "inliers", "outliers", "df"]
+    df_names = ['interest', 'no_interest', 'inliers', 'outliers', 'df']
     for v in data.values():
         for name in df_names:
-            v[name][features] /= scales["features"]
-            v[name][targets] /= scales["targets"]
+            v[name][features] /= scales['features']
+            v[name][targets] /= scales['targets']
             # Check if every element of targets prediction is in v[name].columns
             if all([t in v[name].columns for t in targets_prediction]):
-                v[name][targets_prediction] /= scales["targets"]
+                v[name][targets_prediction] /= scales['targets']
             
     scaled_interest_region = {}
-    for region, target, target_scale in zip(interest_region.values(), targets, scales["targets"]):
+    for region, target, target_scale in zip(interest_region.values(), targets, scales['targets']):
         scaled_interest_region[target] = [v / target_scale for v in region]
 
     return dict(
@@ -179,10 +179,10 @@ def plot_metrics(
     interest_asvd_scores: Dict[str, Dict[str, float]],
     volume_voronoi: Dict
 ):
-    features_dic = names["features"]
-    features = features_dic["str"]
-    targets = names["targets"]["str"]
-    asvd_metrics_to_plot = ["sum_augm", "rsd_x", "rsd_xy", "rsd_augm", "riqr_x", "riqr_xy"]
+    features_dic = names['features']
+    features = features_dic['str']
+    targets = names['targets']['str']
+    asvd_metrics_to_plot = ['sum_augm', 'rsd_x', 'rsd_xy', 'rsd_augm', 'riqr_x', 'riqr_xy']
 
     targets_volume = None  # TODO yasser: compute covered area on targets space
     # targets_volume = {k: 10000 for k in data.columns}
@@ -200,19 +200,19 @@ def plot_metrics(
     # Detailed features versus targets plots
     # pair_plot = gm.pair_grid_for_all_variables(data, features, targets)
     feat_tar_dict = {}
-    feat_tar_dict["all"] = gm.plot_feat_tar(data, features, targets, only_interest=False)
-    feat_tar_dict["all_int"] = gm.plot_feat_tar(data, features, targets, only_interest=True, title_extension='(only interest)')
+    feat_tar_dict['all'] = gm.plot_feat_tar(data, features, targets, only_interest=False)
+    feat_tar_dict['all_int'] = gm.plot_feat_tar(data, features, targets, only_interest=True, title_extension='(only interest)')
     for k in data.keys():
         feat_tar_dict[k] = gm.plot_feat_tar({k: data[k]}, features, targets, only_interest=False)
 
     plots_dict = {
-        "features_2d": features_2d,
-        "violin_plot": violin_plot,
-        "targets_kde": kde_plot,
-        # "pair_plot": pair_plot,
-        "ASVD_all": total_asvd_plot,
-        "ASVD_interest": interest_asvd_plot,
-        "volume_voronoi": voronoi_plot,
+        'features_2d': features_2d,
+        'violin_plot': violin_plot,
+        'targets_kde': kde_plot,
+        # 'pair_plot': pair_plot,
+        'ASVD_all': total_asvd_plot,
+        'ASVD_interest': interest_asvd_plot,
+        'volume_voronoi': voronoi_plot,
         **{f'features_targets_{k}': v for k, v in feat_tar_dict.items()},
     }
     plots_dict = {f'{i+1:02d}_{k}': v for i, (k, v) in enumerate(plots_dict.items())}
@@ -226,8 +226,8 @@ def plot_metrics(
     os.makedirs(output_dir_svg, exist_ok=True)
     
     for plot_name, plot in plots_dict.items():
-        png_path = os.path.join(output_dir_png, f"{plot_name}.png")
-        svg_path = os.path.join(output_dir_svg, f"{plot_name}.svg")
+        png_path = os.path.join(output_dir_png, f'{plot_name}.png')
+        svg_path = os.path.join(output_dir_svg, f'{plot_name}.svg')
 
         plot.savefig(png_path, format='png')
         plot.savefig(svg_path, format='svg')

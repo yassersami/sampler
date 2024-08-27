@@ -27,11 +27,11 @@ def print_json(name='dic', dic={}, index=None):
 
 
 def add_suffix(filepath, suffix):
-    '''This function adds suffix to file name before its extension.
+    """This function adds suffix to file name before its extension.
     Example:
         add_suffix('path/dir/foo.txt', '_1')
         -> 'path/dir/foo_1.txt'
-    '''
+    """
     folder_path, filename = os.path.split(filepath)
     filename, extension = os.path.splitext(filename)
     newfilename = filename + suffix + extension
@@ -41,8 +41,8 @@ def add_suffix(filepath, suffix):
 
 
 def distinct_filename(filepath):
-    '''If file already exists, a _i suffix is added.
-    '''
+    """If file already exists, a _i suffix is added.
+    """
     newpath = filepath
     is_file = os.path.isfile(newpath)
     i = 1
@@ -55,13 +55,13 @@ def distinct_filename(filepath):
 
 
 def save(fig, name, width=4, path=None, image_ext='png', check_exist=False):
-    '''
+    """
     Exemple of use:
         save(
             fig=fig,
-            name=kwargs["fig_name"],
+            name=kwargs['fig_name'],
             width=4,
-            path=kwargs["path"],
+            path=kwargs['path'],
             image_ext='png',
             check_exist=False
         )
@@ -71,7 +71,7 @@ def save(fig, name, width=4, path=None, image_ext='png', check_exist=False):
 
     If path last folder does nots exists, mkdir is done for it but not its
     parents.
-    '''
+    """
     if path is None:
         path = os.path.abspath(os.path.join(
             os.path.abspath(__file__),
@@ -108,20 +108,20 @@ def save(fig, name, width=4, path=None, image_ext='png', check_exist=False):
 
 
 def fill_dict(keys, value):
-    '''create a new dict with 'keys' as keys and fill each one with
+    """create a new dict with 'keys' as keys and fill each one with
     'value'.
-    '''
+    """
     return {e: value for e in keys}
 
 
 def format_customdata(i, col, is_float):
-    '''
+    """
     Returns string of hover message depending if data is numerical.
     If is_float, return scientific format
         <b>col</b>: %{customdata[i]:.2e}
     Else, return raw
         <b>col</b>: %{customdata[i]}
-    '''
+    """
     x = 'customdata[' + str(i) + ']'
     if is_float:
         str_out = (
@@ -137,7 +137,7 @@ def format_customdata(i, col, is_float):
 
 
 def hover_df(custom_cols, float_cols, i_mainvals=2):
-    '''
+    """
     Arguments
     ---------
 
@@ -159,7 +159,7 @@ def hover_df(custom_cols, float_cols, i_mainvals=2):
             <b>info_1</b>: %{customdata[2]}
             <b>info_2</b>: %{customdata[3]:.2e}
             <b>info_3</b>: %{customdata[4]:.2e}
-    '''
+    """
     rows = list(map(
         lambda x: format_customdata(
             i=x[0],
@@ -177,10 +177,10 @@ def hover_df(custom_cols, float_cols, i_mainvals=2):
 
 
 def list_files(dir, extensions=''):
-    '''
+    """
     Extract all available result images directly in dir
     If nested image, will not be found
-    '''
+    """
     if extensions == 'images':
         extensions = (
             'png', 'jpg', 'jpeg', 'tiff', 'bmp', 'gif', 'svg', 'html'
@@ -243,40 +243,40 @@ def plot_line(df, **kwargs):
     y_exp = x_values*np.exp(x_values)
 
     df = pd.DataFrame({
-        "x": x_values,
-        "y_lin": y_lin,
-        "y_abs_sqrt": y_abs_sqrt,
-        "y_x_exp": y_exp,
+        'x': x_values,
+        'y_lin': y_lin,
+        'y_abs_sqrt': y_abs_sqrt,
+        'y_x_exp': y_exp,
     })
-    fig = plot_line(df=df, x="x", y=["y_lin", "y_abs_sqrt", "y_x_exp"], mode='lines')
+    fig = plot_line(df=df, x='x', y=['y_lin', 'y_abs_sqrt', 'y_x_exp'], mode='lines')
     fig.show()
     """
 
-    if "x" not in [*kwargs]:
+    if 'x' not in [*kwargs]:
         assert False, "Missing column name (string) for x-axis"
-    if "y" not in [*kwargs]:
+    if 'y' not in [*kwargs]:
         assert False, "Missing column name (string or list of strings) for y-axis"
-    if isinstance(kwargs["y"], str):
-        kwargs["y"] = [kwargs["y"]]
-    if "y_name" not in [*kwargs]:
-        kwargs["y_name"] = {}
-    if "y_hover" not in [*kwargs]:
-        kwargs["y_hover"] = {}
-    if "title" not in [*kwargs]:
-        kwargs["title"] = f'{kwargs["y"]}({kwargs["x"]})'
-        kwargs["title"] += f'<br> {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}'
-    if "legend_title" not in [*kwargs]:
-        kwargs["legend_title"] = ''
-    if "mode" not in [*kwargs]:
-        kwargs["mode"] = 'markers'
+    if isinstance(kwargs['y'], str):
+        kwargs['y'] = [kwargs['y']]
+    if 'y_name' not in [*kwargs]:
+        kwargs['y_name'] = {}
+    if 'y_hover' not in [*kwargs]:
+        kwargs['y_hover'] = {}
+    if 'title' not in [*kwargs]:
+        kwargs['title'] = f'{kwargs['y']}({kwargs['x']})'
+        kwargs['title'] += f'<br> {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}'
+    if 'legend_title' not in [*kwargs]:
+        kwargs['legend_title'] = ''
+    if 'mode' not in [*kwargs]:
+        kwargs['mode'] = 'markers'
 
     # Add traces
     traces = []
 
-    x = kwargs["x"]
-    color_list = [kwargs["color_column"]] if "color_column" in kwargs else []
-    for y in kwargs["y"]:
-        hover_cols = kwargs["y_hover"].get(y, [])
+    x = kwargs['x']
+    color_list = [kwargs['color_column']] if 'color_column' in kwargs else []
+    for y in kwargs['y']:
+        hover_cols = kwargs['y_hover'].get(y, [])
         default_cols = [x, y] + color_list
         hover_cols = [col for col in hover_cols if col not in default_cols]
         hover_cols = default_cols + hover_cols
@@ -286,13 +286,13 @@ def plot_line(df, **kwargs):
             dict(
                 x=df.loc[:, x],
                 y=df.loc[:, y],
-                name=kwargs["y_name"].get(y, y),
+                name=kwargs['y_name'].get(y, y),
                 showlegend=True,
                 # line=dict(
                 #     dash='solid',
                 #     width=2,
                 # ),
-                mode=kwargs["mode"],
+                mode=kwargs['mode'],
                 customdata=df_hover.loc[:, hover_cols],
                 hovertemplate=hover_df(
                     custom_cols=hover_cols,
@@ -301,16 +301,16 @@ def plot_line(df, **kwargs):
                 )
             )
         )
-    if "color_column" in kwargs:
+    if 'color_column' in kwargs:
         traces[0].update(  # this is only done for first y trace
             dict(
                 marker=dict(
-                    color=df.loc[:, kwargs["color_column"]],
+                    color=df.loc[:, kwargs['color_column']],
                     showscale=True,
                     colorscale='Jet',  # Inferno, Bluered, Rainbow, Turbo
                     colorbar=dict(
                         title=dict(
-                            text=kwargs["color_column"],
+                            text=kwargs['color_column'],
                             font=dict(
                                 # size=axis_titles_font_size,
                                 family='Serif',
@@ -323,27 +323,27 @@ def plot_line(df, **kwargs):
         )
     layout = dict(
         title=dict(
-            text=kwargs["title"],
+            text=kwargs['title'],
             y=0.96,
             x=0.5,
-            xanchor="center",
-            yanchor="top"
+            xanchor='center',
+            yanchor='top'
         ),
-        legend_title_text=kwargs["legend_title"],
+        legend_title_text=kwargs['legend_title'],
         legend=dict(
-            orientation="h",
-            yanchor="bottom",
+            orientation='h',
+            yanchor='bottom',
             y=1.02,
-            xanchor="right",
+            xanchor='right',
             x=1
         ),
         xaxis=dict(
-            title=kwargs.get("x_title", kwargs["x"]),
+            title=kwargs.get('x_title', kwargs['x']),
         ),
         yaxis=dict(
-            title=kwargs.get("y_title", '')
+            title=kwargs.get('y_title', '')
         ),
-        template="plotly_white",
+        template='plotly_white',
     )
 
     # print('\n traces:')
@@ -365,11 +365,11 @@ def plot_line(df, **kwargs):
         ],
         layout=go.Layout(layout)
     )
-    if "annotations" in kwargs:
+    if 'annotations' in kwargs:
         fig.add_annotation(
-            text=kwargs["annotations"].replace('\n', '<br>'),
-            x=0., xref="paper", xanchor="left",
-            y=1., yref="paper", yanchor="bottom",
+            text=kwargs['annotations'].replace('\n', '<br>'),
+            x=0., xref='paper', xanchor='left',
+            y=1., yref='paper', yanchor='bottom',
             align='left',  # left, center
             showarrow=False,
         )
@@ -420,7 +420,7 @@ def plot_gp_std_2d(model, X_train: np.ndarray, target_idx=0, z_value=None, plot_
         fig = go.Figure(data=go.Contour(z=Z, x=x, y=y, contours=dict(coloring='heatmap')))
         fig.update_layout(coloraxis=dict(colorscale='Viridis'))
 
-    fig.update_layout(legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01))
+    fig.update_layout(legend=dict(yanchor='top', y=0.99, xanchor='left', x=0.01))
     fig.update_layout(height=800, margin=dict(l=0, r=0, b=0, t=0))
     fig.show()
 

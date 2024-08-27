@@ -16,21 +16,21 @@ from simulator_0d.src.pypp.launch import set_inputs_dic, adapt_inputs_dic
 
 
 def map_creation(df: pd.DataFrame, map_dir: str = 'default'):
-    df["workdir"] = df.apply(set_simu_name, axis=1)
+    df['workdir'] = df.apply(set_simu_name, axis=1)
 
     constants = {
-        "alpha_p": 0.3,
-        "th_Al2O3": 5.12281599140251e-08,
-        "heat_input_ths": 556000,
-        "power_input": 20000000,
-        "coeff_contact": 0.01,
-        "Ea_D_Ox": 50000,
-        "Ea_Al2O3_decomp": 400000,
-        "Ea_MeO_decomp": 50000,
-        "k0_D_Ox": 0.000008,
-        "k0_Al2O3_decomp": 1520000,
-        "k0_MeO_decomp": 30000000,
-        "bool_kin": 'false'
+        'alpha_p': 0.3,
+        'th_Al2O3': 5.12281599140251e-08,
+        'heat_input_ths': 556000,
+        'power_input': 20000000,
+        'coeff_contact': 0.01,
+        'Ea_D_Ox': 50000,
+        'Ea_Al2O3_decomp': 400000,
+        'Ea_MeO_decomp': 50000,
+        'k0_D_Ox': 0.000008,
+        'k0_Al2O3_decomp': 1520000,
+        'k0_MeO_decomp': 30000000,
+        'bool_kin': 'false'
     }
     
     # don't set a feature constant if it's an input
@@ -67,7 +67,7 @@ def launch_0d(input_dir: str) -> Dict[str, float]:
     inputs_dic, output_dir = define_in_out(input_dir)
 
     # Warn about the maximum simulation time
-    max_simu_time_sec = inputs_dic.get("max_simu_time", 0)
+    max_simu_time_sec = inputs_dic.get('max_simu_time', 0)
     max_simu_time_min = max_simu_time_sec / 60
     warnings.warn(
         f"Maximum simulation time is set to {max_simu_time_sec} seconds "
@@ -77,12 +77,12 @@ def launch_0d(input_dir: str) -> Dict[str, float]:
 
     # Default error response
     error_res = {
-        "sim_time": np.NaN,
-        "timed_out": np.NaN,
-        "Tg_Tmax": np.NaN,
-        "Pg_f": np.NaN,
-        "Pg_rate": np.NaN,
-        "Y_O2_f": np.NaN,
+        'sim_time': np.NaN,
+        'timed_out': np.NaN,
+        'Tg_Tmax': np.NaN,
+        'Pg_f': np.NaN,
+        'Pg_rate': np.NaN,
+        'Y_O2_f': np.NaN,
     }
 
     try:
@@ -117,7 +117,7 @@ def run_parallel_simulation(folders: List[str], n_proc: int=None):
 
 def run_serial_simulation(folder: str):
     dict_result = launch_0d(folder)
-    return pd.DataFrame.from_dict({folder[-4:]: dict_result}, orient="index")
+    return pd.DataFrame.from_dict({folder[-4:]: dict_result}, orient='index')
 
 
 def run_simulation(x: pd.DataFrame, n_proc: int, index: int, map_dir: str):
@@ -132,9 +132,9 @@ def run_simulation(x: pd.DataFrame, n_proc: int, index: int, map_dir: str):
 def run_fake_simulator(x_real, features, targets, additional_values, scaler, spice_on):
     """ Set a fake results df. All outputs are in real space (not scaled one)"""
     x_scaled = scaler.transform_features(x_real)
-    # As if y_sim = ["Pg_f", "Tg_Tmax"] with values in [0, 1]
+    # As if y_sim = ['Pg_f', 'Tg_Tmax'] with values in [0, 1]
     y_sim = np.array([x_scaled.min(axis=1), x_scaled.max(axis=1)]).T
-    # As if y_doi = ["sim_time", "Composition", ...]
+    # As if y_doi = ['sim_time', 'Composition', ...]
     y_doi = np.zeros((x_real.shape[0], len(additional_values)))
 
     new_points = pd.DataFrame(
@@ -146,7 +146,7 @@ def run_fake_simulator(x_real, features, targets, additional_values, scaler, spi
 
     # Add some spice to check how outliers and errors are handled
     if spice_on and new_points.shape[0] >= 4:
-        new_points.loc[0, "sim_time"] = 60  # time_out
+        new_points.loc[0, 'sim_time'] = 60  # time_out
         new_points.loc[1, targets] = [45e6, 6000]  # interest sample
         new_points.loc[2, targets[0]] = 1e20  # target out of bounds
         new_points.loc[3, targets[0]] = np.nan  # failed simulation causing error (missing value)
@@ -192,7 +192,7 @@ class SimulationProcessor:
         x_real = self._prepare_real_input(new_x, real_x)
         real_df = pd.DataFrame(x_real, columns=self.features)
 
-        if "r_ext_pMeO" not in self.features: # If r_ext_pMeO lack, I replace with the same value than r_ext_pAl # ? rs_inputs
+        if 'r_ext_pMeO' not in self.features: # If r_ext_pMeO lack, I replace with the same value than r_ext_pAl # ? rs_inputs
             real_df['r_ext_pMeO'] = real_df['r_ext_pAl']
 
         if self.use_simulator:

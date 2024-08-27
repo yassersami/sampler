@@ -36,9 +36,9 @@ def categorize_df_by_quality(
         'name': name,
         'color': color,
         'interest': df[(df.quality == 'interest')],
-        'not_interesting': df[(df.quality == 'not_interesting')],
-        'inliers': df[(df.quality == 'interest') | (df.quality == 'not_interesting')],
-        'outliers': df[(df.quality != 'interest') & (df.quality != 'not_interesting')],
+        'no_interest': df[(df.quality == 'no_interest')],
+        'inliers': df[(df.quality == 'interest') | (df.quality == 'no_interest')],
+        'outliers': df[(df.quality != 'interest') & (df.quality != 'no_interest')],
         'df': df
     }
 

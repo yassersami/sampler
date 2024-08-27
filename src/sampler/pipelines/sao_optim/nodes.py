@@ -31,11 +31,11 @@ def sao_optim_from_simulator(
         run_condition: Dict[str, Union[bool, int]],
         sao_history_path: str,
 ):
-    '''
+    """
     Output values of simulation function must be in 0, 1 so that it's easier
     for optimizer to search.
 
-    '''
+    """
 
     # Chose the simulation function that will be adapted for optimizer
     simulator = SimulationProcessor(
@@ -57,9 +57,9 @@ def sao_optim_from_simulator(
     )
     # Parse optimization results
     result_dic = {
-        "order": SIZE_OPTIM.get(),
-        "X": treatment.scaler.transform_features(X_1D.reshape((1, -1))).ravel(),
-        "y_obj": y_obj,
+        'order': SIZE_OPTIM.get(),
+        'X': treatment.scaler.transform_features(X_1D.reshape((1, -1))).ravel(),
+        'y_obj': y_obj,
         **optiminfo_dic,
     }
     result_df = pd.DataFrame.from_records(result_dic)
@@ -104,12 +104,12 @@ def set_f_sim(
 def set_filter(
     treatment: DataTreatment, minimize: bool = True
 ) -> Callable[[np.ndarray], np.ndarray]:
-    '''
+    """
     Set the filter function that computes weither the output of the simulation
     function is in the interest zone.
     Caution: If the optimization direction is minimizing the filter should be smaller
     (or negative) for better candidates.
-    '''
+    """
     L_normalized = np.array([bounds[0] for bounds in treatment.scaled_interest_region.values()])
     U_normalized = np.array([bounds[1] for bounds in treatment.scaled_interest_region.values()])
     direction = -1 if minimize else 1
@@ -127,9 +127,9 @@ def set_objective_optuna(
     f_sim: Callable, f_filter: Callable, features: List[str], targets: List[str],
     additional_values: List[str], treatment: DataTreatment, sao_history_path: str
 ):
-    '''
+    """
         Objective is the function that optuna optimizer takes as argument.
-    '''
+    """
     global SIZE_OPTIM
     SIZE_OPTIM.put(0)
 
@@ -183,7 +183,7 @@ def set_objective_optuna(
 
 # https://optuna.readthedocs.io/en/stable/reference/logging.html
 def run_optimization_optuna(objective, max_size, batch_size):
-    '''
+    """
     Argmax of figure of merit (fom)
 
     Return
@@ -194,7 +194,7 @@ def run_optimization_optuna(objective, max_size, batch_size):
     y_obj: float
         Maximum obtained objective
     optiminfo_dic: dict of best trial
-    '''
+    """
     study = optuna.create_study(
         sampler=optuna.samplers.TPESampler(seed=RANDOM_STATE),
         direction='minimize',
@@ -208,7 +208,7 @@ def run_optimization_optuna(objective, max_size, batch_size):
     X = np.array([*study.best_params.values()])
     y_obj = study.best_value
     optiminfo_dic = {
-        "optim_n_trial": len(study.trials),
-        "optim_n_besttrial": study.best_trial.number,
+        'optim_n_trial': len(study.trials),
+        'optim_n_besttrial': study.best_trial.number,
     }
     return X, y_obj, optiminfo_dic

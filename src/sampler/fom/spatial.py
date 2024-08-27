@@ -64,7 +64,7 @@ class SigmoidLocalDensityTerm(FittableFOMTerm):
 
         # Compute for each x_row distances to every dataset point
         # Element at position [i, j] is d(x_i, dataset_points_j)
-        distances = distance.cdist(X, self.dataset_points, metric="euclidean")
+        distances = distance.cdist(X, self.dataset_points, metric='euclidean')
 
         # Compute the decay score weights for all distances
         # decay score =0 for big distance, =1 for small distance
@@ -125,7 +125,7 @@ class OutlierProximityTerm(FittableFOMTerm):
             return np.ones(X.shape[0])
 
         # Compute distances based on the specified metric
-        distances = distance.cdist(X, self.outlier_points, "euclidean")
+        distances = distance.cdist(X, self.outlier_points, 'euclidean')
 
         # Determine which points should be ignored based on tolerance
         should_avoid = np.any(distances < self.exclusion_radius, axis=1)

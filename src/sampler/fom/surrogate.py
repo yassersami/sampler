@@ -108,10 +108,10 @@ class SurrogateGPR(GaussianProcessRegressor):
         print(f"SurrogateGPR.update_max_std -> Maximum GP std: {max_std}")
     
     def predict_interest_score(self, X: np.ndarray) -> np.ndarray:
-        '''
+        """
         Computes the probability of being in the region of interest.
         CDF: cumulative distribution function P(X <= x)
-        '''
+        """
         X = np.atleast_2d(X)
 
         y_mean, y_std = self.predict(X, return_std=True)
@@ -133,7 +133,7 @@ class SurrogateGPR(GaussianProcessRegressor):
 
 class SurrogateGPRTerm(FittableFOMTerm, SurrogateGPR):
     
-    required_args = ["interest_region"]
+    required_args = ['interest_region']
     fit_params = {'X_only': False, 'drop_nan': True}
     
     def __init__(
@@ -232,8 +232,8 @@ class GPCModel(GaussianProcessClassifier):
         - For binary classification (n_classes = 2), the output shape is
         (n_samples,).
         - For multi-class classification, the output shape is (n_samples,
-        n_classes) when multi_class="one_vs_rest", and is shaped (n_samples,
-        n_classes*(n_classes - 1)/2) when multi_class="one_vs_one". In other
+        n_classes) when multi_class='one_vs_rest', and is shaped (n_samples,
+        n_classes*(n_classes - 1)/2) when multi_class='one_vs_one'. In other
         terms, There are as many columns as trained Binary GPC sub-models.
         - The number of classes (n_classes) is determined by the number of
         unique target values in the training data.
@@ -271,7 +271,7 @@ class GPCModel(GaussianProcessClassifier):
 
         v = solve(estimator.L_, estimator.W_sr_[:, np.newaxis] * K_star)  # Line 5
         # Line 6 (compute np.diag(v.T.dot(v)) via einsum)
-        var_f_star = kernel.diag(X) - np.einsum("ij,ij->j", v, v)
+        var_f_star = kernel.diag(X) - np.einsum('ij,ij->j', v, v)
 
         return f_star, np.sqrt(var_f_star)
 
@@ -285,7 +285,7 @@ class OutlierGPCTerm(GPCModel):
         self.score_names = 'gpc_inlier_bstd'
 
         # Map class labels to indices
-        self.class_to_index = {"outlier": 0, "inlier": 1}
+        self.class_to_index = {'outlier': 0, 'inlier': 1}
         self.index_to_class = {
             index: label for label, index in self.class_to_index.items()
         }
@@ -294,8 +294,8 @@ class OutlierGPCTerm(GPCModel):
         # Determine inlier or outlier status based on NaN presence in y
         y = np.where(
             np.isnan(y).any(axis=1),
-            self.class_to_index["outlier"],  # 0
-            self.class_to_index["inlier"]   # 1
+            self.class_to_index['outlier'],  # 0
+            self.class_to_index['inlier']   # 1
         )
         # Check if there are two classes in y
         unique_classes = np.unique(y)
@@ -336,7 +336,7 @@ class OutlierGPCTerm(GPCModel):
         alpha = ( (3/4)**3 * (1/4) )**(-0.5)
 
         # Predict inlier probabilities
-        proba = self.predict_proba(X)[:, self.class_to_index["inlier"]]
+        proba = self.predict_proba(X)[:, self.class_to_index['inlier']]
 
         # Compute the score using the given formula
         score = alpha * proba * np.sqrt(proba * (1 - proba))
@@ -356,8 +356,8 @@ class OutlierGPCTerm(GPCModel):
         uncertainty. For binary classification, the maximum entropy is
         ln(2) ≈ 0.693.
         """
-        # Get probabilities for the "inlier" class
-        proba = self.predict_proba(X)[:, self.class_to_index["inlier"]]
+        # Get probabilities for the 'inlier' class
+        proba = self.predict_proba(X)[:, self.class_to_index['inlier']]
 
         # Clip probabilities to avoid log(0)
         proba = np.clip(proba, 1e-15, 1 - 1e-15)

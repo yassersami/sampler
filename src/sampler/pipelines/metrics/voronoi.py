@@ -58,7 +58,7 @@ def filter(points, threshold, dim):
     return filtered_points[:count]
 
 def get_volume_voronoi(points: np.ndarray, dim: int, tol: float=1e-3, isFilter: bool=True):
-    '''
+    """
     Compute the volume of the Voronoi diagram of a set of points in a hypercube of dimension dim.
     The volume is computed by clipping the Voronoi regions with the hypercube and computing the volume of the clipped regions with the ConvexHull method.
 
@@ -70,7 +70,7 @@ def get_volume_voronoi(points: np.ndarray, dim: int, tol: float=1e-3, isFilter: 
     isFilter : bool, the function will filter the points to remove duplicates and close points (recommended for dim>3).
 
     See notebooks to understand more about the method and the parameters (and to improve it !).
-    '''
+    """
     if dim>4: 
         print("The dimension is too high, the computation may take a long time !")
 
