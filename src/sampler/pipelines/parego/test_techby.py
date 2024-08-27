@@ -7,7 +7,7 @@ from sampler.pipelines.parego.nodes import LambdaGenerator, tchebychev
 
 def set_2d_space():
     targets = ['Pg_f', 'Tg_Tmax']
-    lambda_gen = LambdaGenerator(k=len(targets), s=1000)  # TODO : set s  as a parameter in conf
+    lambda_gen = LambdaGenerator(k=len(targets), s=1000)
     llambda = lambda_gen.choose_uniform_lambda()
 
     x_values = np.linspace(0, 1, 10)

@@ -4,8 +4,9 @@ import pandas as pd
 import json
 
 from .base import FittableFOMTerm, FOMTermAccessor, FOMTermType, FOMTermInstance
-from .surrogate import SurrogateGPRTerm, OutlierGPCTerm
-from .spatial import OutlierProximityTerm, SigmoidLocalDensityTerm
+from .term_gpr import SurrogateGPRTerm
+from .term_gpc import OutlierGPCTerm
+from .term_spatial import OutlierProximityTerm, SigmoidLocalDensityTerm
 
 
 class FigureOfMerit:
@@ -44,8 +45,10 @@ class FigureOfMerit:
                     arg: getattr(self, arg) for arg in TermClass.required_args
                 })
 
-                # Initialize the term instance
-                self._terms[term_name] = TermClass(**term_args)
+                try:
+                    self._terms[term_name] = TermClass(**term_args)
+                except Exception as e:
+                    raise type(e)(f"Error instantiating term '{term_name}': {str(e)}") from e
 
         # Create the accessor
         self.terms = FOMTermAccessor(self._terms)

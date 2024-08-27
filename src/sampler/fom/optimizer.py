@@ -101,7 +101,7 @@ class SHGOOptimizer(MultiModalOptimizer):
         
         result = shgo(
             lambda x: -self.objective_function(x, fom),  # Negate here for minimization
-            [(0, 1)]*self.n_features,
+            bounds=[(0, 1)]*self.n_features,
             n=self.n,
             iters=self.iters,
             sampling_method='simplicial'
@@ -186,7 +186,7 @@ class SHGOOptimizer_2(MultiModalOptimizer):
 
         result = shgo(
             lambda x: -self.objective_function(x, fom),  # Negate for minimization
-            [(0, 1)]*self.n_features,
+            bounds=[(0, 1)]*self.n_features,
             n=self.n, 
             iters=self.iters, 
             # options={'ftol': 1e-6, 'maxev': 1000}

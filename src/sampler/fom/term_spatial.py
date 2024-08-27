@@ -238,8 +238,11 @@ class KDEModel:
         print("KDEModel.update_min_density -> Searching for minimum density")
 
         result = shgo(
-            self.predict_proba, bounds=[(0, 1)]*self.data.shape[1],
-            iters=shgo_iters, n=shgo_n, sampling_method='simplicial'
+            self.predict_proba,
+            bounds=[(0, 1)]*self.data.shape[1],
+            n=shgo_n,
+            iters=shgo_iters,
+            sampling_method='simplicial'
         )
         self.min_density = result.fun
 

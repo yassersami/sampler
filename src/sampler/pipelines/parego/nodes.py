@@ -55,7 +55,7 @@ def run_parego(
     n_total = 0  # counting all simulations
     n_inliers = 0  # counting only inliers
     n_interest = 0  # counting only interesting inliers
-    iteration = 0
+    iteration = 1
     should_continue = True
     
     # Initialize tqdm progress bar with estimated time remaining
@@ -65,6 +65,7 @@ def run_parego(
     )
     
     while should_continue:
+        print(f"\nRound {iteration:03} (start) " + "-"*62)
         clean_res = res.dropna(subset=targets)
         x_pop = clean_res[features].values
         y_pop = clean_res[targets].values
@@ -81,7 +82,7 @@ def run_parego(
         # Launch time expensive simulations
         new_df = simulator.process_data(new_x, real_x=False, index=n_total, treat_output=True)
 
-        print(f'Round {iteration:03} (continued): simulation results' + '-'*49)
+        print(f"Round {iteration:03} (continued) - simulation results " + "-"*37)
         print(f'run_parego -> New samples after simulation:\n {new_df}')
 
         # Add interesting informations about samples choice
@@ -113,21 +114,24 @@ def run_parego(
         n_interest += n_new_interest
         iteration += 1
 
-        # Update progress bar based on the condition
-        progress_bar.update(n_new_inliers if run_until_max_size else n_new_interest)
+        # Print iteration details
+        print(
+            f"Round {iteration - 1:03} (end) - Report count: "
+            f"Total: {n_total}, "
+            f"Inliers: {n_inliers}, "
+            f"Interest: {n_interest}"
+        )
 
         # Determine the end condition
         should_continue = (
             (n_inliers < max_size) if run_until_max_size else
             (n_interest < n_interest_max)
         )
-        
-        # Print iteration details
-        print(
-            f"Report count of iteration {iteration - 1:03}: "
-            f"Total: {n_total}, "
-            f"Inliers: {n_inliers}, "
-            f"Interest: {n_interest}"
+
+        # Update progress bar based on the condition
+        progress_bar.update(
+            n_new_inliers - max(0, n_inliers - max_size) if run_until_max_size else
+            n_new_interest - max(0, n_interest - n_interest_max)
         )
     progress_bar.close()
 
