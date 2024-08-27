@@ -1,4 +1,4 @@
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 import numpy as np
 import pandas as pd
@@ -10,19 +10,41 @@ class MixedMinMaxScaler:
             self,
             features: List[str],
             targets: List[str],
-            scale: List = None,
+            scale: Optional[Dict[str, str]] = None,
     ):
         self.features = features
         self.targets = targets
+        self.all_vars = features + targets
 
-        self.scale = scale
         if scale is not None:
-            assert all(v in ['lin', 'log'] for v in scale), (
-                "Only allowed values for scale are 'lin' or 'log', but got:\n"
-                f"{list(zip(features + targets, scale))}"
-            )
-            self.lin_vars = np.array([v == 'lin' for v in scale])
-            self.log_vars = np.array([v == 'log' for v in scale])
+            # Check if all variables are present in the scale dict
+            missing_vars = set(self.all_vars) - set(scale.keys())
+            if missing_vars:
+                raise ValueError(f"Missing scale type for variables: {missing_vars}")
+            
+            # Check if there are any extra variables in scale dict
+            extra_vars = set(scale.keys()) - set(self.all_vars)
+            if extra_vars:
+                raise ValueError(f"Unexpected variables in scale dict: {extra_vars}")
+
+            # Check if all scale values are valid
+            invalid_scales = {
+                var: scale_type for var, scale_type in scale.items()
+                if scale_type not in ['lin', 'log']
+            }
+            if invalid_scales:
+                raise ValueError(
+                    f"Invalid scale types: {invalid_scales}. \n"
+                    "Only 'lin' and 'log' are allowed."
+                )
+
+            self.scale = scale
+        else:
+            self.scale = {var: 'lin' for var in self.all_vars}
+
+        # Create boolean arrays for linear and logarithmic variables
+        self.lin_vars = np.array([self.scale[var] == 'lin' for var in self.all_vars])
+        self.log_vars = np.array([self.scale[var] == 'log' for var in self.all_vars])
 
         self.lin_on = self.log_on = False
         if self.lin_vars.any():
@@ -66,14 +88,14 @@ class MixedMinMaxScaler:
     
     def transform_features(self, X_feat: np.ndarray):
         """ Transforms a features only array filling the rest with ones """
-        ones = np.ones((len(X_feat), len(self.targets)))
+        ones = np.ones((X_feat.shape[0], len(self.targets)))
         X = np.concatenate((X_feat, ones), axis=1)
         # Return only the first len(features) columns
         return self.transform(X)[:, :len(self.features)]
 
     def transform_targets(self, X_tar: np.ndarray):
         """ Transforms a targets only array filling the rest with ones """
-        ones = np.ones((len(X_tar), len(self.features)))
+        ones = np.ones((X_tar.shape[0], len(self.features)))
         X = np.concatenate((ones, X_tar), axis=1)
         # Return only the last len(targets) columns
         return self.transform(X)[:, -len(self.targets):]
@@ -82,12 +104,12 @@ class MixedMinMaxScaler:
         if self.lin_on:
             x_lin = self.scaler_lin.inverse_transform(X[:, self.lin_vars])
         else:
-            x_lin = np.empty(len(X))
+            x_lin = np.empty(X.shape[0])
         if self.log_on:
             x_log = self.scaler_log.inverse_transform(X[:, self.log_vars])
             x_log = np.exp(x_log)
         else:
-            x_log = np.empty(len(X))
+            x_log = np.empty(X.shape[0])
         return self._merge(x_lin, x_log)
 
     def _merge(self, x_lin_norm, x_log_norm):

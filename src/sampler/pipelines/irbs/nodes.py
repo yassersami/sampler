@@ -86,9 +86,8 @@ def irbs_sampling(
         new_df['max_std'] = model.terms.surrogate_gpr.max_std
 
         # Add model prediction to selected (already simulated) points
-        prediction = model.terms.surrogate_gpr.predict(new_df[features].values)
-        prediction_cols = [f'pred_{t}' for t in targets]
-        new_df[prediction_cols] = np.atleast_2d(prediction)
+        y_pred = model.terms.surrogate_gpr.predict(new_df[features].values)
+        new_df[[f'pred_{t}' for t in targets]] = np.atleast_2d(y_pred.T).T
 
         # Add column is_interest with True if targets are inside the interest region
         new_df = treatment.classify_quality_interest(new_df, data_is_scaled=True)

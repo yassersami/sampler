@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, List, Tuple, Any
 import numpy as np
 import pandas as pd
 from sampler.common.scalers import MixedMinMaxScaler
@@ -6,29 +6,38 @@ from sampler.common.data_treatment import DataTreatment
 
 
 def prepare_treatment(
-    features: List[str], targets: List[str], variables_ranges: Dict,
-    interest_region: Dict, simulator_env: Dict
+    features: List[str],
+    targets: List[str],
+    variables_ranges: Dict[str, Dict],
+    interest_region: Dict[str, Tuple[float, float]],
+    simulator_env: Dict[str, Any]
 ) -> DataTreatment:
     """
     Prepare the DataTreatment class with the necessary configuration.
     """
-    # Construct scaler to scale all values from 0 to 1
-    bounds = np.array([v['bounds'] for v in variables_ranges.values()]).T
-    scale = [v['scale'] for v in variables_ranges.values()]
-    scaler = MixedMinMaxScaler(scale=scale, features=features, targets=targets)
+    # Prepare input-output space description
+    all_vars = features + targets
+    bounds_dict = {var: variables_ranges[var]['bounds'] for var in all_vars}
+    scale = {var: variables_ranges[var]['scale'] for var in all_vars}
+    interest_region = {var: interest_region[var] for var in targets}
+
+    # Fit scaler to scale all values from 0 to 1
+    scaler = MixedMinMaxScaler(features=features, targets=targets, scale=scale)
+    bounds = np.array(list(bounds_dict.values())).T  # dict.values() keeps order
     scaler.fit(bounds)
 
     # Initialize and return data treatment
     treatment = DataTreatment(
         features=features, targets=targets, scaler=scaler,
-        variables_ranges=variables_ranges, interest_region=interest_region,
+        bounds=bounds_dict, interest_region=interest_region,
         sim_time_cutoff=simulator_env['sim_time_cutoff'],
     )
     return treatment
 
 
 def prepare_data(
-    initial_data: pd.DataFrame, additional_values: List[str],
+    initial_data: pd.DataFrame,
+    additional_values: List[str],
     treatment: DataTreatment
 ) -> Dict:
     """

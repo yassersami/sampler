@@ -15,10 +15,9 @@ from scipy.optimize import shgo
 from .base import FittableFOMTerm
 
 RANDOM_STATE = 42
+KERNEL = RationalQuadratic(length_scale_bounds=(1e-5, 10))
 
-# TODO:
-# - adapt bounds and predict_interest_score for 1D y
-# - updat_max_std has problems with 2D X
+
 class SurrogateGPR(GaussianProcessRegressor):
     def __init__(
         self, 
@@ -27,8 +26,7 @@ class SurrogateGPR(GaussianProcessRegressor):
         shgo_iters: int = 5,
         **kwargs
     ):
-        kernel = RationalQuadratic(length_scale_bounds=(1e-5, 10))
-        super().__init__(kernel=kernel, random_state=RANDOM_STATE, **kwargs)
+        super().__init__(kernel=KERNEL, random_state=RANDOM_STATE, **kwargs)
 
         self.is_trained = False
         self.interest_region = interest_region
@@ -277,10 +275,8 @@ class GPCModel(GaussianProcessClassifier):
 
 
 class OutlierGPCTerm(GPCModel):
-    def __init__(self, kernel=None):
-        if kernel is None:
-            kernel = 1.0 * RBF(length_scale=1.0)
-        super().__init__(kernel=kernel, random_state=RANDOM_STATE)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, kernel=KERNEL, random_state=RANDOM_STATE, **kwargs)
         self.is_trained = False
         self.score_names = 'gpc_inlier_bstd'
 

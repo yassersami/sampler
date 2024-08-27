@@ -12,15 +12,15 @@ class DataTreatment:
             self,
             features: List[str],
             targets: List[str],
-            variables_ranges: Dict,
-            interest_region: Dict,
+            bounds: Dict[str, Tuple[float, float]],
+            interest_region: Dict[str, Tuple[float, float]],
             scaler: MixedMinMaxScaler,
             sim_time_cutoff: int,
     ):
         self.features = features
         self.targets = targets
         self.scaler = scaler
-        self.variables_ranges = variables_ranges
+        self.bounds = bounds
         self.sim_time_cutoff = sim_time_cutoff
         self.interest_region = interest_region
         self.scaled_interest_region = scale_interest_region(interest_region, scaler)
@@ -137,8 +137,8 @@ class DataTreatment:
         masks['out_of_bounds_feat'] = False
         masks['out_of_bounds_tar'] = False
         
-        for key, val in self.variables_ranges.items():
-            bounds = [val['bounds'][0] - tol, val['bounds'][1] + tol]
+        for key, val in self.bounds.items():
+            bounds = [val[0] - tol, val[1] + tol]
             mask = ~(df_real[key].between(*bounds))
             
             if key in self.features:

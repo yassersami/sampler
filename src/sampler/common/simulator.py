@@ -129,11 +129,22 @@ def run_simulation(x: pd.DataFrame, n_proc: int, index: int, map_dir: str):
     return new_df
 
 
+def normalized_power_function(X, target_dim):
+    # Compute the hypercube diagonal length
+    diagonal_length = np.sqrt(X.shape[1])
+    
+    # Compute the normalized norm for each point
+    norms = np.linalg.norm(X, axis=1) / diagonal_length
+    
+    # Apply powers based on the target space dimension
+    return np.column_stack([norms**(i + 1) for i in range(target_dim)])
+
+
 def run_fake_simulator(x_real, features, targets, additional_values, scaler, spice_on):
     """ Set a fake results df. All outputs are in real space (not scaled one)"""
     x_scaled = scaler.transform_features(x_real)
     # As if y_sim = ['Pg_f', 'Tg_Tmax'] with values in [0, 1]
-    y_sim = np.array([x_scaled.min(axis=1), x_scaled.max(axis=1)]).T
+    y_sim = normalized_power_function(x_scaled, len(targets))
     # As if y_doi = ['sim_time', 'Composition', ...]
     y_doi = np.zeros((x_real.shape[0], len(additional_values)))
 
@@ -147,7 +158,7 @@ def run_fake_simulator(x_real, features, targets, additional_values, scaler, spi
     # Add some spice to check how outliers and errors are handled
     if spice_on and new_points.shape[0] >= 4:
         new_points.loc[0, 'sim_time'] = 60  # time_out
-        new_points.loc[1, targets] = [45e6, 6000]  # interest sample
+        new_points.loc[1, targets] = [45e6, 6000][:len(targets)]  # interest sample
         new_points.loc[2, targets[0]] = 1e20  # target out of bounds
         new_points.loc[3, targets[0]] = np.nan  # failed simulation causing error (missing value)
 
