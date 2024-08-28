@@ -98,9 +98,12 @@ class SHGOOptimizer(MultiModalOptimizer):
         )
 
         self.n_features = fom.n_features  # Used in self.sort_by_relevance
-        
-        result = shgo(
-            lambda x: -self.objective_function(x, fom),  # Negate here for minimization
+
+        # Define a smaller is better objective where smallest best value is 0
+        obj_func = lambda x: fom.n_positive_scores - self.objective_function(x, fom)
+
+        result = shgo(  # Minimization algorithm
+            obj_func,
             bounds=[(0, 1)]*self.n_features,
             n=self.n,
             iters=self.iters,
@@ -110,6 +113,7 @@ class SHGOOptimizer(MultiModalOptimizer):
         X_candidates = self.choose_results(minimums=res, size=self.batch_size)
         
         df_scores = fom.predict_scores_df(X_candidates)
+        df_scores['shgo_obj'] = [obj_func(x) for x in X_candidates]
 
         feature_cols = [f'feature_{i+1}' for i in range(fom.n_features)]
         df_candidates = pd.DataFrame(X_candidates, columns=feature_cols)
@@ -136,9 +140,10 @@ class GAOptimizer(MultiModalOptimizer):
         )
 
         self.n_features = fom.n_features
+        obj_func = lambda x: self.objective_function(x, fom)  # No negation needed
 
-        ga = GA(
-            func=lambda x: self.objective_function(x, fom),  # No negation needed
+        ga = GA(  # Maximization algorithm
+            obj_func,
             n_dim=self.n_features, 
             size_pop=self.population_size ,
             max_iter=self.generations, 
@@ -156,6 +161,7 @@ class GAOptimizer(MultiModalOptimizer):
         X_candidates = population[best_indices]
 
         df_scores = fom.predict_scores_df(X_candidates)
+        df_scores['ga_obj'] = [obj_func(x) for x in X_candidates]
 
         feature_cols = [f'feature_{i+1}' for i in range(fom.n_features)]
         df_candidates = pd.DataFrame(X_candidates, columns=feature_cols)
@@ -184,8 +190,11 @@ class SHGOOptimizer_2(MultiModalOptimizer):
 
         self.n_features = fom.n_features
 
-        result = shgo(
-            lambda x: -self.objective_function(x, fom),  # Negate for minimization
+        # Define a smaller is better objective where smallest best value is 0
+        obj_func = lambda x: fom.n_positive_scores - self.objective_function(x, fom)
+
+        result = shgo(  # Minimization algorithm
+            obj_func,
             bounds=[(0, 1)]*self.n_features,
             n=self.n, 
             iters=self.iters, 
@@ -222,6 +231,7 @@ class SHGOOptimizer_2(MultiModalOptimizer):
 
         X_candidates = candidates[selected_indices]
         df_scores = fom.predict_scores_df(X_candidates)
+        df_scores['shgo_obj'] = [obj_func(x) for x in X_candidates]
         
         feature_cols = [f'feature_{i+1}' for i in range(fom.n_features)]
         df_candidates = pd.DataFrame(X_candidates, columns=feature_cols)

@@ -122,7 +122,7 @@ class OutlierProximityTerm(FittableFOMTerm):
         X = np.atleast_2d(X)
 
         if self.outlier_points.size == 0:
-            return np.ones(X.shape[0])
+            return np.zeros(X.shape[0])
 
         # Compute distances based on the specified metric
         distances = distance.cdist(X, self.outlier_points, 'euclidean')
@@ -137,9 +137,9 @@ class OutlierProximityTerm(FittableFOMTerm):
                 f"{X[should_avoid]}"
             )
 
-        # Score is 0 for bad rows that FOM should avoid
-        score = 1 - should_avoid.astype(float)
-        
+        # Score is -1 if bad row that FOM should avoid else 0
+        score = 0 - should_avoid.astype(float)  # 0 - value to avoid negative 0
+
         return score
     
     def get_parameters(self) -> Dict[str, Any]:

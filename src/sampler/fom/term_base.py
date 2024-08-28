@@ -164,13 +164,3 @@ FOMTermType = Union[Type[FittableFOMTerm], Type[NonFittableFOMTerm]]
 
 # Create custom type for instances
 FOMTermInstance = Union[FittableFOMTerm, NonFittableFOMTerm]
-
-
-class FOMTermAccessor:
-    def __init__(self, terms: Dict[str, FOMTermInstance]):
-        self._terms = terms
-    
-    def __getattr__(self, name):
-        if name not in self._terms:
-            raise AttributeError(f"Term '{name}' is not active or does not exist.")
-        return self._terms[name]

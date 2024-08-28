@@ -3,13 +3,18 @@ import numpy as np
 import pandas as pd
 import json
 
-from .term_base import FittableFOMTerm, FOMTermAccessor, FOMTermType, FOMTermInstance
+from .term_base import FittableFOMTerm, FOMTermType, FOMTermInstance
 from .term_gpr import SurrogateGPRTerm
 from .term_gpc import OutlierGPCTerm
 from .term_spatial import OutlierProximityTerm, SigmoidLocalDensityTerm
 
 
-class FigureOfMerit:
+class FOMTermAccessor:
+    """
+    This class enables accessing terms in FigureOfMerit.terms.term_name with
+    autocompletion
+    """
+
     TERM_CLASSES: Dict[str, FOMTermType] = {
         'surrogate_gpr': SurrogateGPRTerm,
         'sigmoid_density': SigmoidLocalDensityTerm,
@@ -17,22 +22,38 @@ class FigureOfMerit:
         'outlier_gpc': OutlierGPCTerm,
     }
 
+    def __init__(self, terms: Dict[str, FOMTermInstance]):
+        self._terms = terms
+        self.surrogate_gpr: SurrogateGPRTerm
+        self.sigmoid_density: SigmoidLocalDensityTerm
+        self.outlier_proximity: OutlierProximityTerm
+        self.outlier_gpc: OutlierGPCTerm
+
+    def __getattr__(self, name):
+        if name not in self._terms:
+            raise AttributeError(f"Term '{name}' is not active or does not exist.")
+        term: self.TERM_CLASSES[name] = self._terms[name]
+        return term
+
+
+class FigureOfMerit:
+
     def __init__(
         self,
         interest_region: Dict[str, Tuple[float, float]],
         terms_config: Dict[str, Dict]
     ):
         self.interest_region = interest_region
-        self.terms_config = terms_config
+        self.terms_config = terms_config.copy()
         self._terms: Dict[str, FOMTermInstance] = {}
-        
+
         self.n_samples = None
         self.n_features = None
         self.n_targets = None
         
         # Set terms
-        for term_name, term_args in self.terms_config.items():
-            TermClass = self.TERM_CLASSES.get(term_name)
+        for term_name, term_args in terms_config.items():
+            TermClass = FOMTermAccessor.TERM_CLASSES.get(term_name)
             self._validate_term(term_name, term_args, TermClass)
             apply = term_args.pop('apply')
 
@@ -159,13 +180,76 @@ class FigureOfMerit:
                 scores = (scores,)  # Convert single array to tuple for consistent handling
             for score, score_name in zip(scores, score_names):
                 scores_dict[score_name] = score
-        return pd.DataFrame(scores_dict)
 
-    def get_score_names(self) -> List[str]:
+        df_scores = pd.DataFrame(scores_dict)
+        self._validate_n_negative_scores(df_scores)
+
+        return df_scores
+    
+    def _validate_n_negative_scores(self, df_scores: pd.DataFrame) -> None:
+        """
+        Validate if the number of columns with negative or null values matches
+        the expected count.
+
+        Logic:
+        1- Negative or null columns include negative scores but can also include
+           positive scores with only null values.
+        2- So number of negative or null columns is greater than negative scores.
+        3- But if it is not true then raise error, because number of expected
+           negative scores is too high.
+        """
+        expected_negative_columns = self.n_negative_scores
+
+        # Count columns with only negative or null values
+        columns_with_negative_or_null = ((df_scores <= 0).any()).sum()
+
+        
+        if columns_with_negative_or_null <= expected_negative_columns:
+            raise ValueError(
+                f"Mismatch in negative scores count. "
+                f"Expected {expected_negative_columns} columns with negative/null values, "
+                f"but found {columns_with_negative_or_null}."
+            )
+
+    @property
+    def score_names(self) -> List[str]:
         score_names = []
         for term in self._terms.values():
             score_names.extend(term.score_names)
         return score_names
+
+    @property
+    def n_negative_scores(self) -> int:
+        """
+        Count number of negative active scores.
+
+        Note:
+        - Some terms can return multiple scores.
+        - Only active terms (stored in self._terms) are considered.
+        - 'outlier_proximity', if present, is treated as a term with negative
+        score(s).
+        """
+        negative_term_names = ['outlier_proximity']
+        count_negative_scores = 0
+
+        for term_name in negative_term_names:
+            # Check if term is well defined
+            if term_name not in FOMTermAccessor.TERM_CLASSES:
+                raise AttributeError(f"Class attribute TERM_CLASSES is missing '{term_name}' term")
+
+            # Check if term is active and count its negative scores
+            if term_name in self._terms.keys() :
+                count_negative_scores += len(self._terms[term_name].score_names)
+
+        return count_negative_scores
+
+    @property
+    def n_positive_scores(self) -> int:
+        # Count number of scores of all active terms
+        count_scores = len(self.score_names)
+
+        # Subtract number of negative scores of active terms
+        return count_scores - self.n_negative_scores
 
     def get_parameters(self) -> Dict[str, Dict[str, Any]]:
         return {name: term.get_parameters() for name, term in self._terms.items()}
