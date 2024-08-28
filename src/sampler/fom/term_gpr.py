@@ -9,7 +9,7 @@ from sklearn.gaussian_process.kernels import RationalQuadratic
 from sklearn.exceptions import NotFittedError
 from scipy.optimize import shgo
 
-from .base import FittableFOMTerm
+from .term_base import FittableFOMTerm
 
 RANDOM_STATE = 42
 KERNEL = RationalQuadratic(length_scale_bounds=(1e-5, 10))

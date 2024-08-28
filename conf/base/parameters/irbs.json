@@ -28,7 +28,13 @@
       "exclusion_radius": 1e-5
     },
     "outlier_gpc": {
-      "apply": false
+      "apply": false,
+      "apply_proba": false,
+      "apply_std": false,
+      "apply_bstd": true, 
+      "apply_entropy": false,
+      "shgo_n": 1000,
+      "shgo_iters": 5
     }
   }
 }

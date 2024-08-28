@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import json
 
-from .base import FittableFOMTerm, FOMTermAccessor, FOMTermType, FOMTermInstance
+from .term_base import FittableFOMTerm, FOMTermAccessor, FOMTermType, FOMTermInstance
 from .term_gpr import SurrogateGPRTerm
 from .term_gpc import OutlierGPCTerm
 from .term_spatial import OutlierProximityTerm, SigmoidLocalDensityTerm

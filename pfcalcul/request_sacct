@@ -7,7 +7,7 @@ sacct_list () {
 	end_date=$2
 	states=$3
 
-	sacct --starttime=$start_date --endtime=$end_date --state=$states --format=Start,State%10,JobID%7,JobName%40,Elapsed,Timelimit | sort -k 1 | grep -v ' batch ' | grep -v monopy 
+	sacct --starttime=$start_date --endtime=$end_date --state=$states --format=Start,State%10,JobID%9,JobName%40,Elapsed,Timelimit | sort -k 1 | grep -v ' batch ' | grep -v monopy 
 }
 
 sacct_count () {

@@ -9,7 +9,7 @@ from sklearn.model_selection import RandomizedSearchCV
 from sklearn.cluster import MeanShift
 from scipy.optimize import shgo
 
-from .base import FittableFOMTerm
+from .term_base import FittableFOMTerm
 
 RANDOM_STATE = 42
 
