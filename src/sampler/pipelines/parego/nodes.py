@@ -42,7 +42,7 @@ def run_parego(
         features=features, targets=targets, additional_values=additional_values,
         treatment=treatment, n_proc=batch_size, simulator_env=simulator_env
     )
-    data = simulator.adapt_targets(data)
+    data = simulator.adapt_targets(data, spice_on=True)
 
     res = initialize_dataset(data=data, treatment=treatment)
     yield parse_results(res, current_history_size=0)
@@ -81,6 +81,7 @@ def run_parego(
         
         # Launch time expensive simulations
         new_df = simulator.process_data(new_x, real_x=False, index=n_total, treat_output=True)
+        new_df = treatment.classify_quality_interest(new_df, data_is_scaled=True)
 
         print(f"Round {iteration:03} (continued) - simulation results " + "-"*37)
         print(f'run_parego -> New samples after simulation:\n {new_df}')
@@ -93,7 +94,6 @@ def run_parego(
         )
         score = dace.get_score(new_df[features].values)
         new_df['obj_score'] = score
-        new_df = treatment.classify_quality_interest(new_df, data_is_scaled=True)
         timenow = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         new_df['datetime'] = timenow
         new_df['iteration'] = iteration

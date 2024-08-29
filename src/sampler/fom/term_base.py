@@ -96,7 +96,8 @@ class BaseFOMTerm(ABC):
         Note:
             - If multiple scores are returned, they should be in a consistent
         order with self.score_names property.
-            - The score must be in [0, 1], where greater is better.  
+            - The score must be either in [0, 1] or [-1, 0].
+            - Score always verifies greater is better.  
         """
         pass
 

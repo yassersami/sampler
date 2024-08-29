@@ -140,9 +140,12 @@ def normalized_power_function(X, target_dim):
     return np.column_stack([norms**(i + 1) for i in range(target_dim)])
 
 
-def run_fake_simulator(x_real, features, targets, additional_values, scaler, spice_on):
+def run_fake_simulator(
+    x_real: np.ndarray, features: List[str], targets: List[str],
+    additional_values: List[str], treatment: DataTreatment
+):
     """ Set a fake results df. All outputs are in real space (not scaled one)"""
-    x_scaled = scaler.transform_features(x_real)
+    x_scaled = treatment.scaler.transform_features(x_real)
     # As if y_sim = ['Pg_f', 'Tg_Tmax'] with values in [0, 1]
     y_sim = normalized_power_function(x_scaled, len(targets))
     # As if y_doi = ['sim_time', 'Composition', ...]
@@ -153,14 +156,7 @@ def run_fake_simulator(x_real, features, targets, additional_values, scaler, spi
         columns=features + targets + additional_values
     )
     # Get targets in real space (not in sclaed one)
-    new_points[features + targets] = scaler.inverse_transform(new_points[features + targets].values)
-
-    # Add some spice to check how outliers and errors are handled
-    if spice_on and new_points.shape[0] >= 4:
-        new_points.loc[0, 'sim_time'] = 60  # time_out
-        new_points.loc[1, targets] = [45e6, 6000][:len(targets)]  # interest sample
-        new_points.loc[2, targets[0]] = 1e20  # target out of bounds
-        new_points.loc[3, targets[0]] = np.nan  # failed simulation causing error (missing value)
+    new_points[features + targets] = treatment.scaler.inverse_transform(new_points[features + targets].values)
 
     return new_points
 
@@ -214,22 +210,34 @@ class SimulationProcessor:
         else:
             new_points = run_fake_simulator(
                 x_real, self.features, self.targets, self.additional_values,
-                self.treatment.scaler, spice_on=(index==0)
+                self.treatment,
             )
-        # Return data as outputed from simulator
+
         if not treat_output:
+            # Return data in real scale as returned by simulator
             return new_points
+
         # Scale and clean data
         scaled_data = self.treatment.treat_real_data(df_real=new_points)
         scaled_data = scaled_data[self.features + self.targets + self.additional_values]
         return scaled_data
 
-    def adapt_targets(self, data: pd.DataFrame) -> pd.DataFrame:
-        # If using fake simulator change targets values
-        if not self.use_simulator:
-            # Set index = 1 to avoid spice_on for initial data
-            scaled_data = self.process_data(
-                data[self.features].values, real_x=False, index=1, treat_output=True
-            )
-            data[self.targets] = scaled_data[self.targets].values
+    def adapt_targets(self, data: pd.DataFrame, spice_on: bool) -> pd.DataFrame:
+        if self.use_simulator:
+            return data
+        
+        # If using fake simulator change target values
+        scaled_data = self.process_data(
+            data[self.features].values, real_x=False, index=0, treat_output=True
+        )
+        data[self.targets] = scaled_data[self.targets].values
+
+        # Add some spice to check how outliers and errors are handled
+        if spice_on and data.shape[0] >= 4: 
+            interest_region_center = [sum(values) / 2 for values in self.treatment.scaled_interest_region.values()]
+
+            data.loc[0, 'sim_time'] = 60  # time_out
+            data.loc[1, self.targets] = interest_region_center  # interest sample
+            data.loc[2, self.targets[0]] = 1.1  # target out of bounds
+            data.loc[3, self.targets[0]] = np.nan  # failed simulation causing error (missing value)
         return data

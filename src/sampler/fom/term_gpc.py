@@ -226,7 +226,7 @@ class BinaryLatentGPC(LatentGPC):
 # TODO: finish BinaryLatentGPCTerm and split surrogate into GPR and GPR
 class BinaryLatentGPCTerm(FittableFOMTerm, BinaryLatentGPC):
     
-    required_args = ['interest_region']
+    required_args = []
     fit_params = {'X_only': False, 'drop_nan': False}
     
     def __init__(
@@ -235,7 +235,6 @@ class BinaryLatentGPCTerm(FittableFOMTerm, BinaryLatentGPC):
         apply_std: bool,
         apply_bstd: bool,
         apply_entropy: bool,
-        interest_region: Dict[str, Tuple[float, float]],
         positive_class: str,
         negative_class: str,
         shgo_n: int,
@@ -254,7 +253,6 @@ class BinaryLatentGPCTerm(FittableFOMTerm, BinaryLatentGPC):
         self.apply_std = apply_std
         self.apply_bstd = apply_bstd
         self.apply_entropy = apply_entropy
-        self.interest_region = interest_region
         
     @property
     def score_names(self) -> List[str]:
@@ -315,10 +313,12 @@ class BinaryLatentGPCTerm(FittableFOMTerm, BinaryLatentGPC):
             'apply_entropy': self.apply_entropy,
             'kernel': self.kernel_.get_params(),
             'kernel_str': str(self.kernel_),
+            'is_trained': self.is_trained,
         }
 
         if self.is_trained:
             params.update({
+                'max_std': self.max_std,
                 'log_marginal_likelihood': self.log_marginal_likelihood_value_,
                 'n_features': self.n_features_in_,
                 'n_train': self.base_estimator_.X_train_.shape[0],
@@ -345,14 +345,65 @@ class BinaryLatentGPCTerm(FittableFOMTerm, BinaryLatentGPC):
         return params
 
 
-class OutlierGPCTerm(BinaryLatentGPCTerm):
+class InterestGPCTerm(BinaryLatentGPCTerm):
+
+    required_args = BinaryLatentGPCTerm.required_args + ['interest_region']
+
     def __init__(
         self,
         apply_proba: bool,
         apply_std: bool,
         apply_bstd: bool,
         apply_entropy: bool,
+        shgo_n: int,
+        shgo_iters: int,
         interest_region: Dict[str, Tuple[float, float]],
+        **gpc_kwargs
+    ):
+        super().__init__(
+            apply_proba = apply_proba,
+            apply_std = apply_std,
+            apply_bstd = apply_bstd,
+            apply_entropy = apply_entropy,
+            positive_class='interest',
+            negative_class='no_interest',
+            shgo_n=shgo_n,
+            shgo_iters=shgo_iters,
+            kernel=KERNEL,
+            random_state=RANDOM_STATE,
+            **gpc_kwargs
+        )
+        self.interest_region = interest_region
+
+    def fit(self, X: np.ndarray, y: np.ndarray) -> None:
+        # Determine class status based on interest region appartenance of y values
+
+        # Compute interest condition
+        interest_cond = np.all(
+            [
+                (y[:, j] > val[0]) & (y[:, j] < val[1])
+                for j, val in enumerate(self.interest_region.values())
+            ],
+            axis=0
+        )
+
+        # Set 'quality' column based on interest conditions
+        y = np.where(
+            interest_cond,
+            self.class_to_index[self.negative_class],  # 0
+            self.class_to_index[self.positive_class]   # 1
+        )
+        super().fit(X, y)
+
+
+class OutlierGPCTerm(BinaryLatentGPCTerm):
+
+    def __init__(
+        self,
+        apply_proba: bool,
+        apply_std: bool,
+        apply_bstd: bool,
+        apply_entropy: bool,
         shgo_n: int,
         shgo_iters: int,
         **gpc_kwargs
@@ -362,7 +413,6 @@ class OutlierGPCTerm(BinaryLatentGPCTerm):
             apply_std = apply_std,
             apply_bstd = apply_bstd,
             apply_entropy = apply_entropy,
-            interest_region = interest_region,
             positive_class='inlier',
             negative_class='outlier',
             shgo_n=shgo_n,

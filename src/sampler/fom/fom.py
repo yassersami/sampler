@@ -2,38 +2,71 @@ from typing import List, Tuple, Dict, Union, Type, Any, Optional, ClassVar
 import numpy as np
 import pandas as pd
 import json
+import inspect
 
-from .term_base import FittableFOMTerm, FOMTermType, FOMTermInstance
+from .term_base import FittableFOMTerm, NonFittableFOMTerm, FOMTermType, FOMTermInstance
 from .term_gpr import SurrogateGPRTerm
-from .term_gpc import OutlierGPCTerm
+from .term_gpc import InterestGPCTerm, OutlierGPCTerm
 from .term_spatial import OutlierProximityTerm, SigmoidLocalDensityTerm
 
 
 class FOMTermAccessor:
     """
     This class enables accessing terms in FigureOfMerit.terms.term_name with
-    autocompletion
+    autocompletion and provides methods to access term classes.
     """
 
-    TERM_CLASSES: Dict[str, FOMTermType] = {
-        'surrogate_gpr': SurrogateGPRTerm,
-        'sigmoid_density': SigmoidLocalDensityTerm,
-        'outlier_proximity': OutlierProximityTerm,
-        'outlier_gpc': OutlierGPCTerm,
-    }
+    surrogate_gpr: SurrogateGPRTerm
+    interest_gpc: InterestGPCTerm
+    sigmoid_density: SigmoidLocalDensityTerm
+    outlier_proximity: OutlierProximityTerm
+    outlier_gpc: OutlierGPCTerm
 
     def __init__(self, terms: Dict[str, FOMTermInstance]):
         self._terms = terms
-        self.surrogate_gpr: SurrogateGPRTerm
-        self.sigmoid_density: SigmoidLocalDensityTerm
-        self.outlier_proximity: OutlierProximityTerm
-        self.outlier_gpc: OutlierGPCTerm
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str) -> FOMTermInstance:
         if name not in self._terms:
             raise AttributeError(f"Term '{name}' is not active or does not exist.")
-        term: self.TERM_CLASSES[name] = self._terms[name]
-        return term
+        return self._terms[name]
+
+    @classmethod
+    def is_valid_term_class(cls, term_class: FOMTermType) -> bool:
+        """
+        Checks if a given input is a valid FOM term class.
+        """
+        return (
+            isinstance(term_class, type) and
+            issubclass(term_class, (FittableFOMTerm, NonFittableFOMTerm))
+        )
+
+    @classmethod
+    def is_valid_term_name(cls, term_name: str) -> bool:
+        """
+        Checks if a given term name is defined and is a valid FOM term class.
+        """
+        if term_name not in cls.__annotations__:
+            return False
+        term_class = cls.__annotations__[term_name]
+        return cls.is_valid_term_class(term_class)
+
+    @classmethod
+    def get_term_class(cls, term_name: str) -> FOMTermType:
+        """ Returns the class for a given term name. """
+        if not cls.is_valid_term_name(term_name):
+            raise ValueError(f"'{term_name}' is not a valid FOM term class.")
+        return cls.__annotations__[term_name]
+
+    @classmethod
+    def get_term_classes(cls) -> Dict[str, FOMTermType]:
+        """
+        Returns a dictionary of term names and their corresponding classes.
+        """
+        return {
+            term_name: term_class
+            for term_name, term_class in cls.__annotations__.items()
+            if cls.is_valid_term_class(term_class)
+        }
 
 
 class FigureOfMerit:
@@ -53,7 +86,7 @@ class FigureOfMerit:
         
         # Set terms
         for term_name, term_args in terms_config.items():
-            TermClass = FOMTermAccessor.TERM_CLASSES.get(term_name)
+            TermClass = FOMTermAccessor.get_term_class(term_name)
             self._validate_term(term_name, term_args, TermClass)
             apply = term_args.pop('apply')
 
@@ -203,8 +236,7 @@ class FigureOfMerit:
         # Count columns with only negative or null values
         columns_with_negative_or_null = ((df_scores <= 0).any()).sum()
 
-        
-        if columns_with_negative_or_null <= expected_negative_columns:
+        if columns_with_negative_or_null < expected_negative_columns:
             raise ValueError(
                 f"Mismatch in negative scores count. "
                 f"Expected {expected_negative_columns} columns with negative/null values, "
@@ -234,7 +266,7 @@ class FigureOfMerit:
 
         for term_name in negative_term_names:
             # Check if term is well defined
-            if term_name not in FOMTermAccessor.TERM_CLASSES:
+            if not FOMTermAccessor.is_valid_term_name(term_name):
                 raise AttributeError(f"Class attribute TERM_CLASSES is missing '{term_name}' term")
 
             # Check if term is active and count its negative scores

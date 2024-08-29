@@ -182,10 +182,12 @@ class SurrogateGPRTerm(FittableFOMTerm, SurrogateGPR):
             'apply_std': self.apply_std,
             'kernel': self.kernel_.get_params(),
             'kernel_str': str(self.kernel_),
+            'is_trained': self.is_trained,
         }
 
         if self.is_trained:
             params.update({
+                'max_std': self.max_std,
                 'log_marginal_likelihood': self.log_marginal_likelihood_value_,
                 'n_features': self.n_features_in_,
                 'n_train': self.X_train_.shape[0],

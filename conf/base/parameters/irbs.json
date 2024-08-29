@@ -19,6 +19,15 @@
       "shgo_n": 1000,
       "shgo_iters": 5
     },
+    "interest_gpc": {
+      "apply": false,
+      "apply_proba": true,
+      "apply_std": true,
+      "apply_bstd": false,
+      "apply_entropy": false,
+      "shgo_n": 1000,
+      "shgo_iters": 5
+    },
     "sigmoid_density": {
       "apply": true,
       "decay_dist": 0.04
