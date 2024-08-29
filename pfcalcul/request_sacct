@@ -3,27 +3,28 @@
 # requests for pfcalcul
 
 sacct_list () {
-	start_date=$1
-	end_date=$2
-	states=$3
+        start_date=$1
+        end_date=$2
+        states=$3
 
-	sacct --starttime=$start_date --endtime=$end_date --state=$states --format=Start,State%10,JobID%9,JobName%40,Elapsed,Timelimit | sort -k 1 | grep -v ' batch ' | grep -v monopy 
+        sacct --starttime=$start_date --endtime=$end_date --state=$states --format=Submit,State%10,JobID%9,JobName%40,Elapsed | sort -k 1 | grep -v ' batch ' | grep -v monopy
 }
 
 sacct_count () {
-	start_date=$1
-	end_date=$2
-	states=$3
+        start_date=$1
+        end_date=$2
+        states=$3
 
-	lines_tot=$(sacct --starttime=$start_date --endtime=$end_date --state=$states | grep -v ' batch ' | grep -v monopy | wc -l)
-	jobs_tot=$(( $lines_tot - 2 ))
+        lines_tot=$(sacct --starttime=$start_date --endtime=$end_date --state=$states | grep -v ' batch ' | grep -v monopy | wc -l)
+        jobs_tot=$(( $lines_tot - 2 ))
 
-	echo -e "----- Sacct request -----\n"
-	echo "Start date : $start_date"
-	echo "End date   : $end_date"
-	echo "States	   : $states"
-	echo "Total lines: $lines_tot"
-	echo "Total jobs : $jobs_tot"
+        echo -e "\n-----------"
+        echo "Start date : $start_date"
+        echo "End date   : $end_date"
+        echo "States       : $states"
+        echo "Total lines: $lines_tot"
+        echo "Total jobs : $jobs_tot"
+        echo -e "-----------\n"
 }
 
 # ---MAIN---
@@ -40,12 +41,6 @@ states="COMPLETED,CANCELLED,TIMEOUT,RUNNING"
 
 request="$start_date_7days $end_date $states"
 
-echo -e "\nlaunch: sacct_list $request\n"
 sacct_list $request
 
-
-echo -e "\nlaunch: sacct_count $request\n"
 sacct_count $request
-
-echo -e "\n"
-

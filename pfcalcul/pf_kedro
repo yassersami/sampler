@@ -43,7 +43,7 @@ echo "Executing: ${EX}"
 
 cat << EOF >> .sbatch-${now}
 #!/bin/bash
-#SBATCH --job-name=kedro-${pipe_name}-${env}-${now}
+#SBATCH --job-name=kedro-${pipe_name}-${env}
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=${cores}
 #SBATCH --output=${out}/stdout.txt
