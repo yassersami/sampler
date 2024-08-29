@@ -163,6 +163,8 @@ class SurrogateGPRTerm(FittableFOMTerm, SurrogateGPR):
             self.update_max_std()
 
     def predict_score(self, X: np.ndarray) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
+        X = np.atleast_2d(X)
+
         scores = []
         
         if self.apply_interest:

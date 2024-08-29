@@ -144,9 +144,9 @@ class GAOptimizer(MultiModalOptimizer):
 
         ga = GA(  # Maximization algorithm
             obj_func,
-            n_dim=self.n_features, 
-            size_pop=self.population_size ,
-            max_iter=self.generations, 
+            n_dim=self.n_features,
+            size_pop=self.population_size,  # Must be an even number
+            max_iter=self.generations,
             prob_mut=0.1,
             lb=[0] * self.n_features,  # Lower bounds
             ub=[1] * self.n_features  # Upper bounds

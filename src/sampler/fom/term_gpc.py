@@ -274,6 +274,7 @@ class BinaryLatentGPCTerm(FittableFOMTerm, BinaryLatentGPC):
             self.update_max_std()
 
     def predict_score(self, X: np.ndarray) -> Union[np.ndarray, Tuple[np.ndarray, ...]]:
+        X = np.atleast_2d(X)
 
         # Return ones (best value) if the model is not trained,
         # as no negative class samples are encountered yet
