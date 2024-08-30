@@ -20,8 +20,16 @@ class MultiModalOptimizer(ABC):
         bounds = [(0, 1)]*self.n_features
         pass
 
-    def objective_function(self, x: np.ndarray, fom: FigureOfMerit) -> float:
+    def score_objective(self, x: np.ndarray, fom: FigureOfMerit) -> float:
+        """ Objective for maximization """
         return fom.predict_score(x.reshape(1, -1)).item()
+
+    def loss_objective(self, x: np.ndarray, fom: FigureOfMerit) -> float:
+        """
+        Objective for minimization. It is a smaller-is-better objective where
+        smallest best value is 0.
+        """
+        return fom.n_positive_scores - fom.predict_score(x.reshape(1, -1)).item()
 
 
 class OptimizerFactory:
@@ -99,8 +107,7 @@ class SHGOOptimizer(MultiModalOptimizer):
 
         self.n_features = fom.n_features  # Used in self.sort_by_relevance
 
-        # Define a smaller is better objective where smallest best value is 0
-        obj_func = lambda x: fom.n_positive_scores - self.objective_function(x, fom)
+        obj_func = lambda x: self.loss_objective(x, fom)
 
         result = shgo(  # Minimization algorithm
             obj_func,
@@ -140,7 +147,7 @@ class GAOptimizer(MultiModalOptimizer):
         )
 
         self.n_features = fom.n_features
-        obj_func = lambda x: self.objective_function(x, fom)  # No negation needed
+        obj_func = lambda x: self.loss_objective(x, fom)
 
         ga = GA(  # Maximization algorithm
             obj_func,
@@ -168,76 +175,6 @@ class GAOptimizer(MultiModalOptimizer):
         df_print = pd.concat([df_candidates, df_scores], axis=1, ignore_index=False)
         print(
             "GAOptimizer -> Selected points to be input to the simulator:\n",
-            df_print
-        )
-
-        return X_candidates, df_scores
-
-
-@OptimizerFactory.register('shgo_2')
-class SHGOOptimizer_2(MultiModalOptimizer):
-    def __init__(self, batch_size, n, iters, diversity_threshold):
-        super().__init__(batch_size)
-        self.n = n
-        self.iters = iters
-        self.diversity_threshold = diversity_threshold
-
-    def optimize(self, fom):
-        print(
-            f"SHGOOptimizer_2 -> n: {self.n}, iters: {self.iters}, diversity_threshold: {self.diversity_threshold} - "
-            "Searching for good candidates..."
-        )
-
-        self.n_features = fom.n_features
-
-        # Define a smaller is better objective where smallest best value is 0
-        obj_func = lambda x: fom.n_positive_scores - self.objective_function(x, fom)
-
-        result = shgo(  # Minimization algorithm
-            obj_func,
-            bounds=[(0, 1)]*self.n_features,
-            n=self.n, 
-            iters=self.iters, 
-            # options={'ftol': 1e-6, 'maxev': 1000}
-        )
-
-        # Get all local minima found by SHGO
-        candidates = np.array(result.xl)
-        scores = np.array([self.objective_function(x, fom) for x in candidates])
-
-        # Sort candidates by score (highest to lowest)
-        sorted_indices = np.argsort(scores)[::-1]
-        candidates = candidates[sorted_indices]
-        scores = scores[sorted_indices]
-
-        # Select diverse set of candidates
-        selected_indices = [0]  # Always include the best point
-        for i in range(1, len(candidates)):
-            if len(selected_indices) == self.batch_size:
-                break
-            
-            # Calculate distances to already selected points
-            distances = pdist(np.vstack([candidates[selected_indices], candidates[i]]))
-            min_distance = np.min(distances[-len(selected_indices):])
-            
-            # Add point if it's sufficiently different from already selected points
-            if min_distance > self.diversity_threshold:
-                selected_indices.append(i)
-
-        # If we don't have enough diverse points, fill with best remaining points
-        while len(selected_indices) < self.batch_size and len(selected_indices) < len(candidates):
-            remaining_indices = set(range(len(candidates))) - set(selected_indices)
-            selected_indices.append(min(remaining_indices, key=lambda i: scores[i]))
-
-        X_candidates = candidates[selected_indices]
-        df_scores = fom.predict_scores_df(X_candidates)
-        df_scores['shgo_obj'] = [obj_func(x) for x in X_candidates]
-        
-        feature_cols = [f'feature_{i+1}' for i in range(fom.n_features)]
-        df_candidates = pd.DataFrame(X_candidates, columns=feature_cols)
-        df_print = pd.concat([df_candidates, df_scores], axis=1, ignore_index=False)
-        print(
-            "SHGOOptimizer_2 -> Selected points to be input to the simulator:\n",
             df_print
         )
 
