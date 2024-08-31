@@ -21,13 +21,13 @@ class MultiModalOptimizer(ABC):
         pass
 
     def score_objective(self, x: np.ndarray, fom: FigureOfMerit) -> float:
-        """ Objective for maximization """
+        """ Objective for maximization with x of shape (n_dim,). """
         return fom.predict_score(x.reshape(1, -1)).item()
 
     def loss_objective(self, x: np.ndarray, fom: FigureOfMerit) -> float:
         """
         Objective for minimization. It is a smaller-is-better objective where
-        smallest best value is 0.
+        smallest best value is 0. x of shape (n_dim,).
         """
         return fom.n_positive_scores - fom.predict_score(x.reshape(1, -1)).item()
 
@@ -107,7 +107,7 @@ class SHGOOptimizer(MultiModalOptimizer):
 
         self.n_features = fom.n_features  # Used in self.sort_by_relevance
 
-        obj_func = lambda x: self.loss_objective(x, fom)
+        def obj_func(x): return self.loss_objective(x, fom)
 
         result = shgo(  # Minimization algorithm
             obj_func,
@@ -118,7 +118,7 @@ class SHGOOptimizer(MultiModalOptimizer):
         )
         res = result.xl if result.success else result.x.reshape(1, -1)
         X_candidates = self.choose_results(minimums=res, size=self.batch_size)
-        
+
         df_scores = fom.predict_scores_df(X_candidates)
         df_scores['shgo_obj'] = [obj_func(x) for x in X_candidates]
 
@@ -147,7 +147,7 @@ class GAOptimizer(MultiModalOptimizer):
         )
 
         self.n_features = fom.n_features
-        obj_func = lambda x: self.loss_objective(x, fom)
+        def obj_func(x): return self.loss_objective(x, fom)
 
         ga = GA(  # Maximization algorithm
             obj_func,
@@ -161,7 +161,7 @@ class GAOptimizer(MultiModalOptimizer):
 
         ga.run()
         population = ga.chrom2x(ga.Chrom)
-        score = np.array([fom.predict_score(ind).item() for ind in population])
+        score = np.array([obj_func(ind) for ind in population])
         sorted_indices = np.argsort(score)
 
         best_indices = sorted_indices[:self.batch_size]

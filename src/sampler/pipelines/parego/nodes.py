@@ -92,12 +92,11 @@ def run_parego(
         new_df[prediction_cols] = (
             prediction.reshape(-1, 1) if prediction.ndim == 1 else prediction
         )
-        score = dace.get_score(new_df[features].values)
-        new_df['obj_score'] = score
+        new_df['obj_score'] = dace.get_loss(new_df[features].values)
         timenow = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         new_df['datetime'] = timenow
         new_df['iteration'] = iteration
-        
+
         # Store final batch results
         yield parse_results(new_df, current_history_size=res.shape[0])
 
@@ -263,11 +262,16 @@ class DACEModel:
         imp[mask] = ei[mask]
         return imp
 
-    def get_score(self, x: np.array):
+    def get_score(self, x: np.ndarray) -> np.ndarray:
         if self.use_maxIpr:
             return self.expected_improvement(x)
         elif self.use_interest:
             return self.excpected_interest(x)
+
+    def get_loss(self, x: np.ndarray) -> np.ndarray:
+        # Expected improvement is an increasing function of goodness of selected sample.
+        # We add a minus to set a loss for minization algorithm.
+        return - self.get_score(x)
 
 
 def tchebychev(y_pop: np.array, llambda: List[float]):
@@ -291,10 +295,8 @@ def EvolAlg(
     dimensions = len(dace.features)
 
     def fitness_function(x):
-        # Expected improvement is an increasing function of goodness of selected sample. Thus we add a minus for minization algorithm.
         x_reshaped = x.reshape(1, -1)
-        score = dace.get_score(x_reshaped)
-        return -score.item()
+        return dace.get_loss(x_reshaped).item()
 
     # Initialize the Genetic Algorithm for minimzation
     # Basic GA, I don't have implemented the real algoritmh from paper (it's not important)

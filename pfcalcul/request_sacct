@@ -22,7 +22,6 @@ sacct_count () {
         echo "Start date : $start_date"
         echo "End date   : $end_date"
         echo "States       : $states"
-        echo "Total lines: $lines_tot"
         echo "Total jobs : $jobs_tot"
         echo -e "-----------\n"
 }
