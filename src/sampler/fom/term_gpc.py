@@ -126,7 +126,7 @@ class BinaryLatentGPC(LatentGPC):
         Update maximum standard deviation of the Gaussian Process for points
         between 0 and 1.
         """
-        print("BinaryLatentGPC.update_max_std -> Searching for the maximum std...")
+        print(f"{self.__class__.__name__}.update_max_std -> Searching for the maximum std...")
         if not self.is_trained:
             raise NotFittedError("The model must be trained before calling update_max_std.")
 
@@ -150,7 +150,7 @@ class BinaryLatentGPC(LatentGPC):
         max_std = min(1.0, max_std * (1 + search_error))
         self.max_std = max_std
 
-        print(f"BinaryLatentGPC.update_max_std -> Maximum GP std: {max_std}")
+        print(f"{self.__class__.__name__}.update_max_std -> Maximum GP std: {max_std}")
 
     def get_std_score(self, X: np.ndarray) -> np.ndarray:
         X = np.atleast_2d(X)

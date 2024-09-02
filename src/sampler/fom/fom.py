@@ -204,6 +204,13 @@ class FigureOfMerit:
                 all_scores.append(scores)
         return np.sum(all_scores, axis=0)
 
+    def predict_loss(self, X: np.ndarray) -> float:
+        """
+        A custom translated opposite to enable a smaller-is-better objective
+        where smallest best value is 0.
+        """
+        return self.n_positive_scores - self.predict_score(X)
+
     def predict_scores_df(self, X: np.ndarray) -> pd.DataFrame:
         scores_dict = {}
         for term in self._terms.values():

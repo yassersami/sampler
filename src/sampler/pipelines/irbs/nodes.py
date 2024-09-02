@@ -30,7 +30,9 @@ def irbs_sampling(
     )
 
     # Set optimizer
-    optimizer = OptimizerFactory.create_from_config(batch_size, optimizer_config)
+    optimizer = OptimizerFactory.create_from_config(
+        len(features), batch_size, optimizer_config
+    )
 
     # Set simulator environement
     simulator = SimulationProcessor(
@@ -67,10 +69,11 @@ def irbs_sampling(
         model.fit(X=res[features].values, y=res[targets].values)
 
         # Search new candidates to add to res dataset
-        new_x, scores = optimizer.optimize(model)
+        X_batch, df_mmm_scores = optimizer.run_old_mmm(model.predict_loss)
+        df_fom_scores = model.predict_scores_df(X_batch)
 
         # Launch time expensive simulations
-        new_df = simulator.process_data(new_x, real_x=False, index=n_total, treat_output=True)
+        new_df = simulator.process_data(X_batch, real_x=False, index=n_total, treat_output=True)
 
         # ----- Add more cols than features, targets and additional_values -----
 
@@ -83,7 +86,7 @@ def irbs_sampling(
         # Add multi-objective optimization scores
         # * ignore_index=False to keep columns names 
         # * join='inner' because scores can have more rows than new_df
-        new_df = pd.concat([new_df, scores], axis=1, join='inner', ignore_index=False)
+        new_df = pd.concat([new_df, df_fom_scores, df_mmm_scores], axis=1, join='inner', ignore_index=False)
 
         # Add iteration number and datetime
         timenow = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
