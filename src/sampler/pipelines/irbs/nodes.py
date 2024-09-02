@@ -13,7 +13,7 @@ from sampler.common.data_treatment import DataTreatment, initialize_dataset
 from sampler.common.storing import parse_results
 from sampler.common.simulator import SimulationProcessor
 from sampler.fom.fom import FigureOfMerit
-from sampler.fom.optimizer import OptimizerFactory
+from sampler.optimizer.optimizer import OptimizerFactory
 
 
 def irbs_sampling(
