@@ -1,4 +1,9 @@
 {
+  "irbs_selector_config": {
+    "diversity": {"apply": true},
+    "centrism": {"apply": false},
+    "elitism": {"apply": false}
+  },
   "irbs_optimizer_config": {
     "shgo": {
         "apply": true,

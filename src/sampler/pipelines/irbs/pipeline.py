@@ -27,6 +27,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 run_condition='params:run_condition',
                 
                 fom_terms_config='params:irbs_fom_terms_config',
+                selector_config='params:irbs_selector_config',
                 optimizer_config='params:irbs_optimizer_config',
             ),
             outputs='irbs_history',

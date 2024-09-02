@@ -13,14 +13,22 @@ from sampler.common.data_treatment import DataTreatment, initialize_dataset
 from sampler.common.storing import parse_results
 from sampler.common.simulator import SimulationProcessor
 from sampler.fom.fom import FigureOfMerit
+from sampler.optimizer.selector import SelectorFactory
 from sampler.optimizer.optimizer import OptimizerFactory
 
 
 def irbs_sampling(
-    data: pd.DataFrame, treatment: DataTreatment,
-    features: List[str], targets: List[str], additional_values: List[str],
-    simulator_env: Dict, batch_size: int, run_condition: Dict,
-    fom_terms_config: Dict[str, Dict], optimizer_config: Dict[str, Dict]
+    data: pd.DataFrame,
+    treatment: DataTreatment,
+    features: List[str],
+    targets: List[str],
+    additional_values: List[str],
+    simulator_env: Dict,
+    batch_size: int,
+    run_condition: Dict,
+    fom_terms_config: Dict[str, Dict],
+    selector_config: Dict[str, Dict],
+    optimizer_config: Dict[str, Dict]
 ):
 
     # Set figure of merite (acquisition function)
@@ -29,9 +37,12 @@ def irbs_sampling(
         terms_config=fom_terms_config
     )
 
-    # Set optimizer
+    # Set multimodal selector and optimizer
+    multi_modal_selector = SelectorFactory.create_from_config(
+        batch_size, selector_config
+    )
     optimizer = OptimizerFactory.create_from_config(
-        len(features), batch_size, optimizer_config
+        len(features), multi_modal_selector, optimizer_config
     )
 
     # Set simulator environement
@@ -69,7 +80,7 @@ def irbs_sampling(
         model.fit(X=res[features].values, y=res[targets].values)
 
         # Search new candidates to add to res dataset
-        X_batch, df_mmm_scores = optimizer.run_old_mmm(model.predict_loss)
+        X_batch, df_mmm_scores = optimizer.run_mmm(model.predict_loss)
         df_fom_scores = model.predict_scores_df(X_batch)
 
         # Launch time expensive simulations

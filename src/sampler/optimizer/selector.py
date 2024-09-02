@@ -1,23 +1,76 @@
 from typing import List, Dict, Tuple, Callable, Type, Union, Optional, ClassVar
-from abc import ABC, abstractmethod
 import warnings
 import numpy as np
 import pandas as pd
 from scipy.spatial.distance import pdist, squareform
-from scipy.optimize import shgo
-from sko.GA import GA
+
+from .base import MultiModalSelector
 
 
-class DiversityMultiModalSelector:
+class SelectorFactory:
+    _selectors: Dict[str, Type[MultiModalSelector]] = {}
+
+    @classmethod
+    def register(cls, name: str):
+        def decorator(selector_class: Type[MultiModalSelector]):
+            cls._selectors[name] = selector_class
+            return selector_class
+        return decorator
+
+    @classmethod
+    def create_from_config(
+        cls,
+        batch_size: int,
+        selector_config: Dict[str, Dict]
+    ) -> MultiModalSelector:
+
+        # Check if all configs have the 'apply' key
+        for name, config in selector_config.items():
+            if 'apply' not in config:
+                raise KeyError(
+                    f"Selector '{name}' is missing the 'apply' key "
+                    "in its configuration."
+                )
+
+        # Gather all active selectors
+        applied_selectors = [
+            name for name, config in selector_config.items()
+            if config['apply']
+        ]
+
+        if len(applied_selectors) != 1:
+            raise ValueError(
+                "Exactly one selector must be applied. "
+                f"Found {len(applied_selectors)}"
+            )
+
+        # Set selected selector
+        selector_name = applied_selectors[0]
+        selector_args = selector_config[selector_name].copy()
+        selector_args.pop('apply')
+
+        if selector_name not in cls._selectors:
+            raise ValueError(f"Unknown selector: {selector_name}")
+
+        SelectorClass = cls._selectors[selector_name]
+        return SelectorClass(batch_size=batch_size, **selector_args)
+
+    @classmethod
+    def list_selectors(cls):
+        return list(cls._selectors.keys())
+
+
+@SelectorFactory.register('diversity')
+class DiversitySelector(MultiModalSelector):
+
     def __init__(self, batch_size: int):
-        self.batch_size = batch_size
+        super().__init__(batch_size)
 
-        # Multimodal progress record attributes
-        self._mmm_score_names = ['_id', 'loss', 'diversity', 'extremeness', 'normal_loss', 'normal_diversity', 'mmm_loss']
-        self.reset_mmm_scores()
-
-    def reset_mmm_scores(self):
-        self._mmm_scores = {name: [] for name in self._mmm_score_names}
+        self._record_columns = [
+            '_id', 'loss', 'diversity', 'extremeness',
+            'normal_loss', 'normal_diversity', 'mmm_loss'
+        ]
+        self.reset_records()
 
     def select_diverse_optima(
         self, X: np.ndarray, loss_values: np.ndarray
@@ -27,6 +80,11 @@ class DiversityMultiModalSelector:
         minimization.
         """
         X = np.atleast_2d(X)
+        X = np.unique(X, axis=0)
+
+        if X.shape[0] <= self.batch_size:
+            # If not enough candidates return all available ones
+            return X
 
         # Normalize objective values to [0, 1] range
         normalized_loss = self._normalize(loss_values)
@@ -36,40 +94,32 @@ class DiversityMultiModalSelector:
 
         # Edge proximity loss (extremeness to minimize)
         edge_proximity_mask = (np.isclose(X, 0) | np.isclose(X, 1))  # Shape of X
-        extremeness = edge_proximity_mask.mean(axis=1)
+        extremeness = edge_proximity_mask.sum(axis=1)
 
-        # Initialize selected candidates with the best sample
-        first_index = np.argmin(loss_values)  # best sample with smallest objective value
-        selected_indices = [first_index]
+        # Initialize list of selected indices
+        selected_indices = []
 
         # Initialize list of not yet selected indices
         n_samples = X.shape[0]
         available_indices = list(range(n_samples))
-        available_indices.remove(first_index)
-
-        # Set dict to store selection progress
-        self._store_mmm_progress(
-            _id             =first_index,
-            loss            =loss_values[first_index],
-            diversity       =np.nan,
-            extremeness     =extremeness[first_index],
-            normal_loss     =normalized_loss[first_index],
-            normal_diversity=np.nan,
-            mmm_loss        =normalized_loss[first_index],
-        )
 
         # Select diverse candidates
-        for _ in range(1, min(self.batch_size, n_samples)):
+        for _ in range(self.batch_size):
 
-            # Calculate diversity score: mean of distances to already selected candidates
-            diversity_scores = distances[:, selected_indices].mean(axis=1)
+            if not selected_indices:
+                # If no selected indices yet set dummy null diversity value
+                diversity_scores = np.zeros(n_samples)
+                normalized_diversity = np.zeros(n_samples)
+            else:
+                # Calculate diversity score: mean distance to already selected candidates
+                diversity_scores = distances[:, selected_indices].mean(axis=1)
 
-            # Normalize diversity scores to [0, 1] range
-            normalized_diversity = self._normalize(diversity_scores)
+                # Normalize diversity scores to [0, 1] range
+                normalized_diversity = self._normalize(diversity_scores)
 
             # Combine normalized objective and diversity scores
             # objective is minimized while diversity is maximized
-            combined_loss = normalized_loss - normalized_diversity  + 2 * extremeness  # This is the main operation
+            combined_loss = 2 * extremeness + normalized_loss - normalized_diversity    # This is the main operation
 
             # Remove rows of already selected indices
             available_combined_loss = [combined_loss[i] for i in available_indices]
@@ -81,7 +131,7 @@ class DiversityMultiModalSelector:
             available_indices.remove(next_index)
 
             # Store selection progress
-            self._store_mmm_progress(
+            self.save_records(
                 _id             =next_index,
                 loss            =loss_values[next_index],
                 diversity       =diversity_scores[next_index],
@@ -91,62 +141,87 @@ class DiversityMultiModalSelector:
                 mmm_loss        =combined_loss[next_index],
             )
 
-        return X[selected_indices], pd.DataFrame(self._mmm_scores)
-
-    @staticmethod
-    def _normalize(values: np.ndarray) -> np.ndarray:
-        """Normalize values to [0, 1] range."""
-        min_val, max_val = values.min(), values.max()
-        return (values - min_val) / (max_val - min_val) if max_val > min_val else np.zeros_like(values)
-
-    def _store_mmm_progress(self, **kwargs):
-        # Store selection progress
-        for key in self._mmm_score_names:
-            if key not in kwargs.keys():
-                raise KeyError(f"Multimodal selection progess record is missing '{key}'")
-
-            self._mmm_scores[key].append(kwargs[key])
+        return X[selected_indices], pd.DataFrame(self._records)
 
 
-class BoundaryMultiModalSelector():
+@SelectorFactory.register('centrism')
+class CentrismSelector(MultiModalSelector):
 
-    @classmethod
-    def sort_by_relevance(cls, X_unique: np.ndarray, mask: np.ndarray) -> List:
-        n_dim = X_unique.shape[1]
-        bounds = [[] for _ in range(n_dim + 1)]
-        for x_row, cond in zip(X_unique, mask):
-            cond_sum = cond.sum()
-            # TODO why not directly bounds[cond_sum].append since cond_sum is in [0, n_dim] anyway ?
-            for local_sum in range(n_dim + 1):
-                if cond_sum == local_sum:
-                    bounds[local_sum].append(x_row)
-        return [
-            item
-            for val in bounds
-            for item in val
-        ]
+    def __init__(self, batch_size: int):
+        super().__init__(batch_size)
 
-    @classmethod
-    def select_diverse_optima(cls, X_candidates: np.ndarray, batch_size: int) -> np.ndarray:
-        X_unique = np.unique(X_candidates, axis=0)
-        if len(X_unique) <= batch_size:
-            # if not enough candidates return all available ones
-            return X_candidates
+        self._record_columns = ['_id', 'loss', 'extremeness', 'mmm_loss']
+        self.reset_records()
 
-        # If a lot of candidates, select best ones
-        mask = (np.isclose(X_unique, 0) | np.isclose(X_unique, 1))
-        X_unique_sorted = cls.sort_by_relevance(X_unique, mask)
-        return np.array(X_unique_sorted[:batch_size])
+    def select_diverse_optima(
+        self, X: np.ndarray, loss_values: np.ndarray
+    ) -> Tuple[np.ndarray, pd.DataFrame]:
+
+        X = np.atleast_2d(X)
+        X = np.unique(X, axis=0)
+
+        if X.shape[0] <= self.batch_size:
+            # If not enough candidates return all available ones
+            return X
+
+        # Create edge proximity mask where true if value close to (0 | 1) edges 
+        edge_proximity_mask = (np.isclose(X, 0) | np.isclose(X, 1))
+
+        # Get a loss based on number of close features to an edge per row
+        extremeness = edge_proximity_mask.sum(axis=1)
+
+        # Combine extremeness and loss values but consider extremeness first
+        combined_loss = 10 * extremeness + loss_values
+
+        # Get indices to sort X where smallest value (less close to an edge) comes first
+        # 'stable' sorting maintains the relative order of equal elements
+        sort_indices = np.argsort(combined_loss, kind='stable')
+
+        # Set the final selected indices
+        selected_indices = sort_indices[:self.batch_size]
+
+        self._records = {
+            '_id': selected_indices,
+            'loss': loss_values[selected_indices],
+            'extremeness': extremeness[selected_indices],
+            'mmm_loss': combined_loss[selected_indices],
+        }
+        return X[selected_indices], pd.DataFrame(self._records)
 
 
-class MultiModalSelector():
-    boundary_mms: BoundaryMultiModalSelector
-    diversity_mms: DiversityMultiModalSelector
+@SelectorFactory.register('elitism')
+class ElitismSelector(MultiModalSelector):
 
-    def __init__(self, name):
-        if name == 'boundary_selector':
-            self.selector = BoundaryMultiModalSelector()
-        elif name == 'diversity_selector':
-            self.selector = DiversityMultiModalSelector()
-        else:
-            raise AttributeError(f"{name} is unknown multimodal selector")
+    def __init__(self, batch_size: int):
+        super().__init__(batch_size)
+
+        self._record_columns = ['_id', 'loss', 'mmm_loss']
+        self.reset_records()
+
+    def select_diverse_optima(
+        self, X: np.ndarray, loss_values: np.ndarray
+    ) -> Tuple[np.ndarray, pd.DataFrame]:
+
+        X = np.atleast_2d(X)
+        X = np.unique(X, axis=0)
+
+        if X.shape[0] <= self.batch_size:
+            # If not enough candidates return all available ones
+            return X
+
+        # Combined loss based exclusively on objective loss value
+        combined_loss = loss_values
+
+        # Get indices to sort X where smallest loss value comes first
+        sort_indices = np.argsort(combined_loss)
+
+        # Set the final selected indices
+        selected_indices = sort_indices[:self.batch_size]
+
+        self._records = {
+            '_id': selected_indices,
+            'loss': loss_values[selected_indices],
+            'mmm_loss': combined_loss[selected_indices]
+        }
+        return X[selected_indices], pd.DataFrame(self._records)
+    
