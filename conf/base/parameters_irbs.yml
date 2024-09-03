@@ -1,55 +1,49 @@
-{
-  "irbs_selector_config": {
-    "diversity": {"apply": true},
-    "centrism": {"apply": false},
-    "elitism": {"apply": false}
-  },
-  "irbs_optimizer_config": {
-    "shgo": {
-        "apply": true,
-        "n": 1000,
-        "iters": 5
-    },
-    "ga": {
-        "apply": false,
-        "population_size": 20,
-        "generations": 1000,
-        "mutation_probability": 0.2
-    }
-  },
-  "irbs_fom_terms_config": {
-    "surrogate_gpr": {
-      "apply": true,
-      "apply_interest": true,
-      "apply_std": true,
-      "shgo_n": 1000,
-      "shgo_iters": 5
-    },
-    "interest_gpc": {
-      "apply": false,
-      "apply_proba": true,
-      "apply_std": true,
-      "apply_bstd": false,
-      "apply_entropy": false,
-      "shgo_n": 1000,
-      "shgo_iters": 5
-    },
-    "sigmoid_density": {
-      "apply": true,
-      "decay_dist": 0.04
-    },
-    "outlier_proximity": {
-      "apply": true,
-      "exclusion_radius": 1e-5
-    },
-    "outlier_gpc": {
-      "apply": false,
-      "apply_proba": false,
-      "apply_std": false,
-      "apply_bstd": true, 
-      "apply_entropy": false,
-      "shgo_n": 1000,
-      "shgo_iters": 5
-    }
-  }
-}
+irbs_selector_config:
+  diversity: {apply: true}
+  centrism: {apply: false}
+  elitism: {apply: false}
+
+irbs_optimizer_config:
+  shgo:
+    apply: true
+    n: 1000
+    iters: 5
+  ga:
+    apply: false
+    population_size: 20
+    generations: 1000
+    mutation_probability: 0.2
+
+irbs_fom_terms_config:
+  surrogate_gpr:
+    apply: true
+    apply_interest: true
+    apply_std: true
+    shgo_n: 1000
+    shgo_iters: 5
+
+  interest_gpc:
+    apply: false
+    apply_proba: false
+    apply_std: false
+    apply_bstd: false
+    apply_entropy: false
+    shgo_n: 1000
+    shgo_iters: 5
+
+  sigmoid_density:
+    apply: false
+    decay_dist: 0.04
+
+  outlier_proximity:
+    apply: true
+    exclusion_radius: 1.0e-5
+
+  outlier_gpc:
+    apply: false
+    apply_proba: false
+    apply_std: false
+    apply_bstd: false
+    apply_entropy: false
+    shgo_n: 1000
+    shgo_iters: 5

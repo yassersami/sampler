@@ -1,52 +1,51 @@
-{
-  "names": {
-    "features": {
-      "str": ["Al radius [micron]", "CuO radius [micron]", "Al richness"],
-      "latex": ["$r_{Al}, [/mu m]$", "$r_{CuO}, [/mu m]$", "$/phi$"]
-    },
-    "targets": {
-      "str": ["Final Pressure [MPa]", "Combustion Temperature [K]"],
-      "latex": ["Final Pressure [MPa]", "Combustion Temperature [K]"]
-    }
-  },
-  "scales": {
-    "features": [1e-6, 1e-6, 1],
-    "targets": [1e6, 1]
-  },
-  "params_volume":{
-    "compute_volume": false,
-    "same_sphere_tol":1e-3,
-    "max_depth":3,
-    "n_subdivision": 128,
-    "default": {
-      "exp_1": [-1, 4.5e-6],
-      "exp_2": [0, 2e-5]
-    }
-  },
-  "params_voronoi": {
-    "compute_voronoi": {
-      "features": true,
-      "targets": true
-    },
-    "tol": 1e-3,
-    "isFilter": false
-  },
+names:
+  features:
+    str:
+      - "Al radius [micron]"
+      - "CuO radius [micron]"
+      - "Al richness"
+    latex:
+      - "$r_{Al}, [/mu m]$"
+      - "$r_{CuO}, [/mu m]$"
+      - "$/phi$"
+  targets:
+    str:
+      - "Final Pressure [MPa]"
+      - "Combustion Temperature [K]"
+    latex:
+      - "Final Pressure [MPa]"
+      - "Combustion Temperature [K]"
 
-  "experiments": {
-    "exp0": {
-      "color": "royalblue",
-      "name": "name_exp0 [R1 interest region]",
-      "path": "data/07_model_output/exp0/irbs_history"
-    },
-    "exp1": {
-      "color": "firebrick",
-      "name": "name_exp1 [R1 interest region]",
-      "path": "data/07_model_output/exp1/irbs_increased_data.csv"
-    },
-    "exp2": {
-      "color": "forestgreen",
-      "name": "name_exp2 [R1 interest region]",
-      "path": "data/07_model_output/exp2/parego_increased_data.csv"
-    }
-  }
-}
+scales:
+  features: [1.0e-6, 1.0e-6, 1]
+  targets: [1.0e+6, 1]
+
+params_volume:
+  compute_volume: false
+  same_sphere_tol: 1.0e-3
+  max_depth: 3
+  n_subdivision: 128
+  default:
+    exp_1: [-1, 4.5e-6]
+    exp_2: [0, 2.0e-5]
+
+params_voronoi:
+  compute_voronoi:
+    features: true
+    targets: true
+  tol: 1.0e-3
+  isFilter: false
+
+experiments:
+  exp0:
+    color: royalblue
+    name: "name_exp0 [R1 interest region]"
+    path: "data/07_model_output/exp0/irbs_history"
+  exp1:
+    color: firebrick
+    name: "name_exp1 [R1 interest region]"
+    path: "data/07_model_output/exp1/irbs_increased_data.csv"
+  exp2:
+    color: forestgreen
+    name: "name_exp2 [R1 interest region]"
+    path: "data/07_model_output/exp2/parego_increased_data.csv"
