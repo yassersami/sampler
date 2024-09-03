@@ -95,11 +95,23 @@ class SHGOOptimizer(MultiModalOptimizer):
 
 @OptimizerFactory.register('ga')
 class GAOptimizer(MultiModalOptimizer):
-    def __init__(self, n_dim: int, selector: MultiModalSelector, population_size: int, generations: int):
+    def __init__(
+        self,
+        n_dim: int,
+        selector: MultiModalSelector,
+        population_size: int,
+        generations: int,
+        mutation_probability: float
+    ):
         super().__init__(n_dim, selector)
         self.population_size  = population_size
         self.generations = generations
-        self.optimizer_config = {'population_size': population_size, 'generations': generations}
+        self.mutation_probability = mutation_probability
+        self.optimizer_config = {
+            'population_size': population_size,
+            'generations': generations,
+            'mutation_probability': mutation_probability
+        }
 
     def minimize(self) -> np.ndarray:
         ga = GA(  # Minimization algorithm
@@ -107,7 +119,7 @@ class GAOptimizer(MultiModalOptimizer):
             n_dim=self.n_dim,
             size_pop=self.population_size,  # Must be an even number
             max_iter=self.generations,
-            prob_mut=0.1,
+            prob_mut=self.mutation_probability,
             lb=[val[0] for val in self.bounds],
             ub=[val[1] for val in self.bounds],
         )

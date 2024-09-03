@@ -13,7 +13,8 @@
     "ga": {
         "apply": false,
         "population_size": 20,
-        "generations": 1000
+        "generations": 1000,
+        "mutation_probability": 0.2
     }
   },
   "irbs_fom_terms_config": {
