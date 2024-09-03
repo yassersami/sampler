@@ -6,7 +6,7 @@ squeue_list () {
         username=$1
         states=$2
 
-        squeue -u $username -t $states -o '%.19V %.10T %.10i %.40j %.10M %.10m'
+        squeue -u $username -t $states -o '%.19V %.10T %.10i %.60j %.10M %.10m'
 }
 # %S Actual or expected start time of the job or job step.
 # %V The job's submission time.
