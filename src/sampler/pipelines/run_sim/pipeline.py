@@ -36,7 +36,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 features='params:features',
                 targets='params:targets',
                 additional_values='params:additional_values',
-                simulator_env='params:simulator_env',
+                simulator_config='params:simulator_config',
                 batch_size='params:batch_size',
                 
                 n_proc='params:run_sim_n_proc',
@@ -50,7 +50,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             func=join_history,
             inputs=dict(
                 history='run_sim_history',
-                run_condition='params:run_condition',
+                stop_condition='params:stop_condition',
                 initial_size='params:initial_size'
             ),
             outputs='run_sim_increased_data',

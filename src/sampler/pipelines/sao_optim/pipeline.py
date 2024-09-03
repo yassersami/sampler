@@ -21,9 +21,9 @@ def create_pipeline(**kwargs) -> Pipeline:
                 features='params:features',
                 targets='params:targets',
                 additional_values='params:additional_values',
-                simulator_env='params:simulator_env',
+                simulator_config='params:simulator_config',
                 batch_size='params:batch_size',
-                run_condition='params:run_condition',
+                stop_condition='params:stop_condition',
                 
                 sao_history_path='params:sao_history_path',
             ),
@@ -37,7 +37,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             func=join_history,
             inputs=dict(
                 history='sao_history',
-                run_condition='params:run_condition',
+                stop_condition='params:stop_condition',
                 initial_size='params:initial_size'
             ),
             outputs='sao_increased_data',

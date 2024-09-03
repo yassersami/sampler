@@ -26,9 +26,9 @@ def sao_optim_from_simulator(
         features: List[str],
         targets: List[str],
         additional_values: List[str],
-        simulator_env: Dict,
+        simulator_config: Dict,
         batch_size: int,
-        run_condition: Dict[str, Union[bool, int]],
+        stop_condition: Dict[str, Union[bool, int]],
         sao_history_path: str,
 ):
     """
@@ -40,7 +40,7 @@ def sao_optim_from_simulator(
     # Chose the simulation function that will be adapted for optimizer
     simulator = SimulationProcessor(
         features=features, targets=targets, additional_values=additional_values,
-        treatment=treatment, n_proc=batch_size, simulator_env=simulator_env
+        treatment=treatment, n_proc=batch_size, simulator_config=simulator_config
     )
     f_sim = set_f_sim(simulator)
     # Set filter function (score function) that will be optimizer objective
@@ -53,7 +53,7 @@ def sao_optim_from_simulator(
     )
     # Run optimization
     X_1D, y_obj, optiminfo_dic = run_optimization_optuna(
-        objective, run_condition['max_size'], batch_size
+        objective, stop_condition['max_size'], batch_size
     )
     # Parse optimization results
     result_dic = {

@@ -72,9 +72,9 @@ class DiversitySelector(MultiModalSelector):
         ]
         self.reset_records()
 
-    def select_diverse_optima(
+    def select_diverse_minima(
         self, X: np.ndarray, loss_values: np.ndarray
-    ) -> Tuple[np.ndarray, pd.DataFrame]:
+    ) -> np.ndarray:
         """
         Select diversified batch of candidates among explored points during
         minimization.
@@ -141,7 +141,7 @@ class DiversitySelector(MultiModalSelector):
                 mmm_loss        =combined_loss[next_index],
             )
 
-        return X[selected_indices], pd.DataFrame(self._records)
+        return X[selected_indices]
 
 
 @SelectorFactory.register('centrism')
@@ -153,9 +153,9 @@ class CentrismSelector(MultiModalSelector):
         self._record_columns = ['_id', 'loss', 'extremeness', 'mmm_loss']
         self.reset_records()
 
-    def select_diverse_optima(
+    def select_diverse_minima(
         self, X: np.ndarray, loss_values: np.ndarray
-    ) -> Tuple[np.ndarray, pd.DataFrame]:
+    ) -> np.ndarray:
 
         X = np.atleast_2d(X)
         X = np.unique(X, axis=0)
@@ -186,7 +186,7 @@ class CentrismSelector(MultiModalSelector):
             'extremeness': extremeness[selected_indices],
             'mmm_loss': combined_loss[selected_indices],
         }
-        return X[selected_indices], pd.DataFrame(self._records)
+        return X[selected_indices]
 
 
 @SelectorFactory.register('elitism')
@@ -198,9 +198,9 @@ class ElitismSelector(MultiModalSelector):
         self._record_columns = ['_id', 'loss', 'mmm_loss']
         self.reset_records()
 
-    def select_diverse_optima(
+    def select_diverse_minima(
         self, X: np.ndarray, loss_values: np.ndarray
-    ) -> Tuple[np.ndarray, pd.DataFrame]:
+    ) -> np.ndarray:
 
         X = np.atleast_2d(X)
         X = np.unique(X, axis=0)
@@ -223,5 +223,5 @@ class ElitismSelector(MultiModalSelector):
             'loss': loss_values[selected_indices],
             'mmm_loss': combined_loss[selected_indices]
         }
-        return X[selected_indices], pd.DataFrame(self._records)
+        return X[selected_indices]
     

@@ -15,7 +15,7 @@ class MultiModalSelector(ABC):
         self.batch_size = batch_size
 
     @abstractmethod
-    def select_diverse_optima(self, X: np.ndarray, *args, **kwargs) -> Tuple[np.ndarray, pd.DataFrame]:
+    def select_diverse_minima(self, X: np.ndarray, *args, **kwargs) -> pd.DataFrame:
         """
         Select diversified batch of candidates among explored points.
         """
@@ -38,6 +38,9 @@ class MultiModalSelector(ABC):
 
             self._records[key].append(kwargs[key])
 
+    def get_records_df(self) -> pd.DataFrame:
+        return pd.DataFrame(self._records)
+
 
 class MultiModalOptimizer(ABC):
     def __init__(self, n_dim: int, selector: MultiModalSelector):
@@ -50,7 +53,7 @@ class MultiModalOptimizer(ABC):
         self.bounds = [(0, 1)] * n_dim
         self.optimizer_config: Dict = {'dummy_param': None}  # minimizer parameters
 
-    def run_mmm(self, loss_func: Callable[[np.ndarray], float]) -> Tuple[np.ndarray, pd.DataFrame]:
+    def run_multimodal_optim(self, loss_func: Callable[[np.ndarray], float]) -> np.ndarray:
         """ Run Multi Modal Minimization"""
     
         print(
@@ -64,23 +67,17 @@ class MultiModalOptimizer(ABC):
         # Clean multimodal progress record
         self.selector.reset_records()
 
-        # Run multi-objective optimization and return promising explored samples
+        # Run multi-objective optimization and return local minima
         X = self.minimize()
 
-        # Get objective values of the optimization explored points
+        # Get loss objective values of detected minima during the optimization 
         loss_values = self.loss_func(X)
 
         # Perform the core multi-modal optimization task
-        # by selecting diverse optima from the candidate solutions
-        X_batch, df_mmm_scores = self.selector.select_diverse_optima(X, loss_values)
+        # by selecting diverse minima from the candidate solutions
+        X_batch = self.selector.select_diverse_minima(X, loss_values)
 
-        # Print final results
-        print(
-            f"{self.__class__.__name__} -> Selected points to be input to "
-            f"the simulator: \n{self._concat_results(X_batch, df_mmm_scores)}"
-        )
-
-        return X_batch, df_mmm_scores
+        return X_batch
 
     def _scalar_loss_func(self, *args) -> float:
         """
@@ -99,8 +96,3 @@ class MultiModalOptimizer(ABC):
         samples
         """
         pass
-
-    def _concat_results(self, X_batch: np.ndarray, df_mmm_scores: pd.DataFrame) -> None:
-        feature_cols = [f'feature_{i+1}' for i in range(X_batch.shape[1])]
-        df_candidates = pd.DataFrame(X_batch, columns=feature_cols)
-        return pd.concat([df_candidates, df_mmm_scores], axis=1)

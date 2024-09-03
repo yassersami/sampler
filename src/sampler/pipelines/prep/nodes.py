@@ -10,7 +10,7 @@ def prepare_treatment(
     targets: List[str],
     variables_ranges: Dict[str, Dict],
     interest_region: Dict[str, Tuple[float, float]],
-    simulator_env: Dict[str, Any]
+    simulator_config: Dict[str, Any]
 ) -> DataTreatment:
     """
     Prepare the DataTreatment class with the necessary configuration.
@@ -30,7 +30,7 @@ def prepare_treatment(
     treatment = DataTreatment(
         features=features, targets=targets, scaler=scaler,
         bounds=bounds_dict, interest_region=interest_region,
-        sim_time_cutoff=simulator_env['sim_time_cutoff'],
+        sim_time_cutoff=simulator_config['sim_time_cutoff'],
     )
     return treatment
 

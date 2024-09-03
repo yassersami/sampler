@@ -23,9 +23,9 @@ def create_pipeline(**kwargs) -> Pipeline:
                 features='params:features',
                 targets='params:targets',
                 additional_values='params:additional_values', # 'sim_time', 'Y_O2', ...
-                simulator_env='params:simulator_env',
+                simulator_config='params:simulator_config',
                 batch_size='params:batch_size',
-                run_condition='params:run_condition',
+                stop_condition='params:stop_condition',
                 
                 llambda_s='params:parego_llambda_s',
                 population_size='params:parego_population_size',
@@ -40,7 +40,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             func=join_history,
             inputs=dict(
                 history='parego_history',
-                run_condition='params:run_condition',
+                stop_condition='params:stop_condition',
                 initial_size='params:initial_size'
             ),
             outputs='parego_increased_data',

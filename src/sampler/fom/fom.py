@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import json
 import inspect
+import copy
 
 from .term_base import FittableFOMTerm, NonFittableFOMTerm, FOMTermType, FOMTermInstance
 from .term_gpr import SurrogateGPRTerm
@@ -29,6 +30,12 @@ class FOMTermAccessor:
         if name not in self._terms:
             raise AttributeError(f"Term '{name}' is not active or does not exist.")
         return self._terms[name]
+
+    def __deepcopy__(self, memo):
+        # Create a deep copy of the terms dictionary
+        copied_terms = copy.deepcopy(self._terms, memo)
+        # Create a new instance of FOMTermAccessor with the copied terms
+        return FOMTermAccessor(copied_terms)
 
     @classmethod
     def is_valid_term_class(cls, term_class: FOMTermType) -> bool:
@@ -211,7 +218,7 @@ class FigureOfMerit:
         """
         return self.n_positive_scores - self.predict_score(X)
 
-    def predict_scores_df(self, X: np.ndarray) -> pd.DataFrame:
+    def get_scores_df(self, X: np.ndarray) -> pd.DataFrame:
         scores_dict = {}
         for term in self._terms.values():
             scores = term.predict_score(X)

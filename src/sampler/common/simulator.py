@@ -164,14 +164,14 @@ def run_fake_simulator(
 class SimulationProcessor:
     def __init__(
         self, features: List[str], targets: List[str], additional_values: List[str],
-        treatment: DataTreatment, simulator_env: Dict, n_proc: int = 1
+        treatment: DataTreatment, simulator_config: Dict, n_proc: int = 1
     ):
         self.features = features
         self.targets = targets
         self.additional_values = additional_values
         self.treatment = treatment
-        self.use_simulator = simulator_env['use']
-        self.map_dir = simulator_env['map_dir']
+        self.use_simulator = simulator_config['use']
+        self.map_dir = simulator_config['map_dir']
         self.n_proc = n_proc
         # Setup simulation environment
         set_history_folder(self.map_dir, should_rename=False)

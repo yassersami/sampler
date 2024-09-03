@@ -29,7 +29,7 @@ RANDOM_STATE = 42
 def run_parego(
     data: pd.DataFrame, treatment: DataTreatment,
     features: List[str], targets: List[str], additional_values: List[str],
-    simulator_env: Dict, batch_size: int, run_condition: Dict,
+    simulator_config: Dict, batch_size: int, stop_condition: Dict,
     llambda_s: int, population_size: int, num_generations: int,
     tent_slope: float=10, experience: str='parEGO_maxIpr'
 ):
@@ -40,7 +40,7 @@ def run_parego(
     )
     simulator = SimulationProcessor(
         features=features, targets=targets, additional_values=additional_values,
-        treatment=treatment, n_proc=batch_size, simulator_env=simulator_env
+        treatment=treatment, n_proc=batch_size, simulator_config=simulator_config
     )
     data = simulator.adapt_targets(data, spice_on=True)
 
@@ -48,9 +48,9 @@ def run_parego(
     yield parse_results(res, current_history_size=0)
 
     # Set progress counting variables
-    max_size = run_condition['max_size']
-    n_interest_max = run_condition['n_interest_max']
-    run_until_max_size = run_condition['run_until_max_size']
+    max_size = stop_condition['max_size']
+    n_interest_max = stop_condition['n_interest_max']
+    run_until_max_size = stop_condition['run_until_max_size']
     
     n_total = 0  # counting all simulations
     n_inliers = 0  # counting only inliers

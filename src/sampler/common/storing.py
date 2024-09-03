@@ -15,25 +15,25 @@ def parse_results(df: pd.DataFrame, current_history_size: int) -> Dict[str, pd.D
 
 
 def join_history(
-    history: Dict[str, pd.DataFrame], run_condition: Dict, initial_size: int
+    history: Dict[str, pd.DataFrame], stop_condition: Dict, initial_size: int
 ) -> pd.DataFrame:
     """ Joins all checkpoints of a run into a single file """
     df_history = pd.DataFrame()
     for df_batch in history.values():
         df_history = pd.concat([df_history, df_batch], ignore_index=True)
 
-    if run_condition['run_until_max_size']:
-        # df_history = df_history.iloc[-(initial_size+run_condition['max_size']):]
+    if stop_condition['run_until_max_size']:
+        # df_history = df_history.iloc[-(initial_size+stop_condition['max_size']):]
         # * yasser: you can't truncate, this means that you remove data what you can do is
         # * df.dropna(targets) for example to keep only inliers and then you will have
         # * size-initial_size = max_size.
         return df_history
 
-    # truncate increased_data to respect run_condition
+    # truncate increased_data to respect stop_condition
     interest_count = 0
     index = initial_size
     while (
-        interest_count < run_condition['n_interest_max'] and 
+        interest_count < stop_condition['n_interest_max'] and 
         index < len(df_history)
     ):
         if df_history.iloc[index]['quality']=='interest':
@@ -41,7 +41,7 @@ def join_history(
         index+=1
 
     df_history = df_history.iloc[:index]
-    assert interest_count==run_condition['n_interest_max'], (
+    assert interest_count==stop_condition['n_interest_max'], (
         "Not enough 'interest' rows in the dataset."
     )
     return df_history
