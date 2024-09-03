@@ -223,7 +223,6 @@ class BinaryLatentGPC(LatentGPC):
         return score
 
 
-# TODO: finish BinaryLatentGPCTerm and split surrogate into GPR and GPR
 class BinaryLatentGPCTerm(FittableFOMTerm, BinaryLatentGPC):
     
     required_args = []
@@ -284,26 +283,26 @@ class BinaryLatentGPCTerm(FittableFOMTerm, BinaryLatentGPC):
             return scores if len(scores) > 1 else scores[0]
 
         scores = []
-        
+
         if self.apply_proba:
             proba = self.predict_proba(X)[:, self.class_to_index[self.positive_class]]  # 1
             scores.append(proba)
-        
+
         if self.apply_std:
             scores.append(self.get_std_score(X))
-        
+
         if self.apply_bstd:
             scores.append(self.get_positive_bstd(X))
-        
+
         if self.apply_entropy:
             scores.append(self.predict_positive_entropy(X))
-        
+
         if not scores:
             raise AttributeError(
                 "At least one of apply_bstd, apply_entropy, apply_proba, "
                 "or apply_std must be True"
             )
-        
+
         return tuple(scores) if len(scores) > 1 else scores[0]
 
     def get_parameters(self, add_details: bool = False):

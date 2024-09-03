@@ -82,10 +82,6 @@ class DiversitySelector(MultiModalSelector):
         X = np.atleast_2d(X)
         X = np.unique(X, axis=0)
 
-        if X.shape[0] <= self.batch_size:
-            # If not enough candidates return all available ones
-            return X
-
         # Normalize objective values to [0, 1] range
         normalized_loss = self._normalize(loss_values)
 
@@ -104,7 +100,7 @@ class DiversitySelector(MultiModalSelector):
         available_indices = list(range(n_samples))
 
         # Select diverse candidates
-        for _ in range(self.batch_size):
+        for _ in range(min(self.batch_size, n_samples)):
 
             if not selected_indices:
                 # If no selected indices yet set dummy null diversity value
@@ -160,10 +156,6 @@ class CentrismSelector(MultiModalSelector):
         X = np.atleast_2d(X)
         X = np.unique(X, axis=0)
 
-        if X.shape[0] <= self.batch_size:
-            # If not enough candidates return all available ones
-            return X
-
         # Create edge proximity mask where true if value close to (0 | 1) edges 
         edge_proximity_mask = (np.isclose(X, 0) | np.isclose(X, 1))
 
@@ -204,10 +196,6 @@ class ElitismSelector(MultiModalSelector):
 
         X = np.atleast_2d(X)
         X = np.unique(X, axis=0)
-
-        if X.shape[0] <= self.batch_size:
-            # If not enough candidates return all available ones
-            return X
 
         # Combined loss based exclusively on objective loss value
         combined_loss = loss_values
