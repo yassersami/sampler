@@ -170,7 +170,7 @@ def scale_data_for_plots(
 
 
 def plot_metrics(
-    env_name: str,
+    output_dir: str,
     data: Dict,
     names: Dict,
     region: Dict,
@@ -220,8 +220,8 @@ def plot_metrics(
     plots_paths_png = {}
     plots_paths_svg = {}
 
-    output_dir_png = f"data/08_reporting/{env_name}/png_outputs/"
-    output_dir_svg = f"data/08_reporting/{env_name}/svg_outputs/"
+    output_dir_png = f"{output_dir}/png_outputs/"
+    output_dir_svg = f"{output_dir}/svg_outputs/"
     os.makedirs(output_dir_png, exist_ok=True)
     os.makedirs(output_dir_svg, exist_ok=True)
     

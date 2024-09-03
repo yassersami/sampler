@@ -5,6 +5,7 @@ generated using Kedro 0.18.5
 from datetime import datetime
 import pandas as pd
 import numpy as np
+import warnings
 from multiprocessing import Queue
 from typing import List, Dict, Tuple, Callable, Union
 
@@ -43,18 +44,24 @@ def sao_optim_from_simulator(
         treatment=treatment, n_proc=batch_size, simulator_config=simulator_config
     )
     f_sim = set_f_sim(simulator)
+
     # Set filter function (score function) that will be optimizer objective
     f_filter = set_filter(treatment)
+
     # Set folder where to store explored samples during optimization
     set_history_folder(sao_history_path, should_rename=False)
+
     # Set the objective function for the optimizer
     objective = set_objective_optuna(
         f_sim, f_filter, features, targets, additional_values, treatment, sao_history_path
     )
+
     # Run optimization
     X_1D, y_obj, optiminfo_dic = run_optimization_optuna(
         objective, stop_condition['max_size'], batch_size
     )
+    warnings.warn(f"All optimization history was stored in: \n{sao_history_path}\n")
+
     # Parse optimization results
     result_dic = {
         'order': SIZE_OPTIM.get(),
@@ -168,7 +175,7 @@ def set_objective_optuna(
         # Save the result immediately
         print(f'sao_optim.nodes.objective -> size_optim: {size_optim}, new_df: \n{new_df}')
         file_name = (
-            f'[{str(size_optim).zfill(3)}-{str(size_optim+1).zfill(3)}]'
+            f'[{str(size_optim).zfill(3)}]'
             # + '_' + datetime.now().strftime("%m-%d_%H-%M-%S")
         )
         store_df(

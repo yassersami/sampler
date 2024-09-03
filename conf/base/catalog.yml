@@ -61,3 +61,23 @@ run_sim_history:
 run_sim_increased_data:
   type: pandas.CSVDataSet
   filepath: data/07_model_output/base/run_sim_increased_data.csv
+
+###### Following is used as parameters and not objects ######
+param_env_name:
+  type: MemoryDataSet
+  data: "base"
+
+param_simulator_config:
+  type: MemoryDataSet
+  data:
+    map_dir: "data/07_simulation/base"
+    sim_time_cutoff: 41
+    use: true
+
+param_sao_history_path:
+  type: MemoryDataSet
+  data: "data/07_model_output/base/sao_history"
+
+param_metrics_output_dir:
+  type: MemoryDataSet
+  data: "data/08_reporting/base"

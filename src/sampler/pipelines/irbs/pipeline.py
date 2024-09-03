@@ -25,7 +25,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 fom_terms_config='params:irbs_fom_terms_config',
                 selector_config='params:irbs_selector_config',
                 optimizer_config='params:irbs_optimizer_config',
-                simulator_config='params:simulator_config',
+                simulator_config='param_simulator_config',
             ),
             outputs=dict(
                 fom_model='fom_model',
