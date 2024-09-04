@@ -70,9 +70,9 @@ param_env_name:
 param_simulator_config:
   type: MemoryDataSet
   data:
-    map_dir: "data/07_simulation/base"
-    sim_time_cutoff: 41
     use: true
+    max_simu_time: 2400  # seconds
+    map_dir: "data/07_simulation/base"
 
 param_sao_history_path:
   type: MemoryDataSet

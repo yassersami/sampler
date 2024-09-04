@@ -80,7 +80,7 @@ def run_parego(
         )
         
         # Launch time expensive simulations
-        new_df = simulator.process_data(new_x, real_x=False, index=n_total, treat_output=True)
+        new_df = simulator.process_data(new_x, is_real_X=False, index=n_total, treat_output=True)
         new_df = treatment.classify_quality_interest(new_df, data_is_scaled=True)
 
         print(f"Round {iteration:03} (continued) - simulation results " + "-"*37)

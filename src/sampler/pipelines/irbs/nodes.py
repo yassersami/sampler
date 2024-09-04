@@ -116,7 +116,7 @@ def irbs_sampling(
         print(f"FOM scores records: \n{df_fom_scores}")
 
         # Launch time expensive simulations
-        new_df = simulator.process_data(X_batch, real_x=False, index=n_total, treat_output=True)
+        new_df = simulator.process_data(X_batch, is_real_X=False, index=n_total, treat_output=True)
 
         # ----- Add more cols than features, targets and additional_values -----
 

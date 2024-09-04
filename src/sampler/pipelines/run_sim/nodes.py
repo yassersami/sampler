@@ -95,7 +95,7 @@ def evaluate_inputs(
         # Run the simulation
         nex_x = data.loc[n_total: n_total + batch_size - 1, features].values
         new_df = simulator.process_data(
-            nex_x, real_x=True, index=n_total, treat_output=(not output_is_real)
+            nex_x, is_real_X=True, index=n_total, treat_output=(not output_is_real)
         )
         
         # Yield results

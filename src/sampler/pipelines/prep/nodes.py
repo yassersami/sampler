@@ -30,7 +30,7 @@ def prepare_treatment(
     treatment = DataTreatment(
         features=features, targets=targets, scaler=scaler,
         bounds=bounds_dict, interest_region=interest_region,
-        sim_time_cutoff=simulator_config['sim_time_cutoff'],
+        max_simu_time=simulator_config['max_simu_time'],
     )
     return treatment
 
@@ -50,4 +50,7 @@ def prepare_data(
     res = treatment.select_in_bounds_feat(res)
     res = treatment.treat_real_data(res)
 
-    return res[features + targets + additional_values]
+    # Select available columns from additional_values
+    available_values = [col for col in additional_values if col in res]
+
+    return res[features + targets + available_values]

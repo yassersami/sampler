@@ -93,7 +93,7 @@ def set_f_sim(
     """
     def f_sim(x: np.ndarray, size_optim: float) -> Tuple[np.ndarray, np.ndarray]:
         # Run simulation, new_df is now scaled
-        new_df = simulator.process_data(x, real_x=False, index=size_optim, treat_output=True)
+        new_df = simulator.process_data(x, is_real_X=False, index=size_optim, treat_output=True)
 
         # Fill NaN values in targets with large default values for error handling
         large_scaled_target_value = 10

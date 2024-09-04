@@ -15,13 +15,13 @@ class DataTreatment:
             bounds: Dict[str, Tuple[float, float]],
             interest_region: Dict[str, Tuple[float, float]],
             scaler: MixedMinMaxScaler,
-            sim_time_cutoff: int,
+            max_simu_time: int,
     ):
         self.features = features
         self.targets = targets
         self.scaler = scaler
         self.bounds = bounds
-        self.sim_time_cutoff = sim_time_cutoff
+        self.max_simu_time = max_simu_time
         self.interest_region = interest_region
         self.scaled_interest_region = scale_interest_region(interest_region, scaler)
 
@@ -147,7 +147,7 @@ class DataTreatment:
                 masks['out_of_bounds_tar'] |= mask
         
         # Create masks for time_out and sim_error
-        masks['time_out'] = df_real['sim_time'].round() >= self.sim_time_cutoff
+        masks['time_out'] = df_real['sim_time'].round() >= self.max_simu_time
         masks['sim_error'] = df_real[self.targets].isna().any(axis=1)
         
         return masks

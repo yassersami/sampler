@@ -72,12 +72,17 @@ def compute_th_Al2O3(r_ext_pAl, Y_Al_pAl):
 
 
 def adapt_inputs_dic(inputs_dic):
-    if "Y_Al_pAl" not in [*inputs_dic]: # ? rs_inputs
-        if "th_Al2O3" in [*inputs_dic]:
-            inputs_dic["Y_Al_pAl"] = compute_Y_Al_pAl(
-                r_ext_pAl=inputs_dic["r_ext_pAl"],
-                th_Al2O3=inputs_dic.pop("th_Al2O3")
-            )
+    """
+    Simulator uses purity (Al % in Al particle) Y_Al_pAl as input. So if input
+    dict contains alumina (Al oxyde) layer thickness th_Al2O3 instead, convert
+    it to purity.
+    """
+    keys = [*inputs_dic]
+    if ("Y_Al_pAl" not in keys) and ("th_Al2O3" in keys):
+        inputs_dic["Y_Al_pAl"] = compute_Y_Al_pAl(
+            r_ext_pAl=inputs_dic["r_ext_pAl"],
+            th_Al2O3=inputs_dic.pop("th_Al2O3")
+        )
     return inputs_dic
 
 
