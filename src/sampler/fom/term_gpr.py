@@ -5,14 +5,10 @@ import pandas as pd
 from scipy.stats import norm
 
 from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import RationalQuadratic
 from sklearn.exceptions import NotFittedError
 from scipy.optimize import shgo
 
-from .term_base import FittableFOMTerm
-
-RANDOM_STATE = 42
-KERNEL = RationalQuadratic(length_scale_bounds=(1e-5, 10))
+from .term_base import ModelFOMTerm, KERNEL, RANDOM_STATE
 
 
 class SurrogateGPR(GaussianProcessRegressor):
@@ -37,7 +33,6 @@ class SurrogateGPR(GaussianProcessRegressor):
         self.max_std = None
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> None:
-
         # Check if y is 1D or 2D
         if y.ndim == 1:
             n_targets = 1
@@ -53,6 +48,7 @@ class SurrogateGPR(GaussianProcessRegressor):
                 f"does not match the number of targets ({n_targets})"
             )
 
+        print(f"{self.__class__.__name__} -> Fitting model...")
         super().fit(X, y)
         self.is_trained = True
 
@@ -75,17 +71,17 @@ class SurrogateGPR(GaussianProcessRegressor):
         Update maximum standard deviation of the Gaussian Process for points
         between 0 and 1.
         """
-        print("SurrogateGPR.update_max_std -> Searching for the maximum std...")
         if not self.is_trained:
             raise NotFittedError("The model must be trained before calling update_max_std.")
+
+        print(f"{self.__class__.__name__} -> Searching for maximum std...")
 
         search_error = 0.01
 
         def get_opposite_std(X):
             """Opposite of std to be minimized."""
             X = np.atleast_2d(X)
-            y_std = self.get_std(X)
-            return -1 * y_std
+            return -1 * self.get_std(X)
 
         result = shgo(
             get_opposite_std,
@@ -99,8 +95,6 @@ class SurrogateGPR(GaussianProcessRegressor):
         max_std = min(1.0, max_std * (1 + search_error))
         self.max_std = max_std
 
-        print(f"SurrogateGPR.update_max_std -> Maximum GP std: {max_std}")
-    
     def predict_interest_score(self, X: np.ndarray) -> np.ndarray:
         """
         Computes the probability of being in the region of interest.
@@ -125,10 +119,10 @@ class SurrogateGPR(GaussianProcessRegressor):
         return self.get_std(X) / self.max_std
 
 
-class SurrogateGPRTerm(FittableFOMTerm, SurrogateGPR):
+class SurrogateGPRTerm(ModelFOMTerm, SurrogateGPR):
     
     required_args = ['interest_region']
-    fit_params = {'X_only': False, 'drop_nan': True}
+    fit_config = {'X_only': False, 'drop_nan': True}
     
     def __init__(
         self,
@@ -178,43 +172,34 @@ class SurrogateGPRTerm(FittableFOMTerm, SurrogateGPR):
         
         return tuple(scores) if len(scores) > 1 else scores[0]
 
-    def get_parameters(self, add_details: bool = False):
+    def get_model_params(self) -> Dict[str, float]:
+        if not self.is_trained:
+            return {}
+        kernel_params = {
+            k: v for k, v in self.kernel_.get_params().items()
+            if not k.endswith('_bounds')
+        }
+        return {
+            **kernel_params,
+            'lml': self.log_marginal_likelihood_value_,
+            'max_std': self.max_std,
+        }
+
+    def get_parameters(self) -> Dict:
         params = {
             'apply_interest': self.apply_interest,
             'apply_std': self.apply_std,
-            'kernel': self.kernel_.get_params(),
             'kernel_str': str(self.kernel_),
             'is_trained': self.is_trained,
         }
 
         if self.is_trained:
             params.update({
-                'max_std': self.max_std,
+                'kernel': self.kernel_.get_params(),
                 'log_marginal_likelihood': self.log_marginal_likelihood_value_,
+                'max_std': self.max_std,
                 'n_features': self.n_features_in_,
                 'n_train': self.X_train_.shape[0],
-            })
-
-        if not add_details:
-            return params
-
-        params.update({
-            'alpha': self.alpha,
-            'optimizer': self.optimizer,
-            'n_restarts_optimizer': self.n_restarts_optimizer,
-            'normalize_y': self.normalize_y,
-            'copy_X_train': self.copy_X_train,
-            'random_state': self.random_state,
-        })
-
-        if self.is_trained:
-            params.update({
-                'noise_level': self.noise_,
-                'optimizer_results': {
-                    'fun': self._optimizer_results.fun,
-                    'nit': self._optimizer_results.nit,
-                    'message': self._optimizer_results.message,
-                }
             })
 
         return params

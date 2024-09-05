@@ -2,6 +2,7 @@ from typing import List, Tuple, Dict, Union, Type, Any, Optional, ClassVar
 from abc import ABC, abstractmethod
 import pandas as pd
 import numpy as np
+from sklearn.gaussian_process.kernels import RationalQuadratic
 
 
 class BaseFOMTerm(ABC):
@@ -104,7 +105,19 @@ class BaseFOMTerm(ABC):
 
     @abstractmethod
     def get_parameters(self) -> Dict[str, Any]:
-        """ Retrieve the parameters of this FOM term. """
+        """
+        Retrieve the fitted parameters of this FOM term.
+
+        This method is intentionally named 'get_parameters' instead of 'get_params'
+        to avoid conflicts with scikit-learn's API. The 'get_params' method in 
+        scikit-learn estimators is used for hyperparameter management and is called 
+        with a 'deep' argument. Overriding it can lead to compatibility issues.
+
+        By using a distinct name, we prevent accidental overriding of scikit-learn's 
+        'get_params' method in child classes that may inherit from both this base 
+        class and scikit-learn estimators. This ensures that scikit-learn's internal 
+        mechanisms for parameter management remain intact.
+        """
         pass
 
 
@@ -113,37 +126,62 @@ class FittableFOMTerm(BaseFOMTerm):
     An abstract base class for fittable FOM (Figure of Merit) terms.
 
     This class extends BaseFOMTerm to include fitting functionality.
-    Subclasses must implement the fit method and define their own fit_params.
+    Subclasses must implement the fit method and define their own fit_config.
 
     Class Attributes:
-        - fit_params (ClassVar[Dict[str, Optional[bool]]]): A dictionary of
-        fitting parameters. Subclasses must override this with their specific
-        parameters. Default values are set to None and will raise an error if
+        - fit_config (ClassVar[Dict[str, Optional[bool]]]): A dictionary of
+        fitting configuration. Subclasses must override this with their specific
+        configuration. Default values are set to None and will raise an error if
         not properly defined.
 
     Attributes:
         Inherits all attributes from BaseFOMTerm.
     """
-    fit_params: ClassVar[Dict[str, Optional[bool]]] = {'X_only': None, 'drop_nan': None}
+    fit_config: ClassVar[Dict[str, Optional[bool]]] = {'X_only': None, 'drop_nan': None}
 
     @classmethod
-    def _validate_fit_params(cls) -> None:
+    def _validate_fit_config(cls) -> None:
         """
-        Validate that fit_params are properly defined in the subclass.
+        Validate that fit_config are properly defined in the subclass.
         Raises a ValueError if any parameter is None.
         """
-        for param, value in cls.fit_params.items():
+        for param, value in cls.fit_config.items():
             if value is None:
                 raise AttributeError(
                     f"FittableFOMTerm subclass '{cls.__name__}' is missing a "
-                    f"required parameter '{param}' in fit_params. All "
-                    "parameters in fit_params must be explicitly set to "
+                    f"required parameter '{param}' in fit_config. All "
+                    "parameters in fit_config must be explicitly set to "
                     "boolean values."
                 )
 
     @abstractmethod
     def fit(self, X: np.ndarray, y: np.ndarray) -> None:
         """ Fit the FOM term to the provided data. """
+        pass
+
+
+class ModelFOMTerm(FittableFOMTerm):
+    """
+    An abstract base class for fittable model-based FOM (Figure of Merit) terms.
+
+    This class extends FittableFOMTerm to specific terms that actually train a
+    model, unlike FittableFOMTerm where subclasses could use `fit` just to store
+    train data for easier access in `predict_score`. This class includes a
+    method for retrieving fitted parameters. Subclasses must implement the
+    `get_model_params` method in addition to the fit method inherited from
+    FittableFOMTerm.
+
+    Class Attributes:
+        Inherits all class attributes from FittableFOMTerm, including
+        fit_config.
+
+    Methods:
+        get_model_params: Abstract method to retrieve fitted parameters.
+    """
+
+    @abstractmethod
+    def get_model_params(self) -> Dict[str, float]:
+        """ Retrieve the fitted parameters of the model. """
         pass
 
 
@@ -160,8 +198,50 @@ class NonFittableFOMTerm(BaseFOMTerm):
     """
 
 
-# Create custom type for classes
-FOMTermType = Union[Type[FittableFOMTerm], Type[NonFittableFOMTerm]]
-
 # Create custom type for instances
-FOMTermInstance = Union[FittableFOMTerm, NonFittableFOMTerm]
+FOMTermInstance = Union[FittableFOMTerm, ModelFOMTerm, NonFittableFOMTerm]
+
+# Create custom type for classes
+FOMTermType = Type[FOMTermInstance]
+
+# Kernel of Gaussian Process model
+RANDOM_STATE = 42
+KERNEL = RationalQuadratic(
+    length_scale=0.5,
+    alpha=1.0, 
+    length_scale_bounds=(0.01, 2.0),  # (1e-5, 10)
+    alpha_bounds=(0.1, 10.0)
+)
+"""
+For the implementation of the Gaussian Process Regression model utilizing the
+RationalQuadratic kernel, parameter boundaries were carefully selected to align
+with the normalized feature space [0, 1]. The RationalQuadratic kernel is
+defined as:
+
+        k(x_i, x_j) = (1 + d(x_i, x_j)^2 / (2 * alphal**2))**-alpha
+
+where d(x_i, x_j) is the Euclidean distance between two points, l is the length
+scale, and alpha is the scale mixture parameter.
+
+Given the normalized feature space, the following parameter bounds were
+established:
+
+Length scale (l):
+    Lower bound: 0.01
+    Upper bound: 2.0
+
+The lower bound represents 1% of the feature range, allowing the model to
+capture fine-grained patterns, while the upper bound of twice the feature range
+permits the identification of smooth, global trends across the entire input
+space.
+
+Scale mixture parameter (alpha):
+    Lower bound: 0.1
+    Upper bound: 10.0
+
+This range for alpha facilitates a balanced exploration of both large-scale and
+small-scale variations in the data, while mitigating the risk of numerical
+instability that could arise from extreme values. The initial values for
+length_scale and alpha were set to 0.5 and 1.0 respectively, providing a neutral
+starting point for optimization within the defined bounds.
+"""

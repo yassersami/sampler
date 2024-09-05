@@ -39,7 +39,7 @@ irbs_fom_terms_config:
     apply: true
     exclusion_radius: 1.0e-5
 
-  outlier_gpc:
+  inlier_gpc:
     apply: false
     apply_proba: false
     apply_std: false

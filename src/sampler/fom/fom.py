@@ -5,9 +5,12 @@ import json
 import inspect
 import copy
 
-from .term_base import FittableFOMTerm, NonFittableFOMTerm, FOMTermType, FOMTermInstance
+from .term_base import (
+    FittableFOMTerm, ModelFOMTerm, NonFittableFOMTerm,
+    FOMTermType, FOMTermInstance
+)
 from .term_gpr import SurrogateGPRTerm
-from .term_gpc import InterestGPCTerm, OutlierGPCTerm
+from .term_gpc import InterestGPCTerm, InlierGPCTerm
 from .term_spatial import OutlierProximityTerm, SigmoidLocalDensityTerm
 
 
@@ -21,7 +24,7 @@ class FOMTermAccessor:
     interest_gpc: InterestGPCTerm
     sigmoid_density: SigmoidLocalDensityTerm
     outlier_proximity: OutlierProximityTerm
-    outlier_gpc: OutlierGPCTerm
+    inlier_gpc: InlierGPCTerm
 
     def __init__(self, terms: Dict[str, FOMTermInstance]):
         self._terms = terms
@@ -44,7 +47,7 @@ class FOMTermAccessor:
         """
         return (
             isinstance(term_class, type) and
-            issubclass(term_class, (FittableFOMTerm, NonFittableFOMTerm))
+            issubclass(term_class, (FittableFOMTerm, ModelFOMTerm, NonFittableFOMTerm))
         )
 
     @classmethod
@@ -125,8 +128,8 @@ class FigureOfMerit:
         1. The 'apply' parameter is present in term_args.
         2. The TermClass is not None if the term is to be used.
         3. All required arguments for the term are available in the FOM instance.
-        4. If FittableFOMTerm, check fit_parms are all booleans.
-        
+        4. If FittableFOMTerm, check fit_config are all booleans.
+
         Raises:
             ValueError: If any validation check fails.
         """
@@ -147,9 +150,9 @@ class FigureOfMerit:
                         "not available in FOM"
                     )
 
-            # If fittable term, check if fit_params are well defined
+            # If fittable term, check if fit_config is well defined
             if issubclass(TermClass, FittableFOMTerm):
-                TermClass._validate_fit_params()
+                TermClass._validate_fit_config()
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> None:
 
@@ -167,12 +170,12 @@ class FigureOfMerit:
 
         for term in self._terms.values():
             if isinstance(term, FittableFOMTerm):
-                fit_params = term.fit_params
+                fit_config = term.fit_config
 
                 # Adapt input data for fittable term
-                if fit_params['X_only']:
+                if fit_config['X_only']:
                     term.fit(X)
-                elif fit_params['drop_nan']:
+                elif fit_config['drop_nan']:
                     X_clean, y_clean = self._drop_target_nans(X, y)
                     term.fit(X_clean, y_clean)
                 else:
@@ -220,7 +223,9 @@ class FigureOfMerit:
 
     def get_scores_df(self, X: np.ndarray) -> pd.DataFrame:
         scores_dict = {}
+
         for term in self._terms.values():
+            # Get scores
             scores = term.predict_score(X)
             score_names = term.score_names
             if isinstance(scores, np.ndarray):
@@ -229,10 +234,11 @@ class FigureOfMerit:
                 scores_dict[score_name] = score
 
         df_scores = pd.DataFrame(scores_dict)
+
         self._validate_n_negative_scores(df_scores)
 
         return df_scores
-    
+
     def _validate_n_negative_scores(self, df_scores: pd.DataFrame) -> None:
         """
         Validate if the number of columns with negative or null values matches
@@ -297,12 +303,26 @@ class FigureOfMerit:
         # Subtract number of negative scores of active terms
         return count_scores - self.n_negative_scores
 
+    def get_model_params(self) -> Dict[str, float]:
+        model_params = {}
+
+        for term_name, term in self._terms.items():
+            # Get fit parameters if the method exists
+            if isinstance(term, ModelFOMTerm):
+                term_model_params = term.get_model_params()
+                for param_name, param_value in term_model_params.items():
+                    # Use term name as prefix to avoid conflicts
+                    model_params[f"{term_name}_{param_name}"] = param_value
+
+        return model_params
+
     def get_parameters(self) -> Dict[str, Dict[str, Any]]:
         return {name: term.get_parameters() for name, term in self._terms.items()}
-    
-    def get_parameters_str(self) -> str:
+
+    @staticmethod
+    def serialize_dict(dic: Dict) -> str:
         return json.dumps(
-            obj=self.get_parameters(),
+            obj=dic,
             default=lambda o: ' '.join(repr(o).split()),
             indent=4
         )

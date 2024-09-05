@@ -18,7 +18,7 @@ class SigmoidLocalDensityTerm(FittableFOMTerm):
     """
     A fittable FOM term that computes the sigmoid local density.
     """
-    fit_params: ClassVar[Dict[str, bool]] = {'X_only': True, 'drop_nan': False}
+    fit_config: ClassVar[Dict[str, bool]] = {'X_only': True, 'drop_nan': False}
 
     def __init__(self, decay_dist: float = 0.04):
         self.decay_dist = decay_dist
@@ -93,7 +93,7 @@ class SigmoidLocalDensityTerm(FittableFOMTerm):
 
 class OutlierProximityTerm(FittableFOMTerm):
     
-    fit_params: ClassVar[Dict[str, bool]] = {'X_only': False, 'drop_nan': False}
+    fit_config: ClassVar[Dict[str, bool]] = {'X_only': False, 'drop_nan': False}
 
     def __init__(self, exclusion_radius: float = 1e-5):
         self.exclusion_radius = exclusion_radius

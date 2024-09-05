@@ -123,6 +123,8 @@ def irbs_sampling(
 
     while should_continue:
         print(f"\nRound {iteration:03} (start) " + "-"*62)
+        start_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
         # Set the new FOM that will be used in next iteration
         fom_model.fit(X=data[features].values, y=data[targets].values)
 
@@ -131,9 +133,11 @@ def irbs_sampling(
 
         df_mmo_scores = optimizer.selector.get_records_df()
         df_fom_scores = fom_model.get_scores_df(X_batch)
+        model_params = fom_model.get_model_params()
         print(f"Selected candidates to be input to the simulator: \n{X_batch}")
         print(f"Optimization selection records: \n{df_mmo_scores}")
         print(f"FOM scores records: \n{df_fom_scores}")
+        print(f"FOM models fitting report: \n{fom_model.serialize_dict(model_params)}")
 
         # Launch time expensive simulations
         new_df = simulator.process_data(X_batch, is_real_X=False, index=n_total, treat_output=True)
@@ -147,16 +151,16 @@ def irbs_sampling(
         print(f"irbs_sampling -> New samples after simulation:\n {new_df}")
 
         # Add multi-objective optimization scores
-        # ignore_index=False to keep columns names 
+        # ignore_index=False to keep columns names
         new_df = pd.concat(
             [new_df, df_fom_scores, df_mmo_scores],
             axis=1, ignore_index=False
         )
 
-        # Add iteration number and datetime
-        timenow = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        new_df['datetime'] = timenow
-        new_df['iteration'] = iteration
+        # Add common information to first row only
+        new_df.loc[0, 'iteration'] = iteration
+        new_df.loc[0, 'datetime'] = start_time
+        new_df.loc[0, model_params.keys()] = model_params.values()
 
         # Store final batch results
         yield parse_results(new_df, current_history_size=data.shape[0])

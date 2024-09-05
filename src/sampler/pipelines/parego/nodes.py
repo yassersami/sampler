@@ -66,6 +66,8 @@ def run_parego(
     
     while should_continue:
         print(f"\nRound {iteration:03} (start) " + "-"*62)
+        start_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
         clean_res = res.dropna(subset=targets)
         x_pop = clean_res[features].values
         y_pop = clean_res[targets].values
@@ -93,9 +95,8 @@ def run_parego(
             prediction.reshape(-1, 1) if prediction.ndim == 1 else prediction
         )
         new_df['obj_score'] = dace.get_loss(new_df[features].values)
-        timenow = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        new_df['datetime'] = timenow
-        new_df['iteration'] = iteration
+        new_df.loc[0, 'iteration'] = iteration
+        new_df.loc[0, 'datetime'] = start_time
 
         # Store final batch results
         yield parse_results(new_df, current_history_size=res.shape[0])
@@ -271,7 +272,7 @@ class DACEModel:
     def get_loss(self, x: np.ndarray) -> np.ndarray:
         # Expected improvement is an increasing function of goodness of selected sample.
         # We add a minus to set a loss for minization algorithm.
-        return - self.get_score(x)
+        return -1 * self.get_score(x)
 
 
 def tchebychev(y_pop: np.array, llambda: List[float]):

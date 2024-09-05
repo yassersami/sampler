@@ -11,10 +11,7 @@ from sklearn.exceptions import NotFittedError
 from scipy.linalg import solve
 from scipy.optimize import shgo
 
-from .term_base import FittableFOMTerm
-
-RANDOM_STATE = 42
-KERNEL = RationalQuadratic(length_scale_bounds=(1e-5, 10))
+from .term_base import ModelFOMTerm, KERNEL, RANDOM_STATE
 
 
 class LatentGPC(GaussianProcessClassifier):
@@ -113,6 +110,7 @@ class BinaryLatentGPC(LatentGPC):
             )
         elif num_classes == 2:
             self.is_trained = True
+            print(f"{self.__class__.__name__} -> Fitting model...")
             # Fit the Gaussian Process Classifier
             super().fit(X, y)
         else:
@@ -120,23 +118,27 @@ class BinaryLatentGPC(LatentGPC):
                 f"Expected 2 classes, but got {num_classes} classes. "
                 f"This model only supports binary classification."
             )
+
+    def get_std(self, X: np.ndarray) -> np.ndarray:
+        _, y_std = self.predict_a(X, return_std=True)
+        return y_std
     
     def update_max_std(self):
         """
         Update maximum standard deviation of the Gaussian Process for points
         between 0 and 1.
         """
-        print(f"{self.__class__.__name__}.update_max_std -> Searching for the maximum std...")
         if not self.is_trained:
             raise NotFittedError("The model must be trained before calling update_max_std.")
+
+        print(f"{self.__class__.__name__} -> Searching for maximum std...")
 
         search_error = 0.01
 
         def get_opposite_std(X):
             """Opposite of std to be minimized."""
             X = np.atleast_2d(X)
-            _, y_std = self.predict_a(X, return_std=True)
-            return -1 * y_std
+            return -1 * self.get_std(X)
 
         result = shgo(
             get_opposite_std,
@@ -150,14 +152,11 @@ class BinaryLatentGPC(LatentGPC):
         max_std = min(1.0, max_std * (1 + search_error))
         self.max_std = max_std
 
-        print(f"{self.__class__.__name__}.update_max_std -> Maximum GP std: {max_std}")
-
     def get_std_score(self, X: np.ndarray) -> np.ndarray:
         X = np.atleast_2d(X)
         if self.max_std is None:
             raise NotFittedError("max_std must be updated before predicting scores.")
-        _, y_std = self.predict_a(X, return_std=True)
-        return y_std / self.max_std
+        return self.get_std(X) / self.max_std
 
     def get_positive_bstd(self, X: np.ndarray) -> np.ndarray:
         """
@@ -223,10 +222,10 @@ class BinaryLatentGPC(LatentGPC):
         return score
 
 
-class BinaryLatentGPCTerm(FittableFOMTerm, BinaryLatentGPC):
+class BinaryLatentGPCTerm(ModelFOMTerm, BinaryLatentGPC):
     
     required_args = []
-    fit_params = {'X_only': False, 'drop_nan': False}
+    fit_config = {'X_only': False, 'drop_nan': False}
     
     def __init__(
         self,
@@ -305,41 +304,37 @@ class BinaryLatentGPCTerm(FittableFOMTerm, BinaryLatentGPC):
 
         return tuple(scores) if len(scores) > 1 else scores[0]
 
-    def get_parameters(self, add_details: bool = False):
+    def get_model_params(self) -> Dict[str, float]:
+        if not self.is_trained:
+            return {}
+        kernel_params = {
+            k: v for k, v in self.kernel_.get_params().items()
+            if not k.endswith('_bounds')
+        }
+        return {
+            **kernel_params,
+            'lml': self.log_marginal_likelihood_value_,
+            'max_std': self.max_std,
+        }
+
+    def get_parameters(self) -> Dict:
         params = {
             'apply_proba': self.apply_proba,
             'apply_std': self.apply_std,
             'apply_bstd': self.apply_bstd,
             'apply_entropy': self.apply_entropy,
-            'kernel': self.kernel_.get_params(),
             'kernel_str': str(self.kernel_),
             'is_trained': self.is_trained,
         }
 
         if self.is_trained:
             params.update({
-                'max_std': self.max_std,
+                'kernel': self.kernel_.get_params(),
                 'log_marginal_likelihood': self.log_marginal_likelihood_value_,
+                'max_std': self.max_std,
                 'n_features': self.n_features_in_,
                 'n_train': self.base_estimator_.X_train_.shape[0],
                 'classes': self.classes_,
-            })
-
-        if not add_details:
-            return params
-
-        params.update({
-            'optimizer': self.optimizer,
-            'n_restarts_optimizer': self.n_restarts_optimizer,
-            'max_iter_predict': self.max_iter_predict,
-            'warm_start': self.warm_start,
-            'copy_X_train': self.copy_X_train,
-            'random_state': self.random_state,
-        })
-
-        if self.is_trained:
-            params.update({
-                'n_classes': self.n_classes_,
             })
 
         return params
@@ -391,12 +386,12 @@ class InterestGPCTerm(BinaryLatentGPCTerm):
         y = np.where(
             interest_cond,
             self.class_to_index[self.negative_class],  # 0
-            self.class_to_index[self.positive_class]   # 1
+            self.class_to_index[self.positive_class]   # 1 = interest
         )
         super().fit(X, y)
 
 
-class OutlierGPCTerm(BinaryLatentGPCTerm):
+class InlierGPCTerm(BinaryLatentGPCTerm):
 
     def __init__(
         self,
@@ -427,6 +422,6 @@ class OutlierGPCTerm(BinaryLatentGPCTerm):
         y = np.where(
             np.isnan(y).any(axis=1),
             self.class_to_index[self.negative_class],  # 0
-            self.class_to_index[self.positive_class]   # 1
+            self.class_to_index[self.positive_class]   # 1 = inlier
         )
         super().fit(X, y)
