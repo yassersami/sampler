@@ -71,7 +71,7 @@ param_simulator_config:
   type: MemoryDataSet
   data:
     use: true
-    max_simu_time: 2400  # seconds
+    max_simu_time: 1200  # seconds
     map_dir: "data/07_simulation/base"
 
 param_sao_history_path:

@@ -21,7 +21,6 @@ interest_region:
   Pg_f: [40.0e+6, 56.0e+6]
   Tg_Tmax: [5800, 7000]
 
-initial_size: 100
 batch_size: 8
 
 stop_condition:

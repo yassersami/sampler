@@ -26,7 +26,7 @@ Main Functions:
    - Variable inputs are parameters typically modified between runs, unlike
      fixed inputs, which are constants or developer-adjusted settings.
 
-2. `launch_0d`: Executes the simulation.
+2. `run_simulation_process`: Executes the simulation.
    - Runs using input files from a specified directory.
    - Handles timeouts and errors, returning results or error info.
 """

@@ -50,8 +50,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             func=join_history,
             inputs=dict(
                 history='run_sim_history',
-                stop_condition='params:stop_condition',
-                initial_size='params:initial_size'
+                stop_condition='params:stop_condition'
             ),
             outputs='run_sim_increased_data',
             name='irbs_retrieve_outputs',

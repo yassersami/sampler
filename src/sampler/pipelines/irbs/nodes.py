@@ -9,7 +9,9 @@ from tqdm import tqdm
 import numpy as np
 import pandas as pd
 
-from sampler.common.data_treatment import DataTreatment, initialize_dataset
+from sampler.common.data_treatment import (
+    DataTreatment, initialize_dataset, generate_hypercube_boundary_points
+)
 from sampler.common.storing import parse_results
 from sampler.common.simulator import SimulationProcessor
 from sampler.fom.fom import FigureOfMerit
@@ -66,6 +68,29 @@ def irbs_initialize_component(
     }
 
 
+def irbs_prepare_data(
+    data: pd.DataFrame,
+    treatment: DataTreatment,
+    features: List[str],
+    simulator: SimulationProcessor,
+):
+    # If fake simulator is used, adapt targets
+    data = simulator.adapt_targets(data, spice_on=True)
+
+    # Set dataset to be completed with adaptive sampling
+    data = initialize_dataset(data, treatment)
+
+    # Get points on edge to satisfy classifier curiosity on design space boundaries
+    X_boundary = generate_hypercube_boundary_points(p=len(features), k=5)
+    df_boundary = pd.DataFrame(X_boundary, columns=features)
+    df_boundary['quality'] = 'sim_error'  # from `get_outliers_masks`
+
+    # Append boundary points without target values to be considered as outliers
+    data = pd.concat([data, df_boundary], ignore_index=True)
+
+    return data
+
+
 def irbs_sampling(
     data: pd.DataFrame,
     treatment: DataTreatment,
@@ -76,13 +101,8 @@ def irbs_sampling(
     optimizer: MultiModalOptimizer,
     simulator: SimulationProcessor,
 ):
-
-    # If fake simulator is used, adapt targets
-    data = simulator.adapt_targets(data, spice_on=True)
-
-    # Set dataset to be completed with adaptive sampling
-    res = initialize_dataset(data=data, treatment=treatment)
-    yield parse_results(res, current_history_size=0)
+    # Store initial data
+    yield parse_results(data, current_history_size=0)
     
     # Set progress counting variables
     max_size = stop_condition['max_size']
@@ -104,9 +124,9 @@ def irbs_sampling(
     while should_continue:
         print(f"\nRound {iteration:03} (start) " + "-"*62)
         # Set the new FOM that will be used in next iteration
-        fom_model.fit(X=res[features].values, y=res[targets].values)
+        fom_model.fit(X=data[features].values, y=data[targets].values)
 
-        # Search new candidates to add to res dataset
+        # Search new candidates to add to dataset
         X_batch = optimizer.run_multimodal_optim(fom_model.predict_loss)
 
         df_mmo_scores = optimizer.selector.get_records_df()
@@ -127,11 +147,10 @@ def irbs_sampling(
         print(f"irbs_sampling -> New samples after simulation:\n {new_df}")
 
         # Add multi-objective optimization scores
-        # * ignore_index=False to keep columns names 
-        # * join='inner' because scores can have more rows than new_df
+        # ignore_index=False to keep columns names 
         new_df = pd.concat(
             [new_df, df_fom_scores, df_mmo_scores],
-            axis=1, join='inner', ignore_index=False
+            axis=1, ignore_index=False
         )
 
         # Add iteration number and datetime
@@ -140,10 +159,10 @@ def irbs_sampling(
         new_df['iteration'] = iteration
 
         # Store final batch results
-        yield parse_results(new_df, current_history_size=res.shape[0])
+        yield parse_results(new_df, current_history_size=data.shape[0])
 
         # Concatenate new values to original results DataFrame
-        res = pd.concat([res, new_df], axis=0, ignore_index=True)
+        data = pd.concat([data, new_df], axis=0, ignore_index=True)
 
         # Update stopping conditions
         n_new_samples = new_df.shape[0]

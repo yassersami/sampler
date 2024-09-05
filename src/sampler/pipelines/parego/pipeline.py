@@ -40,8 +40,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             func=join_history,
             inputs=dict(
                 history='parego_history',
-                stop_condition='params:stop_condition',
-                initial_size='params:initial_size'
+                stop_condition='params:stop_condition'
             ),
             outputs='parego_increased_data',
             name='parego_retrieve_outputs',

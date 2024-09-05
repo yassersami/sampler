@@ -3,6 +3,7 @@ from typing import List, Dict, Tuple
 
 import numpy as np
 import pandas as pd
+import itertools
 
 from sampler.common.scalers import MixedMinMaxScaler, scale_interest_region
 
@@ -132,11 +133,11 @@ class DataTreatment:
         
         # Initialize DataFrame to store masks
         masks = pd.DataFrame(index=df_real.index)
-        
+
         # Initialize feature and target masks
         masks['out_of_bounds_feat'] = False
         masks['out_of_bounds_tar'] = False
-        
+
         for key, val in self.bounds.items():
             bounds = [val[0] - tol, val[1] + tol]
             mask = ~(df_real[key].between(*bounds))
@@ -149,7 +150,7 @@ class DataTreatment:
         # Create masks for time_out and sim_error
         masks['time_out'] = df_real['sim_time'].round() >= self.max_simu_time
         masks['sim_error'] = df_real[self.targets].isna().any(axis=1)
-        
+
         return masks
 
     def classify_quality_interest(
@@ -224,3 +225,24 @@ def initialize_dataset(data: pd.DataFrame, treatment: DataTreatment) -> pd.DataF
     df_res = data[treatment.features + treatment.targets].copy(deep=True)
     df_res = treatment.classify_quality_interest(df_res, data_is_scaled=True)
     return df_res
+
+
+def generate_hypercube_boundary_points(p, k):
+    """
+    Generate points on the boundary of a p-dimensional hypercube [0, 1]^p
+    with k values per dimension.
+    
+    :param p: number of dimensions
+    :param k: number of values per dimension
+    :return: array of points on the hypercube boundary
+    """
+    # Generate k evenly spaced values between 0 and 1
+    values = np.linspace(0, 1, k)
+    
+    # Generate all combinations of these values
+    all_points = list(itertools.product(values, repeat=p))
+    
+    # Filter points to keep only those on the boundary
+    boundary_points = [point for point in all_points if 0 in point or 1 in point]
+    
+    return np.array(boundary_points)

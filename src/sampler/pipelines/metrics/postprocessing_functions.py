@@ -60,14 +60,3 @@ def prepare_new_data(
     res = treatment.classify_quality_interest(res, data_is_scaled=False)
     res = treatment.classify_quality_error(res, data_is_scaled=False)
     return res
-
-
-def extract_percentage(initial_size, tot_size, n_slice, vals):
-    res_io = pd.DataFrame(columns=['interest', 'others', 'in%', 'o%'])
-    for lim in np.append([initial_size], np.arange(n_slice, tot_size + 1, n_slice)):
-        if lim <= vals['df'].shape[0]:
-            res_io.loc[lim, 'interest'] = vals['interest'].loc[vals['interest'].index < lim].shape[0]
-            res_io.loc[lim, 'in%'] = res_io.loc[lim, 'interest'] / lim
-            res_io.loc[lim, 'others'] = lim - res_io.loc[lim, 'interest']
-            res_io.loc[lim, 'o%'] = 1 - res_io.loc[lim, 'interest'] / lim
-    return res_io
