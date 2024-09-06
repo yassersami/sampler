@@ -1,3 +1,5 @@
+irbs_boundary_outliers_n_per_dim: 0  # int, set to 0 to deactivate.
+
 irbs_selector_config:
   diversity: {apply: true}
   centrism: {apply: false}

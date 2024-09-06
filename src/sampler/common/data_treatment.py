@@ -227,22 +227,22 @@ def initialize_dataset(data: pd.DataFrame, treatment: DataTreatment) -> pd.DataF
     return df_res
 
 
-def generate_hypercube_boundary_points(p, k):
+def generate_hypercube_boundary_points(p, n_per_dim):
     """
     Generate points on the boundary of a p-dimensional hypercube [0, 1]^p
-    with k values per dimension.
-    
+    with n_per_dim values per dimension.
+
     :param p: number of dimensions
-    :param k: number of values per dimension
+    :param n_per_dim: number of values per dimension
     :return: array of points on the hypercube boundary
     """
-    # Generate k evenly spaced values between 0 and 1
-    values = np.linspace(0, 1, k)
-    
+    # Generate n_per_dim evenly spaced values between 0 and 1
+    values = np.linspace(0, 1, n_per_dim)
+
     # Generate all combinations of these values
     all_points = list(itertools.product(values, repeat=p))
-    
+
     # Filter points to keep only those on the boundary
     boundary_points = [point for point in all_points if 0 in point or 1 in point]
-    
+
     return np.array(boundary_points)

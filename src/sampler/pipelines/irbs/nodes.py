@@ -73,6 +73,7 @@ def irbs_prepare_data(
     treatment: DataTreatment,
     features: List[str],
     simulator: SimulationProcessor,
+    boundary_outliers_n_per_dim: int
 ):
     # If fake simulator is used, adapt targets
     data = simulator.adapt_targets(data, spice_on=True)
@@ -80,8 +81,14 @@ def irbs_prepare_data(
     # Set dataset to be completed with adaptive sampling
     data = initialize_dataset(data, treatment)
 
-    # Get points on edge to satisfy classifier curiosity on design space boundaries
-    X_boundary = generate_hypercube_boundary_points(p=len(features), k=5)
+    if boundary_outliers_n_per_dim == 0:
+        # Do not add artificial outliers
+        return data
+
+    # Set outliers on design space boundaries to satisfy classifier curiosity 
+    X_boundary = generate_hypercube_boundary_points(
+        len(features), boundary_outliers_n_per_dim
+    )
     df_boundary = pd.DataFrame(X_boundary, columns=features)
     df_boundary['quality'] = 'sim_error'  # from `get_outliers_masks`
 
