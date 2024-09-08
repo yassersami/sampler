@@ -25,11 +25,12 @@ def irbs_initialize_component(
     features: List[str],
     targets: List[str],
     additional_values: List[str],
+    simulator_config: Dict,
+    simulator_map_dir: str,
     batch_size: int,
     fom_terms_config: Dict[str, Dict],
     selector_config: Dict[str, Dict],
     optimizer_config: Dict[str, Dict],
-    simulator_config: Dict,
 ) -> Dict[str, object]:
 
     # Set figure of merite (acquisition function)
@@ -58,7 +59,8 @@ def irbs_initialize_component(
         additional_values=additional_values,
         treatment=treatment,
         n_proc=batch_size,
-        simulator_config=simulator_config
+        simulator_config=simulator_config,
+        map_dir=simulator_map_dir
     )
 
     return {

@@ -28,6 +28,7 @@ def sao_optim_from_simulator(
         targets: List[str],
         additional_values: List[str],
         simulator_config: Dict,
+        simulator_map_dir: str,
         batch_size: int,
         stop_condition: Dict[str, Union[bool, int]],
         sao_history_path: str,
@@ -40,8 +41,13 @@ def sao_optim_from_simulator(
 
     # Chose the simulation function that will be adapted for optimizer
     simulator = SimulationProcessor(
-        features=features, targets=targets, additional_values=additional_values,
-        treatment=treatment, n_proc=batch_size, simulator_config=simulator_config
+        features=features,
+        targets=targets,
+        additional_values=additional_values,
+        treatment=treatment,
+        n_proc=batch_size,
+        simulator_config=simulator_config,
+        map_dir=simulator_map_dir
     )
     f_sim = set_f_sim(simulator)
 
@@ -70,7 +76,8 @@ def sao_optim_from_simulator(
         **optiminfo_dic,
     }
     result_df = pd.DataFrame.from_records(result_dic)
-    return dict(history={}, optim_res=result_df)
+    print(f'Optimization result: \n{result_df}')
+    return {}
 
 
 def set_f_sim(

@@ -42,10 +42,6 @@ sao_increased_data:
   type: pandas.CSVDataSet
   filepath: data/07_model_output/base/sao_increased_data.csv
 
-sao_optim_res:
-  type: pandas.CSVDataSet
-  filepath: data/07_model_output/base/sao_optim_results.csv
-
 ###### metrics ######
 metrics_plots:
   type: kedro.extras.datasets.matplotlib.MatplotlibWriter
@@ -63,21 +59,14 @@ run_sim_increased_data:
   filepath: data/07_model_output/base/run_sim_increased_data.csv
 
 ###### Following is used as parameters and not objects ######
-param_env_name:
+path_simulator_output:
   type: MemoryDataSet
-  data: "base"
+  data: "data/07_simulation/base"
 
-param_simulator_config:
-  type: MemoryDataSet
-  data:
-    use: true
-    max_simu_time: 1200  # seconds
-    map_dir: "data/07_simulation/base"
-
-param_sao_history_path:
+path_sao_history:
   type: MemoryDataSet
   data: "data/07_model_output/base/sao_history"
 
-param_metrics_output_dir:
+path_metrics_output:
   type: MemoryDataSet
   data: "data/08_reporting/base"

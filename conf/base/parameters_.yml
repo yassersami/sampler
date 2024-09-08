@@ -21,6 +21,10 @@ interest_region:
   Pg_f: [40.0e+6, 56.0e+6]
   Tg_Tmax: [5800, 7000]
 
+simulator_config:
+  use: true
+  max_simu_time: 1200  # seconds
+
 batch_size: 8
 
 stop_condition:

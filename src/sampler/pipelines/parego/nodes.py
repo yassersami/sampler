@@ -27,11 +27,20 @@ RANDOM_STATE = 42
 
 
 def run_parego(
-    data: pd.DataFrame, treatment: DataTreatment,
-    features: List[str], targets: List[str], additional_values: List[str],
-    simulator_config: Dict, batch_size: int, stop_condition: Dict,
-    llambda_s: int, population_size: int, num_generations: int,
-    tent_slope: float=10, experience: str='parEGO_maxIpr'
+    data: pd.DataFrame,
+    treatment: DataTreatment,
+    features: List[str],
+    targets: List[str],
+    additional_values: List[str],
+    simulator_config: Dict,
+    simulator_map_dir: str,
+    batch_size: int,
+    stop_condition: Dict,
+    llambda_s: int,
+    population_size: int,
+    num_generations: int,
+    tent_slope: float=10,
+    experience: str='parEGO_maxIpr'
 ):
     dace = DACEModel(
         features=features, targets=targets,
@@ -40,7 +49,8 @@ def run_parego(
     )
     simulator = SimulationProcessor(
         features=features, targets=targets, additional_values=additional_values,
-        treatment=treatment, n_proc=batch_size, simulator_config=simulator_config
+        treatment=treatment, n_proc=batch_size, simulator_config=simulator_config,
+        map_dir=simulator_map_dir
     )
     data = simulator.adapt_targets(data)
 

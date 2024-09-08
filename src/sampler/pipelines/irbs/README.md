@@ -39,7 +39,7 @@ The pipeline requires the following inputs:
 - **`params:irbs_opt_sampling_points`**: Number of sampling points for optimization in SHGO
 
 ### Simulation Environment
-- **`param_simulator_config`**: Simulator environment configuration
+- **`params:simulator_config`**: Simulator environment configuration
 
 ### Additional Parameters
 - **`params:interest_region`**: Boundaries of the targets defining the region of interest

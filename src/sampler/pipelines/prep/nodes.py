@@ -10,7 +10,7 @@ def prepare_treatment(
     targets: List[str],
     variables_ranges: Dict[str, Dict],
     interest_region: Dict[str, Tuple[float, float]],
-    simulator_config: Dict[str, Any]
+    simulator_config: Dict,
 ) -> DataTreatment:
     """
     Prepare the DataTreatment class with the necessary configuration.

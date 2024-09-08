@@ -36,7 +36,8 @@ def create_pipeline(**kwargs) -> Pipeline:
                 features='params:features',
                 targets='params:targets',
                 additional_values='params:additional_values',
-                simulator_config='param_simulator_config',
+                simulator_config='params:simulator_config',
+                simulator_map_dir='path_simulator_output',
                 batch_size='params:batch_size',
                 
                 n_proc='params:run_sim_n_proc',

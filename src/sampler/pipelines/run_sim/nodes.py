@@ -68,9 +68,16 @@ def prepare_simulator_inputs(
 
 
 def evaluate_inputs(
-    data: pd.DataFrame, treatment: 'DataTreatment',
-    features: List[str], targets: List[str], additional_values: List[str],
-    simulator_config: Dict, batch_size: int, n_proc: int, output_is_real: bool
+    data: pd.DataFrame,
+    treatment: 'DataTreatment',
+    features: List[str],
+    targets: List[str],
+    additional_values: List[str],
+    simulator_config: Dict,
+    simulator_map_dir: str,
+    batch_size: int,
+    n_proc: int,
+    output_is_real: bool
 ):
     # Ensure 'r_ext_pMeO' is in features by copying 'r_ext_pAl' if necessary
     if 'r_ext_pMeO' not in features:
@@ -78,8 +85,13 @@ def evaluate_inputs(
     
     # Initialize the simulation processor, n_proc to None to use cpu_count()
     simulator = SimulationProcessor(
-        features=features, targets=targets, additional_values=additional_values,
-        treatment=treatment, n_proc=n_proc, simulator_config=simulator_config
+        features=features,
+        targets=targets,
+        additional_values=additional_values,
+        treatment=treatment,
+        n_proc=n_proc,
+        simulator_config=simulator_config,
+        map_dir=simulator_map_dir
     )
 
     n_total = 0  # Total launched number of simulations

@@ -191,7 +191,10 @@ class SimulationProcessor:
         features:List[str],
         targets: List[str],
         additional_values: List[str],
-        treatment: DataTreatment, simulator_config: Dict, n_proc: int = 1
+        treatment: DataTreatment,
+        simulator_config: Dict,
+        map_dir: str,
+        n_proc: int = 1
     ):
         self.features = features
         self.targets = targets
@@ -199,7 +202,7 @@ class SimulationProcessor:
         self.treatment = treatment
         self.use_simulator = simulator_config['use']
         self.max_simu_time = simulator_config['max_simu_time']
-        self.map_dir = simulator_config['map_dir']
+        self.map_dir = map_dir
         self.n_proc = n_proc
         if self.use_simulator:
             # Setup simulation environment

@@ -69,7 +69,7 @@ def create_pipeline(**kwargs) -> Pipeline:
         node(
             func=plot_metrics,
             inputs=dict(
-                output_dir='param_metrics_output_dir',
+                output_dir='path_metrics_output',
                 data='scaled_exp_data',
                 names='params:names',
                 region='scaled_region',
