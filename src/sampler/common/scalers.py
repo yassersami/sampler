@@ -1,4 +1,4 @@
-from typing import List, Dict, Optional
+from typing import List, Dict, Tuple, Optional
 
 import numpy as np
 import pandas as pd
@@ -127,7 +127,10 @@ class MixedMinMaxScaler:
         return x
 
 
-def scale_interest_region(interest_region: Dict, scaler: MixedMinMaxScaler) -> Dict:
+def scale_interest_region(
+    interest_region: Dict[str, Tuple[float, float]],
+    scaler: MixedMinMaxScaler
+) -> Dict[str, Tuple[float, float]]:
     """ Scale values of the region of interest"""
 
     lowers = [region[0] for region in interest_region.values()]

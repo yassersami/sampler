@@ -7,8 +7,9 @@ import numpy as np
 import pandas as pd
 import time
 
-from sampler.common.data_treatment import DataTreatment
-from sampler.common.storing import set_history_folder
+from .data_treatment import DataTreatment
+from .simulator_proxy import FastSimulator
+from .storing import set_history_folder
 
 import simulator_0d.src.py0D.main as simulator_0d
 from simulator_0d.src.py0D.functions_pp import DB_simu_pp as SimPostProc
@@ -132,8 +133,11 @@ def run_simulation_process(inputs_dic: Dict, output_dir: int) -> Dict[str, float
 
 
 def run_simulation(
-    df_X: pd.DataFrame, n_proc: int, 
-    index: int, max_simu_time: int, map_dir: str
+    df_X: pd.DataFrame,
+    n_proc: int, 
+    index: int,
+    max_simu_time: int,
+    map_dir: str
 ) -> pd.DataFrame:
 
     # Create input folders and get their inputs dict
@@ -181,41 +185,12 @@ def run_simulation(
     return pd.DataFrame(results)
 
 
-def normalized_power_function(X, target_dim):
-    # Compute the hypercube diagonal length
-    diagonal_length = np.sqrt(X.shape[1])
-    
-    # Compute the normalized norm for each point
-    norms = np.linalg.norm(X, axis=1) / diagonal_length
-    
-    # Apply powers based on the target space dimension
-    return np.column_stack([norms**(i + 1) for i in range(target_dim)])
-
-
-def run_fake_simulation(
-    X_real: np.ndarray, features: List[str], targets: List[str],
-    additional_values: List[str], treatment: DataTreatment
-):
-    """ Set a fake results df. All outputs are in real space (not scaled one)"""
-    x_scaled = treatment.scaler.transform_features(X_real)
-    # As if y_sim = ['Pg_f', 'Tg_Tmax'] with values in [0, 1]
-    y_sim = normalized_power_function(x_scaled, len(targets))
-    # As if y_doi = ['sim_time', 'Composition', ...]
-    y_doi = np.zeros((X_real.shape[0], len(additional_values)))
-
-    df_results = pd.DataFrame(
-        data=np.concatenate([x_scaled, y_sim, y_doi], axis=1),
-        columns=features + targets + additional_values
-    )
-    # Get targets in real space (not in sclaed one)
-    df_results[features + targets] = treatment.scaler.inverse_transform(df_results[features + targets].values)
-
-    return df_results
-
-
 class SimulationProcessor:
     def __init__(
-        self, features: List[str], targets: List[str], additional_values: List[str],
+        self,
+        features:List[str],
+        targets: List[str],
+        additional_values: List[str],
         treatment: DataTreatment, simulator_config: Dict, n_proc: int = 1
     ):
         self.features = features
@@ -226,8 +201,16 @@ class SimulationProcessor:
         self.max_simu_time = simulator_config['max_simu_time']
         self.map_dir = simulator_config['map_dir']
         self.n_proc = n_proc
-        # Setup simulation environment
-        set_history_folder(self.map_dir, should_rename=False)
+        if self.use_simulator:
+            # Setup simulation environment
+            set_history_folder(self.map_dir, should_rename=False)
+        else:
+            self.proxy = FastSimulator(
+                features=self.features,
+                targets=self.targets,
+                additional_values=self.additional_values,
+                interest_region=self.treatment.scaled_interest_region,
+            )
 
     def _prepare_real_input(self, X: np.ndarray, is_real_X: bool) -> np.ndarray:
         if is_real_X:
@@ -237,7 +220,7 @@ class SimulationProcessor:
 
     def process_data(
         self, X: np.ndarray, is_real_X: bool, index: int, treat_output=True
-    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    ) -> pd.DataFrame:
         """
         Process simulation data, either from real or scaled input features.
 
@@ -247,7 +230,7 @@ class SimulationProcessor:
             index (int): Index under which to store comming simulation in self.map_dir.
 
         Returns:
-            Tuple[pd.DataFrame, pd.DataFrame]: Processed scaled data and scaled errors.
+            pd.DataFrame: Processed data either real or treated.
         """
         X_real = self._prepare_real_input(X, is_real_X)
         df_X_real = pd.DataFrame(X_real, columns=self.features)
@@ -257,12 +240,11 @@ class SimulationProcessor:
                 df_X=df_X_real, index=index, n_proc=self.n_proc,
                 max_simu_time=self.max_simu_time, map_dir=self.map_dir
             )
-            df_results = pd.concat([df_X_real, df_results], axis=1)
         else:
-            df_results = run_fake_simulation(
-                X_real, self.features, self.targets, self.additional_values,
-                self.treatment,
-            )
+            df_results = self.proxy.run_fast_simulation(X_real, self.treatment.scaler)
+
+        # Concatenate inputs with simulation results
+        df_results = pd.concat([df_X_real, df_results], axis=1)
 
         if not treat_output:
             # Return data in real scale as returned by simulator
@@ -276,22 +258,17 @@ class SimulationProcessor:
         scaled_data = scaled_data[self.features + self.targets + available_values]
         return scaled_data
 
-    def adapt_targets(self, data: pd.DataFrame, spice_on: bool) -> pd.DataFrame:
+    def adapt_targets(self, data: pd.DataFrame) -> pd.DataFrame:
         if self.use_simulator:
             return data
-        
-        # If using fake simulator change target values
+
+        # If using fake simulator for rapid testing, change target values
         scaled_data = self.process_data(
             data[self.features].values, is_real_X=False, index=0, treat_output=True
         )
         data[self.targets] = scaled_data[self.targets].values
 
-        # Add some spice to check how outliers and errors are handled
-        if spice_on and data.shape[0] >= 4: 
-            interest_region_center = [sum(values) / 2 for values in self.treatment.scaled_interest_region.values()]
+        # Add some spicy data to check how outlier and interest samples are handled
+        data = self.proxy.append_spicy_data(data, self.max_simu_time)
 
-            data.loc[0, 'sim_time'] = 60  # time_out
-            data.loc[1, self.targets] = interest_region_center  # interest sample
-            data.loc[2, self.targets[0]] = 1.1  # target out of bounds
-            data.loc[3, self.targets[0]] = np.nan  # failed simulation causing error (missing value)
         return data

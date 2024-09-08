@@ -22,7 +22,8 @@ sko==0.5.7
 matplotlib==3.4.1
 mycolorpy==1.5.1
 seaborn==0.12.2
-plotly==5.22.0 
+plotly==5.22.0
+# pip install -U kaleido for plotly image export
 
 # requirements for 0D
 cantera==2.6.0

@@ -42,7 +42,7 @@ def run_parego(
         features=features, targets=targets, additional_values=additional_values,
         treatment=treatment, n_proc=batch_size, simulator_config=simulator_config
     )
-    data = simulator.adapt_targets(data, spice_on=True)
+    data = simulator.adapt_targets(data)
 
     res = initialize_dataset(data=data, treatment=treatment)
     yield parse_results(res, current_history_size=0)

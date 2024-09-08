@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 
 from sampler.common.data_treatment import (
-    DataTreatment, initialize_dataset, generate_hypercube_boundary_points
+    DataTreatment, initialize_dataset, append_hypercube_boundary_points
 )
 from sampler.common.storing import parse_results
 from sampler.common.simulator import SimulationProcessor
@@ -76,24 +76,16 @@ def irbs_prepare_data(
     boundary_outliers_n_per_dim: int
 ):
     # If fake simulator is used, adapt targets
-    data = simulator.adapt_targets(data, spice_on=True)
+    data = simulator.adapt_targets(data)
+
+    if boundary_outliers_n_per_dim > 0:
+        # Add outliers on design space boundaries to satisfy classifier curiosity 
+        data = append_hypercube_boundary_points(
+            data, features, boundary_outliers_n_per_dim
+        )
 
     # Set dataset to be completed with adaptive sampling
     data = initialize_dataset(data, treatment)
-
-    if boundary_outliers_n_per_dim == 0:
-        # Do not add artificial outliers
-        return data
-
-    # Set outliers on design space boundaries to satisfy classifier curiosity 
-    X_boundary = generate_hypercube_boundary_points(
-        len(features), boundary_outliers_n_per_dim
-    )
-    df_boundary = pd.DataFrame(X_boundary, columns=features)
-    df_boundary['quality'] = 'sim_error'  # from `get_outliers_masks`
-
-    # Append boundary points without target values to be considered as outliers
-    data = pd.concat([data, df_boundary], ignore_index=True)
 
     return data
 
