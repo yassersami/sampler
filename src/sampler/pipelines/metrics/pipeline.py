@@ -17,17 +17,15 @@ def create_pipeline(**kwargs) -> Pipeline:
             func=prepare_data_metrics,
             inputs=dict(
                 experiments='params:experiments',
-                names='params:names',
+                variable_aliases='params:variable_aliases',
                 features='params:features',
                 targets='params:targets',
-                additional_values='params:additional_values',
                 treatment='treatment',
             ),
             outputs=dict(
                 exp_data='exp_data',
                 features='features',
                 targets='targets',
-                targets_prediction='targets_prediction'
             ),
             # name='prepare_data_to_analyze',
         ),
@@ -39,10 +37,10 @@ def create_pipeline(**kwargs) -> Pipeline:
                 targets='targets',
                 treatment='treatment',
                 params_volume='params:params_volume',
+                params_asvd='params:params_asvd',
                 params_voronoi='params:params_voronoi',
             ),
             outputs=dict(
-                n_interest='n_interest',
                 volume='volume',
                 total_asvd_scores='total_asvd_scores',
                 interest_asvd_scores='interest_asvd_scores',
@@ -56,7 +54,6 @@ def create_pipeline(**kwargs) -> Pipeline:
                 data='exp_data',
                 features='features',
                 targets='targets',
-                targets_prediction='targets_prediction',
                 scales='params:scales',
                 interest_region='params:interest_region',
             ),
@@ -69,14 +66,14 @@ def create_pipeline(**kwargs) -> Pipeline:
         node(
             func=plot_metrics,
             inputs=dict(
-                output_dir='path_metrics_output',
                 data='scaled_exp_data',
-                names='params:names',
+                variable_aliases='params:variable_aliases',
                 region='scaled_region',
                 volume='volume',
                 total_asvd_scores='total_asvd_scores',
                 interest_asvd_scores='interest_asvd_scores',
                 volume_voronoi='volume_voronoi',
+                output_dir='path_metrics_output',
             ),
             outputs=None,
             # name='plot_metrics'

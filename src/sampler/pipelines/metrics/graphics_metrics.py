@@ -3,181 +3,144 @@ import seaborn as sns
 import pandas as pd
 
 from typing import List, Dict, Tuple, Union
-from itertools import combinations
+import warnings
 
 from matplotlib import pyplot as plt
 from matplotlib.patches import Rectangle
 import matplotlib.lines as mlines
-from matplotlib.gridspec import GridSpec
+
+from .postprocessing_functions import get_first_iteration_index
 
 
-def get_colors_legend(data):
-    return [mlines.Line2D([], [], color=vals['color'], label=vals['name']) for vals in data.values()]
+def plot_initial_data(data: Dict[str, Dict], features, targets, only_first_exp: bool = False):
 
+    if only_first_exp:
+        # Keep only the first experiment
+        first_exp = next(iter(data.keys()))
+        data = {first_exp: data[first_exp]}
 
-def plot_violin_distribution(data: Dict, targets: List[str], desired_region: Dict, volume: Dict = None):
-    fig, axs = plt.subplots(1, len(targets), figsize=(10, 5))
+    # Get initial data for each experiment
+    initial_data = {
+        dic['name']: dic['df'].loc[:get_first_iteration_index(dic['df'])-1]
+        for dic in data.values()
+    }
 
-    for col, target in enumerate(targets):
-        sns.violinplot(
-            data=[d['inliers'][target] for k, d in data.items()],
-            palette=[val['color'] for val in data.values()],
-            cut=0,  ax=axs[col]
-        )
-        axs[col].set_xticklabels([val['name'] for val in data.values()], rotation=20, ha='right')
-        axs[col].add_patch(Rectangle(
-            (-0.45, desired_region[target][0]),
-            (len(data) - 0.1),
-            desired_region[target][1] - desired_region[target][0],
-            edgecolor='#B73E3E', facecolor='none', lw=2,
-        ))
-        axs[col].set_ylabel(target)
+    # Concatenate all initial dataframes
+    df_to_plot = pd.concat([df.assign(exp_name=exp_name) for exp_name, df in initial_data.items()])
 
-    axs[0].text(-0.03, 1.03, 'a)', transform=axs[0].transAxes, size=20, weight='bold', ha='right', va='bottom')
-    axs[1].text(-0.03, 1.03, 'b)', transform=axs[1].transAxes, size=20, weight='bold', ha='right', va='bottom')
-    
-    # Add legend if volume is provided
-    if volume is not None:
-        handles = []
-        labels = []
-        for key, value in volume.items():
-            handle = Rectangle((0,0), 1, 1, color=data[key]['color'])
-            handles.append(handle)
-            labels.append(f'{value:.2e}')
-        
-        # Add legend to the last subplot
-        axs[-1].legend(handles, labels, loc='upper left', bbox_to_anchor=(1.1, 1), title='Area')
-        
-    fig.tight_layout()
-    
-    return fig
+    # Count samples and outliers for each label
+    sample_counts = df_to_plot['exp_name'].value_counts()
+    outlier_counts = df_to_plot[df_to_plot[targets].isna().any(axis=1)]['exp_name'].value_counts()
 
+    # Create color palette
+    original_palette = {dic['name']: dic['color'] for dic in data.values()}
 
-def pair_grid_for_all_variables(data, features, targets):
-    sns.set_theme(font_scale=1.15)
-    df_to_plot = pd.concat([v['inliers'].assign(identity=v['name']) for v in data.values()])
+    # Create a mapping from original labels to labels with counts
+    label_mapping = {
+        label: f'{label}\nTotal: {count}\nOutliers: {outlier_counts.get(label, 0)}' 
+        for label, count in sample_counts.items()
+    }
+
+    # Update the 'exp_name' column in df_to_plot
+    df_to_plot['exp_name'] = df_to_plot['exp_name'].map(label_mapping)
+
+    # Create an updated palette that matches the new labels
+    palette = {label_mapping[k]: v for k, v in original_palette.items()}
+
+    # Create PairGrid
     g = sns.PairGrid(
-        df_to_plot[features + targets + ['identity']],
-        hue='identity', palette=[val['color'] for val in data.values()], diag_sharey=False
+        df_to_plot,
+        vars=features + targets,
+        hue='exp_name', palette=palette, diag_sharey=False
     )
-    g.map_lower(sns.scatterplot, alpha=0.3)
-    g.map_upper(sns.kdeplot, levels=4, linewidths=2)
-    g.map_diag(sns.kdeplot, fill=False, linewidth=2)
-    g.add_legend()
+
+    # Define custom scatter plot function to highlight NaN values
+    def scatter_with_nan_highlight(x, y, **kwargs):
+        ax = plt.gca()
+        
+        # Regular scatter plot
+        sns.scatterplot(x=x, y=y, **kwargs)
+        
+        # Highlight NaN values with black crosses
+        nan_mask = df_to_plot[targets].isna().any(axis=1)
+        if nan_mask.any():
+            ax.scatter(x[nan_mask], y[nan_mask], color='black', marker='x', s=30, zorder=1, linewidth=1, label='NaN')
+
+    g.map_lower(scatter_with_nan_highlight, alpha=0.3)
+    
+    # For diagonal, use a separate function
+    def diagonal_kdeplot(x, **kwargs):
+        try:
+            sns.kdeplot(x=x, **kwargs)
+        except (ValueError, IndexError):
+            # If KDE plot fails, fall back to a histogram
+            sns.histplot(x=x, **kwargs)
+
+    g.map_diag(diagonal_kdeplot, linewidth=2)
+
+    # Define custom KDE plot function with error handling
+    def safe_kdeplot(x, y, **kwargs):
+        try:
+            sns.kdeplot(x=x, y=y, **kwargs)
+        except (ValueError, IndexError):
+            # If KDE plot fails, fall back to a scatter plot
+            sns.scatterplot(x=x, y=y, **kwargs)
+
+    g.map_upper(safe_kdeplot, levels=4, linewidth=2)
+
+    # Add legend without title
+    g.add_legend(title='')
+
     return g.figure
 
 
-def targets_kde(data: Dict, targets: List[str], region: Dict):
-    n_col = len(targets)
-    fig, axs = plt.subplots(1, n_col, figsize=(6*n_col, 6))
-
-    df_to_plot = pd.concat(
-        [
-            v['inliers'].assign(identity=v['name'], experiment=k)
-            for k, v in data.items()
-        ],
-        axis=0, ignore_index=True
-    )
-
-    #df_to_plot[targets] = df_to_plot[targets] / scales['targets']
-
-    plt.ticklabel_format(axis='y', style='sci')
-    bw_adjust_per_target = [0.2, 0.3] # Default: 1.0
-    for col, (target, bw_adjust) in enumerate(zip(targets, bw_adjust_per_target)):
-        sns.kdeplot(
-            data=df_to_plot, x=target, hue='experiment',
-            hue_order=[k for k in data.keys()][::-1], # Reverse drawing order of plots 
-            palette=[val['color'] for val in data.values()][::-1],
-            cut=0,
-            ax=axs[col], legend=False, fill=True, common_norm=True,
-            bw_adjust=bw_adjust
-        )
-        axs[col].axvline(x=region[target][0], color='red')
-        axs[col].axvline(x=region[target][1], color='red')
-        axs[col].set_xlabel(target)
-
-    use_zoom = False
-    if use_zoom:
-        # Add inset axis
-        axins = axs[0].inset_axes([0.5, 0.1, 0.45, 0.45])  # [x0, y0, width, height]
-
-        # Hide axis labels
-        axins.set_ylabel(' ')
-        axins.set_xlabel(' ')
-        axins.tick_params(axis='x', labelsize=10)
-        axins.tick_params(axis='y', labelsize=10)
-
-        for col, (target, bw_adjust) in enumerate(zip(targets, bw_adjust_per_target)):
-            sns.kdeplot(data=df_to_plot, x=target, hue='experiment',
-                        hue_order=[k for k in data.keys()][::-1], # Reverse drawing order of plots 
-                        palette=[val['color'] for val in data.values()][::-1],
-                        cut=0, ax=axins, legend=False, fill=True, common_norm=True,
-                        bw_adjust=bw_adjust
-                        
-                        )
-
-        axins.axvline(x=region[targets[0]][0], color='red')
-        axins.axvline(x=region[targets[0]][1], color='red')
-
-        axins.set_xlim(region[targets[0]][0] - 1, region[targets[0]][1] + 1)
-        axins.set_ylim(0.02, 0.11) # < Adjust zoom window y-limits as needed
-        axs[0].indicate_inset_zoom(axins)
-
-    colors_legend = get_colors_legend(data)
-
-    axs[1].set_ylabel('')
-    axs[1].legend(handles=colors_legend, loc='upper left', bbox_to_anchor=(1.1, 1))
-    axs[0].text(-0.03, 1.03, 'a)', transform=axs[0].transAxes, size=20, weight='bold', ha='right', va='bottom')
-    axs[1].text(-0.03, 1.03, 'b)', transform=axs[1].transAxes, size=20, weight='bold', ha='right', va='bottom')
-    fig.tight_layout()
-    return fig
-
-
-def plot_2d(data: Dict, features_dic: Dict, volume: Dict):
+def plot_feature_pairs(data: Dict, features_dic: Dict, feature_pair: Tuple[str, str], only_new: bool = False):
     features = features_dic['str']
     features_latex = features_dic['latex']
-    feature_pairs = list(combinations(features, 2))
     n_exp = len(data)
-    n_rows = len(feature_pairs)
 
-    fig, axs = plt.subplots(n_rows, n_exp, sharey='row', figsize=(4 * n_exp, 4 * n_rows + 1),
-                            constrained_layout=False, squeeze=False)
-    
-    # ? Maybe for one experiment, uncomment this (next commit)
-    # if len(feature_pairs)==1: # axs is a 2D array, but it have to be treated as a 1D array, squeeze
-    #     axs = axs[0]
+    # Use the specified feature pair
+    x, y = feature_pair
 
-    for n_col, (k, v) in enumerate(data.items()):
-        num_no_interest = v['no_interest'].shape[0]
-        num_interest = v['interest'].shape[0]
-        num_outliers = v['outliers'].shape[0]
-        interest_colors = plt.cm.autumn(np.linspace(1, 0, num_interest))
+    # Adjust figure size
+    fig_width = 4 * n_exp + 1
+    fig_height = 6  # Fixed height since we're only plotting one pair
+    fig, axs = plt.subplots(
+        1, n_exp, sharey='row', figsize=(fig_width, fig_height),
+        constrained_layout=False, squeeze=False
+    )
 
-        for n_row, (x, y) in enumerate(feature_pairs):
-            idx = (n_row, n_col) if n_exp > 1 else n_row
-            axs[idx].scatter(
-                x=v['no_interest'][x],
-                y=v['no_interest'][y],
-                c='gray', alpha=0.3, label='No interest'
-            )
-            axs[idx].scatter(
-                x=v['outliers'][x],
-                y=v['outliers'][y],
-                c='black', alpha=0.7, marker='x', label='Outlier'
-            )
-            axs[idx].scatter(
-                x=v['interest'][x],
-                y=v['interest'][y],
-                c=interest_colors, alpha=0.5, label='Interest'
-            )
-            axs[idx].set_xticks(np.arange(11))
-            axs[idx].set_xticklabels(['0', '', '2', '', '4', '', '6', '', '8', '', '10'])
-            axs[idx].set_xlabel(features_latex[features.index(x)].replace('/', '\\'))
-            axs[idx].set_ylabel(features_latex[features.index(y)].replace('/', '\\'))
+    for n_col, exp_dic in enumerate(data.values()):
+        exp_dic_copy = exp_dic.copy()  # Shallow copy for non-new data
+        if only_new:
+            exp_dic_copy.update({  # Update dataframes
+                df_name: df.loc[get_first_iteration_index(df):] for df_name, df in exp_dic.items()
+                if isinstance(df, pd.DataFrame)
+            })
+        num_no_interest = exp_dic_copy['no_interest'].shape[0]
+        num_interest = exp_dic_copy['interest'].shape[0]
+        num_outliers = exp_dic_copy['outliers'].shape[0]
+        interest_colors = plt.cm.autumn_r(np.linspace(1, 0, num_interest))
 
+        ax = axs[0, n_col]
+        ax.scatter(
+            x=exp_dic_copy['no_interest'][x],
+            y=exp_dic_copy['no_interest'][y],
+            c='gray', alpha=0.3, label='No interest'
+        )
+        ax.scatter(
+            x=exp_dic_copy['outliers'][x],
+            y=exp_dic_copy['outliers'][y],
+            c='black', alpha=0.7, marker='x', label='Outlier'
+        )
+        ax.scatter(
+            x=exp_dic_copy['interest'][x],
+            y=exp_dic_copy['interest'][y],
+            c=interest_colors, alpha=0.5, label='Interest'
+        )
 
-        idx_legend = (0, n_col) if n_exp > 1 else 0
-        handles, _ = axs[idx_legend].get_legend_handles_labels()
+        # Create legend for each column
+        handles, _ = ax.get_legend_handles_labels()
 
         # Create a handle for the 'interest' marker
         interest_marker = plt.Line2D(
@@ -188,59 +151,143 @@ def plot_2d(data: Dict, features_dic: Dict, volume: Dict):
         # Initialize handles and labels for the legend
         legend_handles = [interest_marker, handles[0]]
         legend_labels = [
-            f'n_Itr: {num_interest}\n'
-            f'V_Itr_bound: [{volume[k][0]:.2e}, {volume[k][1]:.2e}]',
-            f'n_noItr: {num_no_interest}',
+            f'Interest: {num_interest}',
+            f'No Interest: {num_no_interest}',
         ]
 
         # Add outliers to the legend if present
         if num_outliers != 0:
             legend_handles.append(handles[1])
-            legend_labels.append(f'Outliers {num_outliers}')
+            legend_labels.append(f'Outlier: {num_outliers}')
 
         # Create the legend on the specified axis
-        axs[idx_legend].legend(
+        ax.legend(
             handles=legend_handles, labels=legend_labels,
-            loc='lower center', bbox_to_anchor=(0.5, 1.0),
-            title=v['name'], title_fontsize='large'
+            loc='lower center', bbox_to_anchor=(0.5, 1.05),
+            title=exp_dic['name'], title_fontsize='large'
         )
-    
+
+        # Set axis labels
+        ax.set_xlabel(features_latex[features.index(x)].replace('/', '\\'))
+        if n_col == 0:
+            ax.set_ylabel(features_latex[features.index(y)].replace('/', '\\'))
+
     # Add a vertical color bar with custom ticks outside the subplots
-    cbar_ax = fig.add_axes([0.9, 0.15, 0.03, 0.7])  # Adjusted position
+    cbar_width = 0.2 / fig_width
+    pos = ax.get_position()
+    cbar_ax = fig.add_axes([0.88, pos.y0, cbar_width, 0.6])  # [left, bottom, width, height]
     cbar = fig.colorbar(plt.cm.ScalarMappable(cmap='autumn_r'), cax=cbar_ax, orientation='vertical')
     cbar.set_ticks([0, 1])  # Set ticks at the start and end
     cbar.set_ticklabels(['first', 'last'])  # Label the ticks
     cbar.set_label('Interest order', fontsize='large')
 
-    fig.tight_layout(rect=[0, 0, 0.9, 1])  # Adjust layout to make space for the color bar
-    fig.subplots_adjust(top=0.85)
+    fig.tight_layout(rect=[0, 0, 0.85, 0.95])  # Adjust subplots layout, not global figure
+
+    return fig
+
+
+def plot_violin_distribution(data: Dict, targets: List[str], desired_region: Dict):
+    fig, axs = plt.subplots(1, len(targets), figsize=(5 * len(targets), 5))
+
+    # Ensure axs is always a list, even for a single subplot
+    axs = [axs] if len(targets) == 1 else axs
+
+    for col, target in enumerate(targets):
+        sns.violinplot(
+            data=[d['inliers'][target] for k, d in data.items()],
+            palette=[val['color'] for val in data.values()],
+            cut=0, ax=axs[col]
+        )
+        axs[col].set_xticklabels([val['name'] for val in data.values()], rotation=20, ha='right')
+        axs[col].add_patch(Rectangle(
+            (-0.45, desired_region[target][0]),
+            (len(data) - 0.1),
+            desired_region[target][1] - desired_region[target][0],
+            edgecolor='#B73E3E', facecolor='none', lw=2,
+        ))
+        axs[col].set_ylabel(target)
+
+    # Add labels only if there are multiple subplots
+    if len(targets) > 1:
+        axs[0].text(-0.03, 1.03, 'a)', transform=axs[0].transAxes, size=20, weight='bold', ha='right', va='bottom')
+        axs[1].text(-0.03, 1.03, 'b)', transform=axs[1].transAxes, size=20, weight='bold', ha='right', va='bottom')
+        
+    fig.tight_layout()
+    
+    return fig
+
+
+def targets_kde(data: Dict, targets: List[str], region: Dict):
+    n_col = len(targets)
+    fig, axs = plt.subplots(1, n_col, figsize=(6*n_col, 6), squeeze=False)
+    axs = axs.flatten()  # This ensures axs is always a 1D array
+
+    df_to_plot = pd.concat(
+        [dic['inliers'].assign(exp_name=dic['name']) for dic in data.values()],
+        axis=0, ignore_index=True
+    )
+
+    plt.ticklabel_format(axis='y', style='sci')
+    for col, target in enumerate(targets):
+        sns.kdeplot(
+            data=df_to_plot, x=target, hue='exp_name',
+            hue_order=[dic['name'] for dic in data.values()][::-1],
+            palette=[dic['color'] for dic in data.values()][::-1],
+            cut=0,
+            ax=axs[col], legend=False, fill=True, common_norm=True,
+            bw_adjust=0.2  # kernel bandwidth
+        )
+        axs[col].axvline(x=region[target][0], color='red')
+        axs[col].axvline(x=region[target][1], color='red')
+        axs[col].set_xlabel(target)
+
+    # Get colors legend
+    colors_legend = [mlines.Line2D([], [], color=dic['color'], label=dic['name']) for dic in data.values()]
+
+    if len(targets) > 1:
+        axs[1].set_ylabel('')
+        axs[1].legend(handles=colors_legend, loc='upper left', bbox_to_anchor=(1.1, 1))
+        axs[0].text(-0.03, 1.03, 'a)', transform=axs[0].transAxes, size=20, weight='bold', ha='right', va='bottom')
+        axs[1].text(-0.03, 1.03, 'b)', transform=axs[1].transAxes, size=20, weight='bold', ha='right', va='bottom')
+    else:
+        axs[0].legend(handles=colors_legend, loc='upper left', bbox_to_anchor=(1.1, 1))
+
+    fig.tight_layout()
+
     return fig
 
 
 def plot_feat_tar(data: Dict, features: List[str], targets: List[str], only_interest: bool = True, title_extension: str=''):
     n_col = len(features)
     n_rows = len(targets)
-    fig, axs = plt.subplots(n_rows, n_col, sharey='row', sharex='col', figsize=(4 * n_col, 4 * n_rows))
-    for n_row, tar, in enumerate(targets):
+    fig, axs = plt.subplots(n_rows, n_col, figsize=(4 * n_col, 4 * n_rows), squeeze=False)
+
+    for n_row, tar in enumerate(targets):
         for n_col, feat in enumerate(features):
+            ax = axs[n_row, n_col]
             for v in data.values():
-                axs[n_row, n_col].scatter(
+                ax.scatter(
                     x=v['interest'][feat],
                     y=v['interest'][tar],
                     c=v['color'], marker='.', alpha=1., label=v['name']
                 )
                 if not only_interest:
-                    axs[n_row, n_col].scatter(
+                    ax.scatter(
                         x=v['no_interest'][feat],
                         y=v['no_interest'][tar],
-                        c='gray', marker='.', alpha=0.3, label='Not int'
+                        c='gray', marker='.', alpha=0.3, label='No interest'
                     )
-            axs[1, n_col].set_xlabel(feat)
-        axs[n_row, 0].set_ylabel(tar)
+            if n_row == n_rows - 1:  # Only set xlabel for the bottom row
+                ax.set_xlabel(feat)
+            if n_col == 0:  # Only set ylabel for the leftmost column
+                ax.set_ylabel(tar)
+
+    # Get legend handles and labels from the first subplot
     handles, labels = axs[0, 0].get_legend_handles_labels()
     if not only_interest and len(data) > 1:  # Remove redundant 'Not int' label
         handles = handles[::2] + [handles[-1]]
         labels = labels[::2] + [labels[-1]]
+
     fig.tight_layout()
     fig.legend(handles=handles,
                labels=labels,
@@ -263,12 +310,13 @@ def plot_asvd_scores(
 
     Parameters:
     - experiments (Dict[str, Dict[str, float]]): A dictionary where keys are experiment
-    names and values are dictionaries of scores.
+    keys and values are dictionaries of scores.
     - metrics_to_plot (List[str]): List of metric names to plot in the bar chart.
     If None, all metrics are plotted.
     - figsize (Tuple[int, int]): Size of the figure (width, height) in inches.
     """
-    exp_names = list(experiments.keys())
+    exp_keys = list(experiments.keys())
+    exp_names = [dic['name'] for dic in data.values()]
     
     # Get all unique metrics while preserving order
     all_metrics = []
@@ -282,7 +330,7 @@ def plot_asvd_scores(
 
     metrics_for_table = [metric for metric in all_metrics if metric not in metrics_to_plot]
 
-    n_experiments = len(exp_names)
+    n_experiments = len(exp_keys)
     n_metrics_plot = len(metrics_to_plot)
 
     # Adjust figure size and subplot ratio based on whether we have a table
@@ -296,12 +344,12 @@ def plot_asvd_scores(
     bar_width = 0.8 / n_experiments
     index = np.arange(n_metrics_plot)
 
-    for i, exp_name in enumerate(exp_names):
-        values = [experiments[exp_name].get(metric, np.nan) for metric in metrics_to_plot]
+    for i, (exp_key, exp_name) in enumerate(zip(exp_keys, exp_names)):
+        values = [experiments[exp_key].get(metric, np.nan) for metric in metrics_to_plot]
         position = index + i * bar_width
         rects = ax_bar.bar(
             position, values, bar_width, label=exp_name, alpha=0.8,
-            color=data[exp_name]['color']
+            color=data[exp_key]['color']
         )
 
         # Add value labels on top of each bar
@@ -320,10 +368,10 @@ def plot_asvd_scores(
     # Table (if there are metrics for the table)
     if metrics_for_table:
         table_data = []
-        for exp_name in exp_names:
+        for exp_key, exp_name in zip(exp_keys, exp_names):
             row = [exp_name]
             for metric in metrics_for_table:
-                value = experiments[exp_name].get(metric, 'N/A')
+                value = experiments[exp_key].get(metric, 'N/A')
                 if isinstance(value, int):
                     row.append(f'{value}')
                 elif isinstance(value, float):
@@ -360,7 +408,7 @@ def dist_volume_voronoi(data, volume_voronoi):
     )
     x_ratio_zoom = 0.75 if is_same_size_interest else 1.
 
-    print(
+    warnings.warn(
         "Voronoi Volume is interpretable only if run_until_max_size==False "
         "(same number of interest points)"
     )

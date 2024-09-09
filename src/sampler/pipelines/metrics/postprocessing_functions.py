@@ -44,19 +44,43 @@ def categorize_df_by_quality(
 
 
 def prepare_new_data(
-        df: pd.DataFrame, treatment: DataTreatment,
-        f: List[str], t: List[str], t_c: List[str]
+        df: pd.DataFrame,
+        treatment: DataTreatment,
+        f: List[str],
+        t: List[str],
 ) -> pd.DataFrame:
     res = df.copy()
     res[f+t] = pd.DataFrame(treatment.scaler.inverse_transform(df[f+t].values), columns=f+t)
 
-    # TODO: Temporal fix to allow plotting data without prediction columns
-    if t_c[0] not in df.columns:
-        df[t_c[0]] = df[t[0]]
-        df[t_c[1]] = df[t[1]]
-
-    res[f+t_c] = pd.DataFrame(treatment.scaler.inverse_transform(df[f+t_c].values), columns=f+t_c)
-    # res = treatment.define_quality_of_data(data=res, specify_errors=True)
+    # Classify quality
     res = treatment.classify_quality_interest(res, data_is_scaled=False)
     res = treatment.classify_quality_error(res, data_is_scaled=False)
     return res
+
+
+def get_first_iteration_index(df: pd.DataFrame) -> int:
+    """
+    Get index of first sample that was generated through adaptive sampling
+    pipeline using either 'iteration' or 'datetime' column.
+    """
+    # Check if df is empty
+    if df.empty:
+        return 0
+
+    # Check if 'iteration' or 'datetime' column exists
+    if 'iteration' in df.columns:
+        column = 'iteration'
+    elif 'datetime' in df.columns:
+        column = 'datetime'
+    else:
+        raise ValueError("DataFrame does not contain 'iteration' or 'datetime' column.")
+
+    # Find the index of the first non-empty cell in the chosen column
+    first_non_empty_index = df[column].first_valid_index()
+
+    # If all cells are empty, return last index
+    if first_non_empty_index is None:
+        return df.index[-1]
+
+    # Return the first non-empty index
+    return first_non_empty_index

@@ -7,6 +7,7 @@ import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from itertools import combinations
 
 from .postprocessing_functions import (
     categorize_df_by_quality, prepare_new_data, aggregate_csv_files
@@ -19,22 +20,23 @@ from sampler.common.data_treatment import DataTreatment
 
 
 def prepare_data_metrics(
-    experiments: Dict, names: Dict, features: List[str], targets: List[str],
-    additional_values: List[str], treatment: DataTreatment
+    experiments: Dict,
+    variable_aliases: Dict,
+    features: List[str],
+    targets: List[str],
+    treatment: DataTreatment
 ) -> Dict:
     """
     Prepare data metrics by processing experiment data based on the path type.
     """
     data = {}
     # New names for data columns
-    feature_aliases = names['features']['str']
-    target_aliases = names['targets']['str']
+    feature_aliases = variable_aliases['features']['str']
+    target_aliases = variable_aliases['targets']['str']
     column_renaming = {
         orig: alias for orig, alias in 
         zip(features + targets, feature_aliases + target_aliases)
     }
-    # Name fot target prediction columns
-    targets_pred = [f'{target}_hat' for target in targets]
 
     for exp_id, exp_config in experiments.items():
         file_path = exp_config['path']
@@ -49,8 +51,7 @@ def prepare_data_metrics(
                              "nor a CSV file. Exiting program.")
 
         df = prepare_new_data(
-            df=imported_df, treatment=treatment, f=features, t=targets,
-            t_c=targets_pred
+            df=imported_df, treatment=treatment, f=features, t=targets
         )
         df = df.rename(columns=column_renaming)
 
@@ -62,14 +63,17 @@ def prepare_data_metrics(
         'exp_data': data,
         'features': feature_aliases,
         'targets': target_aliases,
-        'targets_prediction': targets_pred
     }
 
 
 def get_metrics(
-        data: Dict, features: List[str], targets: List[str],
+        data: Dict,
+        features: List[str],
+        targets: List[str],
         treatment: DataTreatment,
-        params_volume: Dict, params_voronoi: Dict
+        params_volume: Dict,
+        params_asvd: Dict,
+        params_voronoi: Dict
 ) -> Dict:
     radius = 0.025 # Sphere radius
 
@@ -79,7 +83,7 @@ def get_metrics(
     interest_asvd_scores = {}
     volume_voronoi = {} # for each experiment, volumes of the Voronoi regions (clipped by the unit hypercube)
     
-    for key, value in data.items():
+    for exp_key, value in data.items():
         # Scale all data
         XY = value['df'][features+targets].values
         scaled_data = pd.DataFrame(
@@ -95,49 +99,55 @@ def get_metrics(
         scaled_x_interest = scaled_data_interest[features]
         scaled_y_interest = scaled_data_interest[targets]
 
-        # Get number of interesting samples
-        n_interest[key] = len(value['interest'])
-        
         # Get volume of interesting samples
-        if key in params_volume['default']:
-            volume[key] = params_volume['default'][key]
+        if exp_key in params_volume['default']:
+            # Use default values
+            volume[exp_key] = params_volume['default'][exp_key]
         elif params_volume['compute_volume']:
-            volume[key] = covered_space_bound(
+            # Compute volume
+            volume[exp_key] = covered_space_bound(
                 scaled_x_interest, radius, params_volume, len(features)
             )
         else:
-            volume[key] = np.array([0,0])
-        
-        # Get all data distribution using ASVD
-        total_asvd = ASVD(scaled_data, features, targets)
-        total_asvd_scores[key] = total_asvd.compute_scores()
-        
-        # Get only interest data distribution using ASVD
-        interest_asvd = ASVD(scaled_data_interest, features, targets)
-        interest_asvd_scores[key] = interest_asvd.compute_scores()
+            volume[exp_key] = np.array([0,0])
+
+        if params_asvd['compute_asvd']:
+            # Get all data distribution using ASVD
+            total_asvd = ASVD(scaled_data, features, targets)
+            total_asvd_scores[exp_key] = total_asvd.compute_scores()
+
+            # Get only interest data distribution using ASVD
+            interest_asvd = ASVD(scaled_data_interest, features, targets)
+            interest_asvd_scores[exp_key] = interest_asvd.compute_scores()
+        else:
+            total_asvd_scores = {}
+            interest_asvd_scores = {}
 
         # Get Voronoi volume
-        volume_voronoi[key] = {
-            'features': np.array([0]*n_interest[key]),
-            'targets': np.array([0]*n_interest[key])
-        }
-        if params_voronoi['compute_voronoi']['features']:
-            volume_voronoi[key]['features'] = get_volume_voronoi(
-                scaled_x_interest,
-                dim=len(features),
-                tol=params_voronoi['tol'],
-                isFilter=params_voronoi['isFilter']
-            )
-        if params_voronoi['compute_voronoi']['targets']:
-            volume_voronoi[key]['targets'] = get_volume_voronoi(
-                scaled_y_interest,
-                dim=len(features+targets),
-                tol=params_voronoi['tol'],
-                isFilter=params_voronoi['isFilter']
-            )
+        if any(params_voronoi['compute_voronoi'].values()):
+            n_interest = len(value['interest'])
+            volume_voronoi[exp_key] = {
+                'features': np.array([0]*n_interest),
+                'targets': np.array([0]*n_interest)
+            }
+            if params_voronoi['compute_voronoi']['features']:
+                volume_voronoi[exp_key]['features'] = get_volume_voronoi(
+                    scaled_x_interest,
+                    dim=len(features),
+                    tol=params_voronoi['tol'],
+                    isFilter=params_voronoi['isFilter']
+                )
+            if params_voronoi['compute_voronoi']['targets']:
+                volume_voronoi[exp_key]['targets'] = get_volume_voronoi(
+                    scaled_y_interest,
+                    dim=len(features+targets),
+                    tol=params_voronoi['tol'],
+                    isFilter=params_voronoi['isFilter']
+                )
+        else:
+            volume_voronoi = {}
 
     return dict(
-        n_interest=n_interest,
         volume=volume,
         total_asvd_scores=total_asvd_scores,
         interest_asvd_scores=interest_asvd_scores,
@@ -146,8 +156,11 @@ def get_metrics(
 
 
 def scale_data_for_plots(
-    data: Dict, features: List[str], targets: List[str],
-    targets_prediction: List[str], scales: Dict, interest_region: Dict
+    data: Dict,
+    features: List[str],
+    targets: List[str],
+    scales: Dict,
+    interest_region: Dict
 ):
     """Scales data in place for visualization purposes."""
     df_names = ['interest', 'no_interest', 'inliers', 'outliers', 'df']
@@ -155,10 +168,7 @@ def scale_data_for_plots(
         for name in df_names:
             v[name][features] /= scales['features']
             v[name][targets] /= scales['targets']
-            # Check if every element of targets prediction is in v[name].columns
-            if all([t in v[name].columns for t in targets_prediction]):
-                v[name][targets_prediction] /= scales['targets']
-            
+
     scaled_interest_region = {}
     for region, target, target_scale in zip(interest_region.values(), targets, scales['targets']):
         scaled_interest_region[target] = [v / target_scale for v in region]
@@ -170,53 +180,70 @@ def scale_data_for_plots(
 
 
 def plot_metrics(
-    output_dir: str,
     data: Dict,
-    names: Dict,
+    variable_aliases: Dict,
     region: Dict,
     volume: Dict,
     total_asvd_scores: Dict[str, Dict[str, float]],
     interest_asvd_scores: Dict[str, Dict[str, float]],
-    volume_voronoi: Dict
+    volume_voronoi: Dict,
+    output_dir: str,
 ):
-    features_dic = names['features']
+    features_dic = variable_aliases['features']
     features = features_dic['str']
-    targets = names['targets']['str']
+    targets = variable_aliases['targets']['str']
     asvd_metrics_to_plot = ['sum_augm', 'rsd_x', 'rsd_xy', 'rsd_augm', 'riqr_x', 'riqr_xy']
 
-    targets_volume = None  # TODO yasser: compute covered area on targets space
-    # targets_volume = {k: 10000 for k in data.columns}
+    # Initial data distribution
+    initial_data_plot = gm.plot_initial_data(data, features, targets, only_first_exp=True)
 
-    # Features and targets space viz
-    features_2d = gm.plot_2d(data, features_dic, volume)
-    violin_plot = gm.plot_violin_distribution(data, targets, region, targets_volume)
-    kde_plot = gm.targets_kde(data, targets, region)
+    # plot features pairs
+    feature_pairs_plot_dict = {}
+    for feat_1, feat_2 in combinations(features, 2):
+        idx_1, idx_2 = features.index(feat_1) + 1, features.index(feat_2) + 1
+        feature_pairs_plot_dict.update({
+            f'X_{idx_1}_{idx_2}'         : gm.plot_feature_pairs(data, features_dic, (feat_1, feat_2), only_new=False),
+            f'X_{idx_1}_{idx_2}_only_new': gm.plot_feature_pairs(data, features_dic, (feat_1, feat_2), only_new=True)
+        })
+
+    # targets distribution
+    targets_plot_dict = {
+        'y_violin': gm.plot_violin_distribution(data, targets, region),
+        'y_kde': gm.targets_kde(data, targets, region),
+    }
 
     # Distribution analysis
-    total_asvd_plot = gm.plot_asvd_scores(data, total_asvd_scores, asvd_metrics_to_plot)
-    interest_asvd_plot = gm.plot_asvd_scores(data, interest_asvd_scores, asvd_metrics_to_plot)
-    voronoi_plot = gm.dist_volume_voronoi(data, volume_voronoi)
+    print(f"Design space volumes: {volume}")
+    distribution_plots_dict = {}
+    if total_asvd_scores:
+        distribution_plots_dict['ASVD'] = gm.plot_asvd_scores(data, total_asvd_scores, asvd_metrics_to_plot)
+    if interest_asvd_scores:
+        distribution_plots_dict['ASVD_only_interest'] = gm.plot_asvd_scores(data, interest_asvd_scores, asvd_metrics_to_plot)
+    if volume_voronoi:
+        distribution_plots_dict['Voronoi'] = gm.dist_volume_voronoi(data, volume_voronoi)
 
     # Detailed features versus targets plots
-    # pair_plot = gm.pair_grid_for_all_variables(data, features, targets)
-    feat_tar_dict = {}
-    feat_tar_dict['all'] = gm.plot_feat_tar(data, features, targets, only_interest=False)
-    feat_tar_dict['all_int'] = gm.plot_feat_tar(data, features, targets, only_interest=True, title_extension='(only interest)')
-    for k in data.keys():
-        feat_tar_dict[k] = gm.plot_feat_tar({k: data[k]}, features, targets, only_interest=False)
+    feat_tar_plots_dict = {}
+    feat_tar_plots_dict['X_y'] = gm.plot_feat_tar(data, features, targets, only_interest=False)
+    feat_tar_plots_dict['X_y_only_interest'] = gm.plot_feat_tar(data, features, targets, only_interest=True, title_extension='(only interest)')
+    for i, exp_key in enumerate(data.keys()):
+        feat_tar_plots_dict[f'X_y_exp{i+1}'] = gm.plot_feat_tar({exp_key: data[exp_key]}, features, targets, only_interest=False)
 
-    plots_dict = {
-        'features_2d': features_2d,
-        'violin_plot': violin_plot,
-        'targets_kde': kde_plot,
-        # 'pair_plot': pair_plot,
-        'ASVD_all': total_asvd_plot,
-        'ASVD_interest': interest_asvd_plot,
-        'volume_voronoi': voronoi_plot,
-        **{f'features_targets_{k}': v for k, v in feat_tar_dict.items()},
-    }
-    plots_dict = {f'{i+1:02d}_{k}': v for i, (k, v) in enumerate(plots_dict.items())}
+    # Aggregate plots
+    all_plots = [
+        {'initial_data': initial_data_plot},
+        feature_pairs_plot_dict,
+        targets_plot_dict,
+        distribution_plots_dict,
+        feat_tar_plots_dict
+    ]
+    plots_dict = {}
+    for i, dic in enumerate(all_plots):
+        # Index plots by groups
+        dic = {f'{i+1:02d}_{k}': v for k, v in dic.items()}
+        plots_dict.update(dic)
 
+    # Save plots
     plots_paths_png = {}
     plots_paths_svg = {}
 

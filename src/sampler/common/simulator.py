@@ -89,7 +89,7 @@ def create_input_folders(
 
 
 def read_input_folders(folders: List[str]) -> List[Dict[str, Union[float, str]]]:
-    # Define input dicts
+    """Read JSON files from simulator input folders and return a list of input dictionaries."""
     inputs_dics = []
     for input_dir in folders:
         inputs_dic = set_inputs_dic(input_dir)

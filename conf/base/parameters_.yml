@@ -9,6 +9,8 @@ targets:
 
 additional_values:
   - sim_time
+  - timed_out
+  - error
 
 variables_ranges:
   r_ext_pAl: {bounds: [2.0e-7, 1.0e-5], scale: lin, discete_steps: 0}

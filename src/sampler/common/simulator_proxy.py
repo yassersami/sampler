@@ -1,5 +1,6 @@
 from typing import List, Tuple, Dict, Callable, Optional
 import warnings
+import time
 import numpy as np
 import pandas as pd
 from scipy.optimize import shgo
@@ -121,15 +122,9 @@ def shubert_like_interest_function(X: np.ndarray, interest_bounds: List[Tuple[fl
        transformation to get to [0, 1]^n_dim_y.
     """
     X = np.atleast_2d(X)
-    n_samples, n_dim_X = X.shape
-    
+
     # Transform [0, 1]^n_dim_X into [-1, 1]^n_dim_X
     X_transformed = 2 * (X - 0.5)
-
-    # Convert interest bounds to numpy array and calculate center of interest for each dimension
-    interest_bounds = np.array(interest_bounds)
-    n_dim_y = len(interest_bounds)
-    interest_centers = np.mean(interest_bounds, axis=1)
 
     # Angular frequency (omega)
     omega = 10 * np.pi
@@ -139,7 +134,7 @@ def shubert_like_interest_function(X: np.ndarray, interest_bounds: List[Tuple[fl
     y_raw = np.mean(shubert_terms, axis=1)
 
     # Apply linear mapping to interest region
-    y = linear_interest_mapping(y_raw, interest_bounds)
+    y = linear_interest_mapping(y_raw, np.array(interest_bounds))
 
     return y
 
@@ -298,15 +293,23 @@ class FastSimulator:
             pd.DataFrame: Results dataframe with features, targets, and additional values.
         """
         X_scaled = scaler.transform_features(X_real)
+        n_samples = X_scaled.shape[0]
 
-        # Compute y_scaled values
+        # Compute y_scaled values and measure the elapsed time
+        start_time = time.time()
         y_scaled = self.proxy_function_with_outliers(X_scaled)
+        elapsed_time = time.time() - start_time
 
         # Get targets in real space (not in scaled one)
         XY_real = scaler.inverse_transform(np.hstack([X_scaled, y_scaled]))
 
+        # Create results dataframe with targets and additional values
         df_results = pd.DataFrame(XY_real[:, -self.n_dim_y:], columns=self.targets)
-        df_results[self.additional_values] = np.nan
+        df_results['sim_time'] = elapsed_time / n_samples
+        df_results['timed_out'] = False
+
+        other_cols = [col for col in self.additional_values if col not in df_results]
+        df_results[other_cols] = np.nan
 
         return df_results
 

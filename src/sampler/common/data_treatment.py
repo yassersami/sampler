@@ -148,7 +148,7 @@ class DataTreatment:
                 masks['out_of_bounds_tar'] |= mask
         
         # Create masks for time_out and sim_error
-        masks['time_out'] = df_real['sim_time'].round() >= self.max_simu_time
+        masks['time_out'] = df_real['sim_time'] >= self.max_simu_time
         masks['sim_error'] = df_real[self.targets].isna().any(axis=1)
 
         return masks

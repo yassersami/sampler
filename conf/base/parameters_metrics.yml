@@ -1,4 +1,4 @@
-names:
+variable_aliases:
   features:
     str:
       - "Al radius [micron]"
@@ -25,9 +25,11 @@ params_volume:
   same_sphere_tol: 1.0e-3
   max_depth: 3
   n_subdivision: 128
-  default:
+  default:  # Default volumes to avoid computing volumes
     exp_1: [-1, 4.5e-6]
-    exp_2: [0, 2.0e-5]
+
+params_asvd:
+  compute_asvd: true
 
 params_voronoi:
   compute_voronoi:
@@ -37,15 +39,15 @@ params_voronoi:
   isFilter: false
 
 experiments:
-  exp0:
-    color: royalblue
-    name: "name_exp0 [R1 interest region]"
-    path: "data/07_model_output/exp0/irbs_history"
-  exp1:
+  exp_1:
     color: firebrick
-    name: "name_exp1 [R1 interest region]"
-    path: "data/07_model_output/exp1/irbs_increased_data.csv"
-  exp2:
+    name: "Experiment 1"
+    path: "data/07_model_output/env_proxy/irbs_increased_data.csv"
+  exp_2:
     color: forestgreen
-    name: "name_exp2 [R1 interest region]"
-    path: "data/07_model_output/exp2/parego_increased_data.csv"
+    name: "Experiment 2"
+    path: "data/07_model_output/env_proxy/parego_increased_data.csv"
+  exp_3:
+    color: royalblue
+    name: "Experiment 3"
+    path: "data/07_model_output/env_proxy/sao_increased_data.csv"
