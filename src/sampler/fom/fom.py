@@ -1,4 +1,4 @@
-from typing import List, Tuple, Dict, Union, Type, Any, Optional, ClassVar
+from typing import List, Tuple, Dict, Union, Literal, Any
 import numpy as np
 import pandas as pd
 import json
@@ -27,27 +27,21 @@ class FOMTermAccessor:
     inlier_gpc: InlierGPCTerm
 
     def __init__(self, terms: Dict[str, FOMTermInstance]):
-        self._terms = terms
-
-    def __getattr__(self, name: str) -> FOMTermInstance:
-        if name not in self._terms:
-            raise AttributeError(f"Term '{name}' is not active or does not exist.")
-        return self._terms[name]
-
-    def __deepcopy__(self, memo):
-        # Create a deep copy of the terms dictionary
-        copied_terms = copy.deepcopy(self._terms, memo)
-        # Create a new instance of FOMTermAccessor with the copied terms
-        return FOMTermAccessor(copied_terms)
+        # Set terms as attributes
+        for term_name, term_instance in terms.items():
+            if term_name in self.__annotations__:
+                setattr(self, term_name, term_instance)
+            else:
+                raise AttributeError(f"Unknown term: {term_name}")
 
     @classmethod
-    def is_valid_term_class(cls, term_class: FOMTermType) -> bool:
+    def is_valid_term_class(cls, TermClass: FOMTermType) -> bool:
         """
         Checks if a given input is a valid FOM term class.
         """
         return (
-            isinstance(term_class, type) and
-            issubclass(term_class, (FittableFOMTerm, ModelFOMTerm, NonFittableFOMTerm))
+            isinstance(TermClass, type) and
+            issubclass(TermClass, (FittableFOMTerm, ModelFOMTerm, NonFittableFOMTerm))
         )
 
     @classmethod
@@ -57,8 +51,8 @@ class FOMTermAccessor:
         """
         if term_name not in cls.__annotations__:
             return False
-        term_class = cls.__annotations__[term_name]
-        return cls.is_valid_term_class(term_class)
+        TermClass = cls.__annotations__[term_name]
+        return cls.is_valid_term_class(TermClass)
 
     @classmethod
     def get_term_class(cls, term_name: str) -> FOMTermType:
@@ -73,9 +67,9 @@ class FOMTermAccessor:
         Returns a dictionary of term names and their corresponding classes.
         """
         return {
-            term_name: term_class
-            for term_name, term_class in cls.__annotations__.items()
-            if cls.is_valid_term_class(term_class)
+            term_name: TermClass
+            for term_name, TermClass in cls.__annotations__.items()
+            if cls.is_valid_term_class(TermClass)
         }
 
 
@@ -113,6 +107,9 @@ class FigureOfMerit:
                     self._terms[term_name] = TermClass(**term_args)
                 except Exception as e:
                     raise type(e)(f"Error instantiating term '{term_name}': {str(e)}") from e
+                
+                # Validate term sign
+                self._terms[term_name]._validate_score_signs()
 
         # Create the accessor
         self.terms = FOMTermAccessor(self._terms)
@@ -219,7 +216,7 @@ class FigureOfMerit:
         A custom translated opposite to enable a smaller-is-better objective
         where smallest best value is 0.
         """
-        return self.n_positive_scores - self.predict_score(X)
+        return self.score_signs.count(1) - self.predict_score(X)
 
     def get_scores_df(self, X: np.ndarray) -> pd.DataFrame:
         scores_dict = {}
@@ -239,6 +236,20 @@ class FigureOfMerit:
 
         return df_scores
 
+    @property
+    def score_names(self) -> List[str]:
+        score_names = []
+        for term in self._terms.values():
+            score_names.extend(term.score_names)
+        return score_names
+
+    @property
+    def score_signs(self) -> List[Literal[1, -1]]:
+        score_signs = []
+        for term in self._terms.values():
+            score_signs.extend(term.score_signs)
+        return score_signs
+
     def _validate_n_negative_scores(self, df_scores: pd.DataFrame) -> None:
         """
         Validate if the number of columns with negative or null values matches
@@ -251,7 +262,7 @@ class FigureOfMerit:
         3- But if it is not true then raise error, because number of expected
            negative scores is too high.
         """
-        expected_negative_columns = self.n_negative_scores
+        expected_negative_columns = self.score_signs.count(-1)
 
         # Count columns with only negative or null values
         columns_with_negative_or_null = ((df_scores <= 0).any()).sum()
@@ -263,51 +274,11 @@ class FigureOfMerit:
                 f"but found {columns_with_negative_or_null}."
             )
 
-    @property
-    def score_names(self) -> List[str]:
-        score_names = []
-        for term in self._terms.values():
-            score_names.extend(term.score_names)
-        return score_names
-
-    @property
-    def n_negative_scores(self) -> int:
-        """
-        Count number of negative active scores.
-
-        Note:
-        - Some terms can return multiple scores.
-        - Only active terms (stored in self._terms) are considered.
-        - 'outlier_proximity', if present, is treated as a term with negative
-        score(s).
-        """
-        negative_term_names = ['outlier_proximity']
-        count_negative_scores = 0
-
-        for term_name in negative_term_names:
-            # Check if term is well defined
-            if not FOMTermAccessor.is_valid_term_name(term_name):
-                raise AttributeError(f"Class attribute TERM_CLASSES is missing '{term_name}' term")
-
-            # Check if term is active and count its negative scores
-            if term_name in self._terms.keys() :
-                count_negative_scores += len(self._terms[term_name].score_names)
-
-        return count_negative_scores
-
-    @property
-    def n_positive_scores(self) -> int:
-        # Count number of scores of all active terms
-        count_scores = len(self.score_names)
-
-        # Subtract number of negative scores of active terms
-        return count_scores - self.n_negative_scores
-
     def get_model_params(self) -> Dict[str, float]:
         model_params = {}
 
         for term_name, term in self._terms.items():
-            # Get fit parameters if the method exists
+            # Get fit parameters if ModelFOMTerm
             if isinstance(term, ModelFOMTerm):
                 term_model_params = term.get_model_params()
                 for param_name, param_value in term_model_params.items():

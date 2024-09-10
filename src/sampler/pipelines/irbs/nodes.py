@@ -129,21 +129,25 @@ def irbs_sampling(
         # Set the new FOM that will be used in next iteration
         fom_model.fit(X=data[features].values, y=data[targets].values)
 
+        # Get FOM models fitting report
+        model_params = fom_model.get_model_params()
+
         # Search new candidates to add to dataset
         X_batch = optimizer.run_multimodal_optim(fom_model.predict_loss)
 
+        # Get multimodal optimization selection records
         df_mmo_scores = optimizer.selector.get_records_df()
+
+        # Get FOM scores (that were optimization objectives)
         df_fom_scores = fom_model.get_scores_df(X_batch)
-        model_params = fom_model.get_model_params()
+
         print(f"Selected candidates to be input to the simulator: \n{X_batch}")
-        print(f"Optimization selection records: \n{df_mmo_scores}")
+        print(f"Multimodal selection records: \n{df_mmo_scores}")
         print(f"FOM scores records: \n{df_fom_scores}")
         print(f"FOM models fitting report: \n{fom_model.serialize_dict(model_params)}")
 
         # Launch time expensive simulations
         new_df = simulator.process_data(X_batch, is_real_X=False, index=n_total, treat_output=True)
-
-        # ----- Add more cols than features, targets and additional_values -----
 
         # Add quality column with 'is_interest' value for samples in the interest region
         new_df = treatment.classify_quality_interest(new_df, data_is_scaled=True)
@@ -152,10 +156,9 @@ def irbs_sampling(
         print(f"irbs_sampling -> New samples after simulation:\n {new_df}")
 
         # Add multi-objective optimization scores
-        # ignore_index=False to keep columns names
         new_df = pd.concat(
-            [new_df, df_fom_scores, df_mmo_scores],
-            axis=1, ignore_index=False
+            [new_df, df_fom_scores, df_mmo_scores], axis=1,
+            ignore_index=False  # to keep columns names
         )
 
         # Add common information to first row only
@@ -169,7 +172,7 @@ def irbs_sampling(
         # Concatenate new values to original results DataFrame
         data = pd.concat([data, new_df], axis=0, ignore_index=True)
 
-        # Update stopping conditions
+        # Update stopping condition
         n_new_samples = new_df.shape[0]
         n_new_inliers = new_df.dropna(subset=targets).shape[0]
         n_new_interest = new_df[new_df['quality'] == 'interest'].shape[0]
@@ -179,7 +182,7 @@ def irbs_sampling(
         n_interest += n_new_interest
         iteration += 1
 
-        # Print iteration details
+        # Print iteration report
         print(
             f"Round {iteration - 1:03} (end) - Report count: "
             f"Total: {n_total}, "
@@ -187,13 +190,13 @@ def irbs_sampling(
             f"Interest: {n_interest}"
         )
 
-        # Determine the end condition
+        # Check stopping conditions
         should_continue = (
             (n_inliers < max_size) if run_until_max_size else
             (n_interest < n_interest_max)
         )
 
-        # Update progress bar based on the condition
+        # Update progress bar
         progress_bar.update(
             n_new_inliers - max(0, n_inliers - max_size) if run_until_max_size else
             n_new_interest - max(0, n_interest - n_interest_max)

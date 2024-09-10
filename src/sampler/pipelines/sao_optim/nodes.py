@@ -13,7 +13,7 @@ import optuna
 
 from sampler.common.scalers import linear_tent
 from sampler.common.data_treatment import DataTreatment
-from sampler.common.storing import set_history_folder, store_df
+from sampler.common.storing import create_history_folder, store_df
 from sampler.common.simulator import SimulationProcessor
 
 
@@ -55,7 +55,7 @@ def sao_optim_from_simulator(
     f_filter = set_filter(treatment)
 
     # Set folder where to store explored samples during optimization
-    set_history_folder(sao_history_path, should_rename=False)
+    create_history_folder(sao_history_path, should_rename=False)
 
     # Set the objective function for the optimizer
     objective = set_objective_optuna(

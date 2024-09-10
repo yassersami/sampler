@@ -9,7 +9,7 @@ import time
 
 from .data_treatment import DataTreatment
 from .simulator_proxy import FastSimulator
-from .storing import set_history_folder
+from .storing import create_history_folder
 
 import simulator_0d.src.py0D.main as simulator_0d
 from simulator_0d.src.py0D.functions_pp import DB_simu_pp as SimPostProc
@@ -205,8 +205,8 @@ class SimulationProcessor:
         self.map_dir = map_dir
         self.n_proc = n_proc
         if self.use_simulator:
-            # Setup simulation environment
-            set_history_folder(self.map_dir, should_rename=False)
+            # Create simulation output directory
+            create_history_folder(self.map_dir, should_rename=False)
         else:
             self.proxy = FastSimulator(
                 features=self.features,

@@ -63,8 +63,9 @@ class SelectorFactory:
 @SelectorFactory.register('diversity')
 class DiversitySelector(MultiModalSelector):
 
-    def __init__(self, batch_size: int):
+    def __init__(self, batch_size: int, tol: float = 1e-5):
         super().__init__(batch_size)
+        self.tol = tol
 
         self._record_columns = [
             '_id', 'loss', 'diversity', 'extremeness',
@@ -80,7 +81,6 @@ class DiversitySelector(MultiModalSelector):
         minimization.
         """
         X = np.atleast_2d(X)
-        X = np.unique(X, axis=0)
 
         # Normalize objective values to [0, 1] range
         normalized_loss = self._normalize(loss_values)
@@ -89,7 +89,7 @@ class DiversitySelector(MultiModalSelector):
         distances = squareform(pdist(X))
 
         # Edge proximity loss (extremeness to minimize)
-        edge_proximity_mask = (np.isclose(X, 0) | np.isclose(X, 1))  # Shape of X
+        edge_proximity_mask = (0.5 - np.abs(X - 0.5)) < self.tol  # Shape of X
         extremeness = edge_proximity_mask.sum(axis=1)
 
         # Initialize list of selected indices
@@ -143,8 +143,9 @@ class DiversitySelector(MultiModalSelector):
 @SelectorFactory.register('centrism')
 class CentrismSelector(MultiModalSelector):
 
-    def __init__(self, batch_size: int):
+    def __init__(self, batch_size: int, tol: float = 1e-5):
         super().__init__(batch_size)
+        self.tol = tol
 
         self._record_columns = ['_id', 'loss', 'extremeness', 'mmm_loss']
         self.reset_records()
@@ -154,10 +155,9 @@ class CentrismSelector(MultiModalSelector):
     ) -> np.ndarray:
 
         X = np.atleast_2d(X)
-        X = np.unique(X, axis=0)
 
         # Create edge proximity mask where true if value close to (0 | 1) edges 
-        edge_proximity_mask = (np.isclose(X, 0) | np.isclose(X, 1))
+        edge_proximity_mask = (0.5 - np.abs(X - 0.5)) < self.tol  # Shape of X
 
         # Get a loss based on number of close features to an edge per row
         extremeness = edge_proximity_mask.sum(axis=1)
@@ -195,7 +195,6 @@ class ElitismSelector(MultiModalSelector):
     ) -> np.ndarray:
 
         X = np.atleast_2d(X)
-        X = np.unique(X, axis=0)
 
         # Combined loss based exclusively on objective loss value
         combined_loss = loss_values

@@ -1,4 +1,4 @@
-from typing import List, Tuple, Dict, Any, Union, Optional, ClassVar
+from typing import List, Tuple, Dict, Any, Literal, Optional, ClassVar
 import warnings
 import numpy as np
 import pandas as pd
@@ -98,7 +98,11 @@ class OutlierProximityTerm(FittableFOMTerm):
     def __init__(self, exclusion_radius: float = 1e-5):
         self.exclusion_radius = exclusion_radius
         self.outlier_points = None
-    
+
+    @property
+    def score_signs(self) -> List[Literal[1, -1]]:
+        return [-1]
+
     def fit(self, X: np.ndarray, y: np.ndarray) -> None:
         """ Detect outliers to avoid (in feature space). """
         y = np.atleast_2d(y.T).T  # Ensure y is 2D with shape (n_samples, n_targets)

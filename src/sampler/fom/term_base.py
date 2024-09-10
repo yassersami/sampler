@@ -1,4 +1,4 @@
-from typing import List, Tuple, Dict, Union, Type, Any, Optional, ClassVar
+from typing import List, Tuple, Dict, Union, Type, Any, Optional, ClassVar, Literal
 from abc import ABC, abstractmethod
 import pandas as pd
 import numpy as np
@@ -20,12 +20,12 @@ class BaseFOMTerm(ABC):
     """
 
     required_args: ClassVar[List[str]] = []
-    
+
     @classmethod
     def _set_term_name(cls, name: str):
         """Set term name used in FOM TERM_CLASSES."""
         cls._term_name = name
-    
+
     @property
     def score_names(self) -> List[str]:
         """
@@ -35,8 +35,27 @@ class BaseFOMTerm(ABC):
         Override this property in subclasses if you need multiple score_names.
         """
         if self._term_name is None:
-            raise ValueError("This FOM term has not been registered with a name.")
+            raise AttributeError("This FOM term has not been registered with a name.")
         return [self._term_name]
+
+    @property
+    def score_signs(self) -> List[Literal[1, -1]]:
+        """
+        Return the signs of the scores produced by this term.
+        
+        By default, it returns a list with ones like the score_names.
+        Override this property in subclasses if negative scores are present.
+        """
+        return [1] * len(self.score_names)
+
+    def _validate_score_signs(self):
+        term_score_signs = self.score_signs
+        # raise error if score_signs has not the same length as score_names
+        if len(term_score_signs) != len(self.score_names):
+            raise ValueError(
+                f"{self._term_name} term has an invalid score_signs length "
+                f"{len(term_score_signs)}"
+            )
 
     def _validate_predicted_score(
         self,

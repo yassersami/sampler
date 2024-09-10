@@ -107,7 +107,7 @@ class SurrogateGPR(GaussianProcessRegressor):
         point_norm = norm(loc=y_mean, scale=y_std)
 
         probabilities = point_norm.cdf(self.uppers) - point_norm.cdf(self.lowers)
-        
+
         if y_mean.ndim == 1:
             return probabilities
         return np.prod(probabilities, axis=1)

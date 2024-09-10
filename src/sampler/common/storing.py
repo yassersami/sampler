@@ -50,9 +50,9 @@ def join_history(
     return df_history
 
 
-def set_history_folder(history_path: str, should_rename: bool = True):
+def create_history_folder(history_path: str, should_rename: bool = True):
     """
-    Set history folder where explored samples are incrementally stored.
+    Create history folder where explored samples are incrementally stored.
     """
     # Check if the folder already exists
     folder_exists = os.path.isdir(history_path)
