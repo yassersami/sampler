@@ -1,24 +1,24 @@
-variable_aliases:
-  features:
-    str:
-      - "Al radius [micron]"
-      - "CuO radius [micron]"
-      - "Al richness"
-    latex:
-      - "$r_{Al}, [/mu m]$"
-      - "$r_{CuO}, [/mu m]$"
-      - "$/phi$"
-  targets:
-    str:
-      - "Final Pressure [MPa]"
-      - "Combustion Temperature [K]"
-    latex:
-      - "Final Pressure [MPa]"
-      - "Combustion Temperature [K]"
-
-scales:
-  features: [1.0e-6, 1.0e-6, 1]
-  targets: [1.0e+6, 1]
+plot_variables:
+  r_ext_pAl:
+    alias: Al radius [micron]
+    latex: "$r_{Al} [\\mu m]$"
+    scale: 1.0e-6
+  r_ext_pMeO: 
+    alias: CuO radius [micron]
+    latex: "$r_{CuO} [\\mu m]$"
+    scale: 1.0e-6
+  pAl_richness: 
+    alias: Al richness
+    latex: "$\\phi$"
+    scale: 1
+  Pg_f: 
+    alias: Final Pressure [MPa]
+    latex: Final Pressure [MPa]
+    scale: 1.0e+6
+  Tg_Tmax: 
+    alias: Combustion Temperature [K]
+    latex: Combustion Temperature [K]
+    scale: 1
 
 params_volume:
   compute_volume: false

@@ -7,34 +7,33 @@ from kedro.pipeline import Pipeline, node, pipeline
 
 from sampler.pipelines.prep import create_pipeline as create_pipeline_prep
 
-from .nodes import prepare_data_metrics, get_metrics, scale_data_for_plots, plot_metrics
+from .nodes import (
+    read_and_prepare_data, compute_metrics,
+    get_variables_for_plot, scale_variables_for_plot,
+    plot_metrics
+)
 
 
 def create_pipeline(**kwargs) -> Pipeline:
     pipeline_prep = create_pipeline_prep()
     pipeline_local = pipeline([
         node(
-            func=prepare_data_metrics,
+            func=read_and_prepare_data,
             inputs=dict(
                 experiments='params:experiments',
-                variable_aliases='params:variable_aliases',
                 features='params:features',
                 targets='params:targets',
                 treatment='treatment',
             ),
-            outputs=dict(
-                exp_data='exp_data',
-                features='features',
-                targets='targets',
-            ),
-            # name='prepare_data_to_analyze',
+            outputs='data',
+            name='metrics_read_data',
         ),
         node(
-            func=get_metrics,
+            func=compute_metrics,
             inputs=dict(
-                data='exp_data',
-                features='features',  # These features and targets are not those of data columns
-                targets='targets',
+                data='data',
+                features='params:features',
+                targets='params:targets',
                 treatment='treatment',
                 params_volume='params:params_volume',
                 params_asvd='params:params_asvd',
@@ -46,29 +45,51 @@ def create_pipeline(**kwargs) -> Pipeline:
                 interest_asvd_scores='interest_asvd_scores',
                 volume_voronoi='volume_voronoi'
             ),
-            # name='get_metrics'
+            name='metrics_compute'
         ),
         node(
-            func=scale_data_for_plots,
+            func=get_variables_for_plot,
             inputs=dict(
-                data='exp_data',
-                features='features',
-                targets='targets',
-                scales='params:scales',
+                features='params:features',
+                targets='params:targets',
+                plot_variables='params:plot_variables',
+            ),
+            outputs=dict(
+                feature_aliases='feature_aliases',
+                target_aliases='target_aliases',
+                latex_mapper='latex_mapper',
+                alias_scales='alias_scales',
+            ),
+            name='metrics_read_plot_variables',
+        ),
+        node(
+            func=scale_variables_for_plot,
+            inputs=dict(
+                data='data',
+                features='params:features',
+                targets='params:targets',
+                feature_aliases='feature_aliases',
+                target_aliases='target_aliases',
+                alias_scales='alias_scales',
+                variables_ranges="params:variables_ranges",
                 interest_region='params:interest_region',
             ),
             outputs=dict(
-                scaled_data='scaled_exp_data',
-                scaled_region='scaled_region'
+                scaled_data='scaled_data',
+                scaled_plot_ranges='scaled_plot_ranges',
+                scaled_interest_region='scaled_interest_region'
             ),
-            # name='scale_data_for_plots'
+            name='metrics_scale'
         ),
         node(
             func=plot_metrics,
             inputs=dict(
-                data='scaled_exp_data',
-                variable_aliases='params:variable_aliases',
-                region='scaled_region',
+                data='scaled_data',
+                feature_aliases='feature_aliases',
+                target_aliases='target_aliases',
+                latex_mapper='latex_mapper',
+                plot_ranges='scaled_plot_ranges',
+                interest_region='scaled_interest_region',
                 volume='volume',
                 total_asvd_scores='total_asvd_scores',
                 interest_asvd_scores='interest_asvd_scores',
@@ -76,7 +97,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 output_dir='path_metrics_output',
             ),
             outputs=None,
-            # name='plot_metrics'
+            name='metrics_plot'
         )
     ])
     return pipeline([pipeline_prep, pipeline_local])

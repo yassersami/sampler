@@ -2,7 +2,7 @@
 This is a boilerplate pipeline 'metrics'
 generated using Kedro 0.18.5
 """
-from typing import List, Dict
+from typing import List, Dict, Tuple, Union
 import os
 import numpy as np
 import pandas as pd
@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from itertools import combinations
 
 from .postprocessing_functions import (
-    categorize_df_by_quality, prepare_new_data, aggregate_csv_files
+    aggregate_csv_files, prepare_new_data, subset_by_quality
 )
 from .volume import covered_space_bound
 from .asvd import ASVD
@@ -19,9 +19,8 @@ import sampler.pipelines.metrics.graphics_metrics as gm
 from sampler.common.data_treatment import DataTreatment
 
 
-def prepare_data_metrics(
-    experiments: Dict,
-    variable_aliases: Dict,
+def read_and_prepare_data(
+    experiments: Dict[str, str],
     features: List[str],
     targets: List[str],
     treatment: DataTreatment
@@ -30,15 +29,8 @@ def prepare_data_metrics(
     Prepare data metrics by processing experiment data based on the path type.
     """
     data = {}
-    # New names for data columns
-    feature_aliases = variable_aliases['features']['str']
-    target_aliases = variable_aliases['targets']['str']
-    column_renaming = {
-        orig: alias for orig, alias in 
-        zip(features + targets, feature_aliases + target_aliases)
-    }
 
-    for exp_id, exp_config in experiments.items():
+    for exp_key, exp_config in experiments.items():
         file_path = exp_config['path']
         
         # Import data, etiher from a folder or a csv file
@@ -50,32 +42,28 @@ def prepare_data_metrics(
             raise ValueError(f"Path '{file_path}' is neither a valid directory "
                              "nor a CSV file. Exiting program.")
 
+        # Scale back and classify quality
         df = prepare_new_data(
-            df=imported_df, treatment=treatment, f=features, t=targets
+            df=imported_df, treatment=treatment, features=features, targets=targets
         )
-        df = df.rename(columns=column_renaming)
 
-        data[exp_id] = categorize_df_by_quality(
+        # Categorize quality
+        data[exp_key] = subset_by_quality(
             df=df, name=exp_config['name'], color=exp_config['color']
         )
 
-    return {
-        'exp_data': data,
-        'features': feature_aliases,
-        'targets': target_aliases,
-    }
+    return data
 
 
-def get_metrics(
-        data: Dict,
-        features: List[str],
-        targets: List[str],
-        treatment: DataTreatment,
-        params_volume: Dict,
-        params_asvd: Dict,
-        params_voronoi: Dict
+def compute_metrics(
+    data: Dict[str, Union[str, pd.DataFrame]],
+    features: List[str],
+    targets: List[str],
+    treatment: DataTreatment,
+    params_volume: Dict,
+    params_asvd: Dict,
+    params_voronoi: Dict
 ) -> Dict:
-    radius = 0.025 # Sphere radius
 
     n_interest = {} # for each experiment, number of interest points (dict of int)
     volume = {} # for each experiment, volume space covered (dict of float)
@@ -83,18 +71,20 @@ def get_metrics(
     interest_asvd_scores = {}
     volume_voronoi = {} # for each experiment, volumes of the Voronoi regions (clipped by the unit hypercube)
     
+    variable_names = features + targets
+    
     for exp_key, value in data.items():
         # Scale all data
-        XY = value['df'][features+targets].values
+        XY = value['df'][variable_names].values
         scaled_data = pd.DataFrame(
             treatment.scaler.transform(XY),
-            columns=features+targets
+            columns=variable_names
         )
         # Scale interest data
-        XY_interest = value['interest'][features+targets].values
+        XY_interest = value['interest'][variable_names].values
         scaled_data_interest = pd.DataFrame(
             treatment.scaler.transform(XY_interest),
-            columns=features+targets
+            columns=variable_names
         )
         scaled_x_interest = scaled_data_interest[features]
         scaled_y_interest = scaled_data_interest[targets]
@@ -105,6 +95,7 @@ def get_metrics(
             volume[exp_key] = params_volume['default'][exp_key]
         elif params_volume['compute_volume']:
             # Compute volume
+            radius = 0.025 # Sphere radius
             volume[exp_key] = covered_space_bound(
                 scaled_x_interest, radius, params_volume, len(features)
             )
@@ -140,7 +131,7 @@ def get_metrics(
             if params_voronoi['compute_voronoi']['targets']:
                 volume_voronoi[exp_key]['targets'] = get_volume_voronoi(
                     scaled_y_interest,
-                    dim=len(features+targets),
+                    dim=len(variable_names),
                     tol=params_voronoi['tol'],
                     isFilter=params_voronoi['isFilter']
                 )
@@ -155,65 +146,110 @@ def get_metrics(
     )
 
 
-def scale_data_for_plots(
-    data: Dict,
+def get_variables_for_plot(
     features: List[str],
     targets: List[str],
-    scales: Dict,
-    interest_region: Dict
+    plot_variables: Dict[str, Dict[str, Union[str, float]]],
 ):
-    """Scales data in place for visualization purposes."""
-    df_names = ['interest', 'no_interest', 'inliers', 'outliers', 'df']
-    for v in data.values():
-        for name in df_names:
-            v[name][features] /= scales['features']
-            v[name][targets] /= scales['targets']
+    return { # Get aliases for features and targets
+        'feature_aliases': [plot_variables[name]['alias'] for name in features],
+        'target_aliases': [plot_variables[name]['alias'] for name in targets],
+        'latex_mapper': {dic['alias']: dic['latex'] for dic in plot_variables.values()},
+        'alias_scales': {dic['alias']: dic['scale'] for dic in plot_variables.values()},
+    }
 
+
+def scale_variables_for_plot(
+    data: Dict[str, Union[str, pd.DataFrame]],
+    features: List[str],
+    targets: List[str],
+    feature_aliases: List[str],
+    target_aliases: List[str],
+    alias_scales: Dict[str, float],
+    variables_ranges: Dict[str, Dict],
+    interest_region: Dict[str, Tuple[float, float]]
+):
+    """
+    Scales features and targets to match physical unit in aliases. For example,
+    if alias unit is MPa, divide by 1e6 or if alias unit is micron divide by
+    1e-6.
+    """
+    variable_names = features + targets
+    variable_aliases = feature_aliases + target_aliases
+
+    # Scale features and targets
+    alias_mapper = { # New names for data columns
+        name: alias for name, alias in 
+        zip(variable_names, variable_aliases)
+    }
+    variable_scales = [alias_scales[alias] for alias in variable_aliases]  # Scale for each variable
+    for exp_dic in data.values():
+        for df in exp_dic.values():
+            if isinstance(df, pd.DataFrame):
+                # Rename features and targets, use inplace to update data dict 
+                df.rename(columns=alias_mapper, inplace=True) 
+                # Scale features and targets
+                df[variable_aliases] /= variable_scales 
+
+    # Set variable bounds
+    scaled_plot_ranges = {}
+    margin_ratio = 0.1
+    for name, alias in zip(variable_names, variable_aliases):
+        bounds = variables_ranges[name]['bounds']
+        scaled_bounds = [v/alias_scales[alias] for v in bounds]
+        margin = (scaled_bounds[1] - scaled_bounds[0]) * margin_ratio
+        scaled_plot_ranges[alias] = [
+            scaled_bounds[0] - margin,
+            scaled_bounds[1] + margin
+        ]
+
+    # Scale interest region
     scaled_interest_region = {}
-    for region, target, target_scale in zip(interest_region.values(), targets, scales['targets']):
-        scaled_interest_region[target] = [v / target_scale for v in region]
+    for name, alias in zip(targets, target_aliases):
+        interval = interest_region[name]
+        scaled_interest_region[alias] = [v/alias_scales[alias] for v in interval]
 
     return dict(
         scaled_data=data,
-        scaled_region=scaled_interest_region
+        scaled_plot_ranges=scaled_plot_ranges,
+        scaled_interest_region=scaled_interest_region
     )
 
 
 def plot_metrics(
-    data: Dict,
-    variable_aliases: Dict,
-    region: Dict,
+    data: Dict[str, Union[str, pd.DataFrame]],
+    feature_aliases: List[str],
+    target_aliases: List[str],
+    latex_mapper: Dict[str, str],
+    plot_ranges: Dict[str, Tuple[float, float]],
+    interest_region: Dict[str, Tuple[float, float]],
     volume: Dict,
     total_asvd_scores: Dict[str, Dict[str, float]],
     interest_asvd_scores: Dict[str, Dict[str, float]],
     volume_voronoi: Dict,
     output_dir: str,
 ):
-    features_dic = variable_aliases['features']
-    features = features_dic['str']
-    targets = variable_aliases['targets']['str']
-    asvd_metrics_to_plot = ['sum_augm', 'rsd_x', 'rsd_xy', 'rsd_augm', 'riqr_x', 'riqr_xy']
-
     # Initial data distribution
-    initial_data_plot = gm.plot_initial_data(data, features, targets, only_first_exp=True)
+    initial_data_plot = gm.plot_initial_data(data, feature_aliases, target_aliases, latex_mapper, plot_ranges, only_first_exp=True)
 
     # plot features pairs
     feature_pairs_plot_dict = {}
-    for feat_1, feat_2 in combinations(features, 2):
-        idx_1, idx_2 = features.index(feat_1) + 1, features.index(feat_2) + 1
+    for feat_1, feat_2 in combinations(feature_aliases, 2):
+        idx_1, idx_2 = feature_aliases.index(feat_1) + 1, feature_aliases.index(feat_2) + 1
         feature_pairs_plot_dict.update({
-            f'X_{idx_1}_{idx_2}'         : gm.plot_feature_pairs(data, features_dic, (feat_1, feat_2), only_new=False),
-            f'X_{idx_1}_{idx_2}_only_new': gm.plot_feature_pairs(data, features_dic, (feat_1, feat_2), only_new=True)
+            f'X_{idx_1}_{idx_2}'         : gm.plot_feature_pairs(data, (feat_1, feat_2), latex_mapper, plot_ranges, only_new=False),
+            f'X_{idx_1}_{idx_2}_only_new': gm.plot_feature_pairs(data, (feat_1, feat_2), latex_mapper, plot_ranges, only_new=True)
         })
 
     # targets distribution
     targets_plot_dict = {
-        'y_violin': gm.plot_violin_distribution(data, targets, region),
-        'y_kde': gm.targets_kde(data, targets, region),
+        'y_violin': gm.plot_violin_distribution(data, target_aliases, latex_mapper, interest_region, plot_ranges),
+        'y_kde': gm.targets_kde(data, target_aliases, latex_mapper, interest_region, plot_ranges),
     }
 
     # Distribution analysis
     print(f"Design space volumes: {volume}")
+    asvd_metrics_to_plot = ['sum_augm', 'rsd_x', 'rsd_xy', 'rsd_augm', 'riqr_x', 'riqr_xy']
     distribution_plots_dict = {}
     if total_asvd_scores:
         distribution_plots_dict['ASVD'] = gm.plot_asvd_scores(data, total_asvd_scores, asvd_metrics_to_plot)
@@ -224,10 +260,10 @@ def plot_metrics(
 
     # Detailed features versus targets plots
     feat_tar_plots_dict = {}
-    feat_tar_plots_dict['X_y'] = gm.plot_feat_tar(data, features, targets, only_interest=False)
-    feat_tar_plots_dict['X_y_only_interest'] = gm.plot_feat_tar(data, features, targets, only_interest=True, title_extension='(only interest)')
+    feat_tar_plots_dict['X_y'] = gm.plot_feat_tar(data, feature_aliases, target_aliases, latex_mapper, plot_ranges, only_interest=False)
+    feat_tar_plots_dict['X_y_only_interest'] = gm.plot_feat_tar(data, feature_aliases, target_aliases, latex_mapper, plot_ranges, only_interest=True, title_extension='(only interest)')
     for i, exp_key in enumerate(data.keys()):
-        feat_tar_plots_dict[f'X_y_exp{i+1}'] = gm.plot_feat_tar({exp_key: data[exp_key]}, features, targets, only_interest=False)
+        feat_tar_plots_dict[f'X_y_exp{i+1}'] = gm.plot_feat_tar({exp_key: data[exp_key]}, feature_aliases, target_aliases, latex_mapper, plot_ranges, only_interest=False)
 
     # Aggregate plots
     all_plots = [

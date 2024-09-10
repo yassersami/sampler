@@ -12,7 +12,14 @@ import matplotlib.lines as mlines
 from .postprocessing_functions import get_first_iteration_index
 
 
-def plot_initial_data(data: Dict[str, Dict], features, targets, only_first_exp: bool = False):
+def plot_initial_data(
+    data: Dict[str, Dict],
+    features: List[str],
+    targets: List[str],
+    latex_mapper: Dict[str, str],
+    plot_ranges: Dict[str, Tuple[float, float]],
+    only_first_exp: bool = False
+):
 
     if only_first_exp:
         # Keep only the first experiment
@@ -88,15 +95,29 @@ def plot_initial_data(data: Dict[str, Dict], features, targets, only_first_exp: 
 
     g.map_upper(safe_kdeplot, levels=4, linewidth=2)
 
+    # Set axis limits and update labels
+    for ax in g.axes.flatten():
+        var_x, var_y = ax.get_xlabel(), ax.get_ylabel()
+        if var_x != '':
+            ax.set_xlabel(latex_mapper[var_x])
+            ax.set_xlim(plot_ranges[var_x])
+        if var_y != '':
+            ax.set_ylabel(latex_mapper[var_y])
+            ax.set_ylim(plot_ranges[var_y])
+
     # Add legend without title
     g.add_legend(title='')
 
     return g.figure
 
 
-def plot_feature_pairs(data: Dict, features_dic: Dict, feature_pair: Tuple[str, str], only_new: bool = False):
-    features = features_dic['str']
-    features_latex = features_dic['latex']
+def plot_feature_pairs(
+    data: Dict,
+    feature_pair: Tuple[str, str],
+    latex_mapper: Dict[str, str],
+    plot_ranges: Dict[str, Tuple[float, float]],
+    only_new: bool = False
+):
     n_exp = len(data)
 
     # Use the specified feature pair
@@ -168,9 +189,11 @@ def plot_feature_pairs(data: Dict, features_dic: Dict, feature_pair: Tuple[str, 
         )
 
         # Set axis labels
-        ax.set_xlabel(features_latex[features.index(x)].replace('/', '\\'))
+        ax.set_xlabel(latex_mapper[x])
+        ax.set_xlim(plot_ranges[x])
         if n_col == 0:
-            ax.set_ylabel(features_latex[features.index(y)].replace('/', '\\'))
+            ax.set_ylabel(latex_mapper[y])
+            ax.set_ylim(plot_ranges[y])
 
     # Add a vertical color bar with custom ticks outside the subplots
     cbar_width = 0.2 / fig_width
@@ -186,7 +209,13 @@ def plot_feature_pairs(data: Dict, features_dic: Dict, feature_pair: Tuple[str, 
     return fig
 
 
-def plot_violin_distribution(data: Dict, targets: List[str], desired_region: Dict):
+def plot_violin_distribution(
+    data: Dict,
+    targets: List[str],
+    latex_mapper: Dict[str, str],
+    interest_region: Dict[str, Tuple[float, float]],
+    plot_ranges: Dict[str, Tuple[float, float]],
+):
     fig, axs = plt.subplots(1, len(targets), figsize=(5 * len(targets), 5))
 
     # Ensure axs is always a list, even for a single subplot
@@ -200,24 +229,31 @@ def plot_violin_distribution(data: Dict, targets: List[str], desired_region: Dic
         )
         axs[col].set_xticklabels([val['name'] for val in data.values()], rotation=20, ha='right')
         axs[col].add_patch(Rectangle(
-            (-0.45, desired_region[target][0]),
-            (len(data) - 0.1),
-            desired_region[target][1] - desired_region[target][0],
+            (-0.45, interest_region[target][0]),  # x, y
+            (len(data) - 0.1),  # width
+            interest_region[target][1] - interest_region[target][0],  # height
             edgecolor='#B73E3E', facecolor='none', lw=2,
         ))
-        axs[col].set_ylabel(target)
+        axs[col].set_ylabel(latex_mapper[target])
+        axs[col].set_ylim(plot_ranges[target])
 
     # Add labels only if there are multiple subplots
     if len(targets) > 1:
         axs[0].text(-0.03, 1.03, 'a)', transform=axs[0].transAxes, size=20, weight='bold', ha='right', va='bottom')
         axs[1].text(-0.03, 1.03, 'b)', transform=axs[1].transAxes, size=20, weight='bold', ha='right', va='bottom')
-        
+
     fig.tight_layout()
-    
+
     return fig
 
 
-def targets_kde(data: Dict, targets: List[str], region: Dict):
+def targets_kde(
+    data: Dict,
+    targets: List[str],
+    latex_mapper: Dict[str, str],
+    interest_region: Dict[str, Tuple[float, float]],
+    plot_ranges: Dict[str, Tuple[float, float]],
+):
     n_col = len(targets)
     fig, axs = plt.subplots(1, n_col, figsize=(6*n_col, 6), squeeze=False)
     axs = axs.flatten()  # This ensures axs is always a 1D array
@@ -237,9 +273,10 @@ def targets_kde(data: Dict, targets: List[str], region: Dict):
             ax=axs[col], legend=False, fill=True, common_norm=True,
             bw_adjust=0.2  # kernel bandwidth
         )
-        axs[col].axvline(x=region[target][0], color='red')
-        axs[col].axvline(x=region[target][1], color='red')
-        axs[col].set_xlabel(target)
+        axs[col].axvline(x=interest_region[target][0], color='red')
+        axs[col].axvline(x=interest_region[target][1], color='red')
+        axs[col].set_xlabel(latex_mapper[target])
+        axs[col].set_xlim(plot_ranges[target])
 
     # Get colors legend
     colors_legend = [mlines.Line2D([], [], color=dic['color'], label=dic['name']) for dic in data.values()]
@@ -257,30 +294,40 @@ def targets_kde(data: Dict, targets: List[str], region: Dict):
     return fig
 
 
-def plot_feat_tar(data: Dict, features: List[str], targets: List[str], only_interest: bool = True, title_extension: str=''):
+def plot_feat_tar(
+    data: Dict,
+    features: List[str],
+    targets: List[str],
+    latex_mapper: Dict[str, str],
+    plot_ranges: Dict[str, Tuple[float, float]],
+    only_interest: bool = True,
+    title_extension: str=''
+):
     n_col = len(features)
     n_rows = len(targets)
-    fig, axs = plt.subplots(n_rows, n_col, figsize=(4 * n_col, 4 * n_rows), squeeze=False)
+    fig, axs = plt.subplots(n_rows, n_col, figsize=(4 * n_col, 4 * n_rows), sharex='col', sharey='row', squeeze=False)
 
-    for n_row, tar in enumerate(targets):
-        for n_col, feat in enumerate(features):
+    for n_row, target in enumerate(targets):
+        for n_col, feature in enumerate(features):
             ax = axs[n_row, n_col]
             for v in data.values():
                 ax.scatter(
-                    x=v['interest'][feat],
-                    y=v['interest'][tar],
+                    x=v['interest'][feature],
+                    y=v['interest'][target],
                     c=v['color'], marker='.', alpha=1., label=v['name']
                 )
                 if not only_interest:
                     ax.scatter(
-                        x=v['no_interest'][feat],
-                        y=v['no_interest'][tar],
+                        x=v['no_interest'][feature],
+                        y=v['no_interest'][target],
                         c='gray', marker='.', alpha=0.3, label='No interest'
                     )
             if n_row == n_rows - 1:  # Only set xlabel for the bottom row
-                ax.set_xlabel(feat)
+                ax.set_xlabel(latex_mapper[feature])
+                ax.set_xlim(plot_ranges[feature])
             if n_col == 0:  # Only set ylabel for the leftmost column
-                ax.set_ylabel(tar)
+                ax.set_ylabel(latex_mapper[target])
+                ax.set_ylim(plot_ranges[target])
 
     # Get legend handles and labels from the first subplot
     handles, labels = axs[0, 0].get_legend_handles_labels()

@@ -29,7 +29,36 @@ def aggregate_csv_files(directory_path: str) -> pd.DataFrame:
     return combined_df
 
 
-def categorize_df_by_quality(
+def prepare_new_data(
+        df: pd.DataFrame,
+        treatment: DataTreatment,
+        features: List[str],
+        targets: List[str],
+) -> pd.DataFrame:
+    """
+    Prepare the new data by scaling it back to physical units and classifying the
+    quality of the points.
+
+    Returns:
+        pd.DataFrame: Prepared DataFrame with the quality of the points classified.
+    """
+    res = df.copy()
+
+    # Scale back to physical units
+    scaler_cols = features + targets
+    res[scaler_cols] = pd.DataFrame(
+        treatment.scaler.inverse_transform(df[scaler_cols].values),
+        columns=scaler_cols
+    )
+
+    # Classify quality
+    res = treatment.classify_quality_interest(res, data_is_scaled=False)
+    # Classify outliers
+    res = treatment.classify_quality_error(res, data_is_scaled=False)
+    return res
+
+
+def subset_by_quality(
     df: pd.DataFrame, name: str, color: str
 ) -> Dict[str, Union[str, pd.DataFrame]]:
     return {
@@ -41,21 +70,6 @@ def categorize_df_by_quality(
         'outliers': df[(df.quality != 'interest') & (df.quality != 'no_interest')],
         'df': df
     }
-
-
-def prepare_new_data(
-        df: pd.DataFrame,
-        treatment: DataTreatment,
-        f: List[str],
-        t: List[str],
-) -> pd.DataFrame:
-    res = df.copy()
-    res[f+t] = pd.DataFrame(treatment.scaler.inverse_transform(df[f+t].values), columns=f+t)
-
-    # Classify quality
-    res = treatment.classify_quality_interest(res, data_is_scaled=False)
-    res = treatment.classify_quality_error(res, data_is_scaled=False)
-    return res
 
 
 def get_first_iteration_index(df: pd.DataFrame) -> int:
