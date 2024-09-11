@@ -1,6 +1,8 @@
 from typing import List, Dict, Tuple, Callable, Type, Union, Optional, ClassVar
 from abc import ABC, abstractmethod
 import warnings
+import cProfile
+import pstats
 from tqdm import tqdm
 import numpy as np
 import pandas as pd
@@ -54,7 +56,7 @@ class MultiModalOptimizer(ABC):
         self.bounds = [(0, 1)] * n_dim
         self.optimizer_config: Dict = {'dummy_param': None}  # minimizer parameters
         self.pbar = None
-        self._eval_counter = None
+        self.activate_profiling = False
 
     @property
     def total_evaluations(self) -> int:
@@ -72,11 +74,9 @@ class MultiModalOptimizer(ABC):
             f"{self.__class__.__name__} -> {self.optimizer_config} - "
             "Searching for good candidates..."
         )
+
         # Update FOM used for minimization objective (loss)
         self.loss_func = loss_func
-
-        # Reset minimization evaluations counter
-        self._eval_counter = 0
 
         # Clean multimodal progress record
         self.selector.reset_records()
@@ -84,11 +84,23 @@ class MultiModalOptimizer(ABC):
         # Initialize progress bar
         self.pbar = tqdm(total=self.total_evaluations, desc="Multimodal Optimization")
 
+        if self.activate_profiling:
+            # Enable profiling
+            profiler = cProfile.Profile()
+            profiler.enable()
+
         # Run multi-objective optimization and return local minima
         X = self.minimize()
 
+        if self.activate_profiling:
+            # Disable profiling
+            profiler.disable()
+            stats = pstats.Stats(profiler).sort_stats('cumulative')
+            stats.print_stats()
+
         # Close progress bar
         self.pbar.close()
+        print('\n')  # Avoid confusion
 
         # Get loss objective values of detected minima during the optimization 
         loss_values = self.loss_func(X)
@@ -108,9 +120,7 @@ class MultiModalOptimizer(ABC):
         """
         x = np.array(args).reshape(1, -1)
         loss_value = self.loss_func(x).item()
-        self._eval_counter += 1
         self.pbar.update(1)
-        # print(f"i: {self.counter:04}, x: {x[0]}, loss: {loss_value:.4f}")
         return loss_value
 
     @abstractmethod

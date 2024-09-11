@@ -27,7 +27,7 @@ class SigmoidLocalDensityTerm(FittableFOMTerm):
     def fit(self, X: np.ndarray) -> None:
         self.dataset_points = X
 
-    def predict_score(self, X: np.ndarray) -> np.ndarray:
+    def _predict_score(self, X: np.ndarray) -> np.ndarray:
         """
         Compute the decay score and apply a sigmoid transformation to obtain a 
         density-like value.
@@ -113,7 +113,7 @@ class OutlierProximityTerm(FittableFOMTerm):
         # Extract feature values from these rows
         self.outlier_points = X[nan_mask]
 
-    def predict_score(self, X: np.ndarray) -> np.ndarray:
+    def _predict_score(self, X: np.ndarray) -> np.ndarray:
         """
         Proximity Avoidance Condition: Determine if the given point is
         sufficiently distant from any point with erroneous simulations. Points
@@ -133,13 +133,6 @@ class OutlierProximityTerm(FittableFOMTerm):
 
         # Determine which points should be ignored based on tolerance
         should_avoid = np.any(distances < self.exclusion_radius, axis=1)
-
-        # Log points that will be avoided
-        if np.any(should_avoid):
-            print(
-                "The following points are in outlier proximity regions:\n"
-                f"{X[should_avoid]}"
-            )
 
         # Score is -1 if bad row that FOM should avoid else 0
         score = 0 - should_avoid.astype(float)  # 0 - value to avoid negative 0

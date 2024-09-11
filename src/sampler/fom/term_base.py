@@ -1,5 +1,6 @@
 from typing import List, Tuple, Dict, Union, Type, Any, Optional, ClassVar, Literal
 from abc import ABC, abstractmethod
+import time
 import pandas as pd
 import numpy as np
 from sklearn.gaussian_process.kernels import RationalQuadratic
@@ -17,9 +18,17 @@ class BaseFOMTerm(ABC):
         be provided by the FOM class, not from the JSON config. For example:
         ['features', 'targets', 'interest_region']. Subclasses should override
         this list as needed.
+        - predict_count (int): Number of prediction calls.
+        - predict_count_log (List[int]): Log of prediction counts.
+        - predict_cumtime (float): Cumulative time spent in predictions.
+        - predict_cumtime_log (List[float]): Log of cumulative prediction times.
     """
 
     required_args: ClassVar[List[str]] = []
+    predict_count: ClassVar[int] = 0
+    predict_count_log: ClassVar[List[int]] = []
+    predict_cumtime: ClassVar[float] = 0
+    predict_cumtime_log: ClassVar[List[float]] = []
 
     @classmethod
     def _set_term_name(cls, name: str):
@@ -102,7 +111,7 @@ class BaseFOMTerm(ABC):
                     )
 
     @abstractmethod
-    def predict_score(self, X: np.ndarray) -> Union[np.ndarray, Tuple[np.ndarray, ...]]:
+    def _predict_score(self, X: np.ndarray) -> Union[np.ndarray, Tuple[np.ndarray, ...]]:
         """
         Calculate and return the score(s) for this FOM term.
         
@@ -121,6 +130,29 @@ class BaseFOMTerm(ABC):
         """
         pass
 
+    def predict_score(self, X: np.ndarray) -> Union[np.ndarray, Tuple[np.ndarray, ...]]:
+        """
+        Wrapper method that calls _predict_score and updates cumulative prediction time.
+        """
+        start_time = time.perf_counter()
+        score = self._predict_score(X)
+        end_time = time.perf_counter()
+
+        self.predict_count += 1
+        self.predict_cumtime += end_time - start_time
+
+        return score
+
+    def reset_predict_profiling(self) -> None:
+        """
+        Resets the cumulative prediction time to zero and logs the current value.
+        """
+        # Log predictions count and time
+        self.predict_count_log.append(self.predict_count)
+        self.predict_cumtime_log.append(self.predict_cumtime)
+        # Reset counters
+        self.predict_count = 0
+        self.predict_cumtime = 0.0
 
     @abstractmethod
     def get_parameters(self) -> Dict[str, Any]:
@@ -216,6 +248,8 @@ class NonFittableFOMTerm(BaseFOMTerm):
     predefined metrics that don't need to be trained on data.
     """
 
+# Create tuple of possible FOM term classes
+FOMTermClasses = (FittableFOMTerm, ModelFOMTerm, NonFittableFOMTerm)
 
 # Create custom type for instances
 FOMTermInstance = Union[FittableFOMTerm, ModelFOMTerm, NonFittableFOMTerm]

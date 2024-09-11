@@ -127,9 +127,6 @@ def irbs_sampling(
         # Set the new FOM that will be used in next iteration
         fom_model.fit(X=data[features].values, y=data[targets].values)
 
-        # Get FOM models fitting report
-        model_params = fom_model.get_model_params()
-
         # Search new candidates to add to dataset
         X_batch = optimizer.run_multimodal_optim(fom_model.predict_loss)
 
@@ -139,10 +136,17 @@ def irbs_sampling(
         # Get FOM scores (that were optimization objectives)
         df_fom_scores = fom_model.get_scores_df(X_batch)
 
+        # Get FOM models fitting report
+        model_params = fom_model.get_model_params()
+
+        # Get predictions profiling
+        iteration_profile = fom_model.get_profile()
+
         print(f"Selected candidates to be input to the simulator: \n{X_batch}")
         print(f"Multimodal selection records: \n{df_mmo_scores}")
         print(f"FOM scores records: \n{df_fom_scores}")
         print(f"FOM models fitting report: \n{fom_model.serialize_dict(model_params)}")
+        print(f"FOM terms prediction profiling: \n{fom_model.serialize_dict(iteration_profile)}")
 
         # Launch time expensive simulations
         new_df = simulator.process_data(X_batch, is_real_X=False, index=n_total, treat_output=True)
@@ -151,7 +155,7 @@ def irbs_sampling(
         new_df = treatment.classify_quality_interest(new_df, data_is_scaled=True)
 
         print(f"Round {iteration:03} (continued) - simulation results " + "-"*37)
-        print(f"irbs_sampling -> New samples after simulation:\n {new_df}")
+        print(f"New samples after simulation:\n {new_df}")
 
         # Add multi-objective optimization scores
         new_df = pd.concat(

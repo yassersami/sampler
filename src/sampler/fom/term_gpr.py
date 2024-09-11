@@ -156,7 +156,7 @@ class SurrogateGPRTerm(ModelFOMTerm, SurrogateGPR):
             # Update max_std of current surrogate GP
             self.update_max_std()
 
-    def predict_score(self, X: np.ndarray) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
+    def _predict_score(self, X: np.ndarray) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
         X = np.atleast_2d(X)
 
         scores = []

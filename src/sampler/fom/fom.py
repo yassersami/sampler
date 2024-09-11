@@ -1,13 +1,11 @@
-from typing import List, Tuple, Dict, Union, Literal, Any
+from typing import List, Tuple, Dict, Union, Literal, Any, Iterator
 import numpy as np
 import pandas as pd
 import json
-import inspect
-import copy
 
 from .term_base import (
-    FittableFOMTerm, ModelFOMTerm, NonFittableFOMTerm,
-    FOMTermType, FOMTermInstance
+    FittableFOMTerm, ModelFOMTerm,
+    FOMTermType, FOMTermInstance, FOMTermClasses
 )
 from .term_gpr import SurrogateGPRTerm
 from .term_gpc import InterestGPCTerm, InlierGPCTerm
@@ -33,6 +31,26 @@ class FOMTermAccessor:
                 setattr(self, term_name, term_instance)
             else:
                 raise AttributeError(f"Unknown term: {term_name}")
+    
+        self.term_names = list(terms.keys())
+
+    def items(self) -> Iterator[Tuple[str, FOMTermInstance]]:
+        """
+        Returns an iterator of (term_name, term_instance) pairs.
+        """
+        return ((term_name, getattr(self, term_name)) for term_name in self.term_names)
+
+    def values(self) -> Iterator[FOMTermInstance]:
+        """
+        Returns an iterator of all term instances.
+        """
+        return (getattr(self, term_name) for term_name in self.term_names)
+
+    def __iter__(self) -> Iterator[str]:
+        """
+        Returns an iterator of all term names.
+        """
+        return iter(self.term_names)
 
     @classmethod
     def is_valid_term_class(cls, TermClass: FOMTermType) -> bool:
@@ -41,7 +59,7 @@ class FOMTermAccessor:
         """
         return (
             isinstance(TermClass, type) and
-            issubclass(TermClass, (FittableFOMTerm, ModelFOMTerm, NonFittableFOMTerm))
+            issubclass(TermClass, FOMTermClasses)
         )
 
     @classmethod
@@ -64,7 +82,8 @@ class FOMTermAccessor:
     @classmethod
     def get_term_classes(cls) -> Dict[str, FOMTermType]:
         """
-        Returns a dictionary of term names and their corresponding classes.
+        Returns a dictionary of all possible term names and their corresponding
+        term classes.
         """
         return {
             term_name: TermClass
@@ -82,13 +101,13 @@ class FigureOfMerit:
     ):
         self.interest_region = interest_region
         self.terms_config = terms_config.copy()
-        self._terms: Dict[str, FOMTermInstance] = {}
 
         self.n_samples = None
         self.n_features = None
         self.n_targets = None
         
         # Set terms
+        terms_dict = {}
         for term_name, term_args in terms_config.items():
             TermClass = FOMTermAccessor.get_term_class(term_name)
             self._validate_term(term_name, term_args, TermClass)
@@ -104,15 +123,15 @@ class FigureOfMerit:
                 })
 
                 try:
-                    self._terms[term_name] = TermClass(**term_args)
+                    terms_dict[term_name] = TermClass(**term_args)
                 except Exception as e:
                     raise type(e)(f"Error instantiating term '{term_name}': {str(e)}") from e
                 
                 # Validate term sign
-                self._terms[term_name]._validate_score_signs()
+                terms_dict[term_name]._validate_score_signs()
 
         # Create the accessor
-        self.terms = FOMTermAccessor(self._terms)
+        self.terms = FOMTermAccessor(terms_dict)
 
     def _validate_term(
         self, term_name: str, term_args: Dict[str, Union[float, str]],
@@ -165,7 +184,10 @@ class FigureOfMerit:
         self.n_features = X.shape[1]
         self.n_targets = n_targets
 
-        for term in self._terms.values():
+        for term in self.terms.values():
+            # Reset term prediction profiling
+            term.reset_predict_profiling()
+
             if isinstance(term, FittableFOMTerm):
                 fit_config = term.fit_config
 
@@ -203,7 +225,7 @@ class FigureOfMerit:
 
     def predict_score(self, X: np.ndarray) -> np.ndarray:
         all_scores = []
-        for term in self._terms.values():
+        for term in self.terms.values():
             scores = term.predict_score(X)
             if isinstance(scores, tuple):
                 all_scores.extend(scores)
@@ -221,7 +243,7 @@ class FigureOfMerit:
     def get_scores_df(self, X: np.ndarray) -> pd.DataFrame:
         scores_dict = {}
 
-        for term in self._terms.values():
+        for term in self.terms.values():
             # Get scores
             scores = term.predict_score(X)
             score_names = term.score_names
@@ -239,14 +261,14 @@ class FigureOfMerit:
     @property
     def score_names(self) -> List[str]:
         score_names = []
-        for term in self._terms.values():
+        for term in self.terms.values():
             score_names.extend(term.score_names)
         return score_names
 
     @property
     def score_signs(self) -> List[Literal[1, -1]]:
         score_signs = []
-        for term in self._terms.values():
+        for term in self.terms.values():
             score_signs.extend(term.score_signs)
         return score_signs
 
@@ -277,7 +299,7 @@ class FigureOfMerit:
     def get_model_params(self) -> Dict[str, float]:
         model_params = {}
 
-        for term_name, term in self._terms.items():
+        for term_name, term in self.terms.items():
             # Get fit parameters if ModelFOMTerm
             if isinstance(term, ModelFOMTerm):
                 term_model_params = term.get_model_params()
@@ -287,8 +309,45 @@ class FigureOfMerit:
 
         return model_params
 
+    def get_profile(self) -> Dict[str, float]:
+        stats = {}
+
+        tot_cumtime = 0
+        tot_calls = 0
+        for term_name, term in self.terms.items():
+            cumtime = term.predict_cumtime
+            calls = term.predict_count
+            tot_cumtime += cumtime
+            tot_calls += calls
+            stats[f'{term_name}_cumtime'] = cumtime
+            stats[f'{term_name}_cumtime_percall'] = 0 if calls == 0 else cumtime / calls
+
+        stats['tot_cumtime'] = tot_cumtime
+        stats['tot_cumtime_percall'] = 0 if tot_calls == 0 else tot_cumtime / tot_calls
+
+        return stats
+
+    def get_log_profile(self) -> Dict[str, float]:
+        stats = {}
+
+        # Get sum of cumulative time over all terms
+        tot_cumtime = 0
+        tot_calls = 0
+        for term_name, term in self.terms.items():
+            cumtime = sum(term.predict_cumtime_log)
+            calls = sum(term.predict_count_log)
+            tot_cumtime += cumtime
+            tot_calls += calls
+            stats[f'{term_name}_cumtime'] = cumtime
+            stats[f'{term_name}_cumtime_percall'] = 0 if calls == 0 else cumtime / calls 
+
+        stats['tot_cumtime'] = tot_cumtime
+        stats['tot_cumtime_percall'] = 0 if tot_calls == 0 else tot_cumtime / tot_calls
+
+        return stats
+
     def get_parameters(self) -> Dict[str, Dict[str, Any]]:
-        return {name: term.get_parameters() for name, term in self._terms.items()}
+        return {name: term.get_parameters() for name, term in self.terms.items()}
 
     @staticmethod
     def serialize_dict(dic: Dict) -> str:
