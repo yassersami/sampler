@@ -1,10 +1,11 @@
 import os
 from typing import Dict, List, Union
-
+import warnings
 import numpy as np
 import pandas as pd
 
 from sampler.common.data_treatment import DataTreatment
+from sampler.common.scalers import MixedMinMaxScaler
 
 
 def aggregate_csv_files(directory_path: str) -> pd.DataFrame:
@@ -29,41 +30,77 @@ def aggregate_csv_files(directory_path: str) -> pd.DataFrame:
     return combined_df
 
 
-def prepare_new_data(
+def scale_back_to_SI_units(
     df: pd.DataFrame,
-    treatment: DataTreatment,
     features: List[str],
     targets: List[str],
+    scaler: MixedMinMaxScaler,
 ) -> pd.DataFrame:
-    """
-    Prepare the new data by scaling it back to physical units and classifying the
-    quality of the points.
-
-    Returns:
-        pd.DataFrame: Prepared DataFrame with the quality of the points classified.
-    """
-    res = df.copy()
-
-    # Scale back to physical units
+    """ Scale the data back to physical SI units. """
     scaler_cols = features + targets
-    res[scaler_cols] = pd.DataFrame(
-        treatment.scaler.inverse_transform(df[scaler_cols].values),
+    df[scaler_cols] = pd.DataFrame(
+        scaler.inverse_transform(df[scaler_cols].values),
         columns=scaler_cols
     )
+    return df
 
-    # Classify quality
-    res = treatment.classify_quality_interest(res, data_is_scaled=False)
-    # Classify outliers
-    res = treatment.classify_quality_error(res, data_is_scaled=False)
-    return res
+
+def add_quality_columns(
+    df: pd.DataFrame,
+    df_name: str,
+    treatment: DataTreatment,
+) -> pd.DataFrame:
+    """
+    Add quality classification columns to the DataFrame based on the base variables configuration.
+
+    This function classifies data points as 'interest' or 'no_interest', and further
+    categorizes outliers among 'no_interest' points into specific error types.
+
+    Note:
+        Quality classification is based on the base variables configuration in
+        the treatment object. If an experiment uses a different scaler that
+        transforms feature or target values outside the base ranges, those
+        points will be classified as 'out_of_bounds' outliers.
+
+        Generally, out-of-bounds outliers are very few (< 5). If their number is
+        abnormally high, it may indicate that the base ranges are too narrow.
+    """
+    # Quality specifies either 'interest' or 'no_interest'
+    df = treatment.classify_quality_interest(df, data_is_scaled=False)
+
+    # If 'no_interest' sample is outlier, classify further as specific error types
+    df = treatment.classify_quality_error(df, data_is_scaled=False)
+
+    # Check for out-of-bounds outliers
+    out_of_bounds_feat = df[df['quality'] == 'out_of_bounds_feat']
+    out_of_bounds_tar = df[df['quality'] == 'out_of_bounds_tar']
+
+    # Prepare and print the report only if out-of-bounds outliers are present
+    if not out_of_bounds_feat.empty or not out_of_bounds_tar.empty:
+        report = 'add_quality_columns -> \n'
+        report += f"Out-of-bounds outliers report for experiment '{df_name}':\n"
+        if not out_of_bounds_feat.empty:
+            report += f"  - Feature out-of-bounds: {len(out_of_bounds_feat)}\n"
+        if not out_of_bounds_tar.empty:
+            report += f"  - Target out-of-bounds: {len(out_of_bounds_tar)}\n"
+        print(report)
+
+    # Raise a warning if out-of-bounds feature outliers are present
+    if not out_of_bounds_feat.empty:
+        warnings.warn(
+            f"{len(out_of_bounds_feat)} feature out-of-bounds outliers detected in '{df_name}' data. "
+            "These points will not appear in plots and may affect analysis.",
+            UserWarning
+        )
+
+    return df
 
 
 def subset_by_quality(
-    df: pd.DataFrame, name: str, color: str
+    df: pd.DataFrame, exp_config: Dict[str, str],
 ) -> Dict[str, Union[str, pd.DataFrame]]:
     return {
-        'name': name,
-        'color': color,
+        **exp_config,
         'interest': df[(df.quality == 'interest')],
         'no_interest': df[(df.quality == 'no_interest')],
         'inliers': df[(df.quality == 'interest') | (df.quality == 'no_interest')],

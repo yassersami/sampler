@@ -10,20 +10,23 @@ import matplotlib.pyplot as plt
 from itertools import combinations
 
 from .postprocessing_functions import (
-    aggregate_csv_files, prepare_new_data, subset_by_quality
+    aggregate_csv_files, scale_back_to_SI_units, add_quality_columns,
+    subset_by_quality
 )
 from .volume import covered_space_bound
 from .asvd import ASVD
 from .voronoi import get_volume_voronoi
 import sampler.pipelines.metrics.graphics_metrics as gm
 from sampler.common.data_treatment import DataTreatment
+from sampler.common.scalers import MixedMinMaxScaler
 
 
 def read_and_prepare_data(
-    experiments: Dict[str, str],
+    experiments: Dict[str, Dict[str, str]],
     features: List[str],
     targets: List[str],
-    treatment: DataTreatment
+    treatment: DataTreatment,
+    scalers: Dict[str, MixedMinMaxScaler],
 ) -> Dict:
     """
     Prepare data metrics by processing experiment data based on the path type.
@@ -31,26 +34,33 @@ def read_and_prepare_data(
     data = {}
 
     for exp_key, exp_config in experiments.items():
-        file_path = exp_config['path']
-        
+        # Check if experiment configuration has valid scaler
+        if 'scaler' not in exp_config:
+            raise ValueError(f"Experiment '{exp_key}' is missing scaler key.")
+        if exp_config['scaler'] not in scalers:
+            raise ValueError(
+                f"Experiment '{exp_key}' has invalid scaler '{exp_config['scaler']}'. "
+                f"Valid scalers: {list(scalers)}."
+            )
+
         # Import data, etiher from a folder or a csv file
+        file_path = exp_config['path']
+
         if os.path.isdir(file_path):
-            imported_df = aggregate_csv_files(file_path)
+            # Combine all csv files in given directory
+            df = aggregate_csv_files(file_path)
         elif os.path.isfile(file_path) and file_path.endswith('.csv'):
-            imported_df = pd.read_csv(file_path)
+            # Read csv file
+            df = pd.read_csv(file_path)
         else:
-            raise ValueError(f"Path '{file_path}' is neither a valid directory "
-                             "nor a CSV file. Exiting program.")
+            raise ValueError(f"Path '{file_path}' is neither a valid directory nor a CSV file.")
 
         # Scale back and classify quality
-        df = prepare_new_data(
-            df=imported_df, treatment=treatment, features=features, targets=targets
-        )
+        df = scale_back_to_SI_units(df, features, targets, scalers[exp_config['scaler']])
+        df = add_quality_columns(df, exp_key, treatment)
 
         # Categorize quality
-        data[exp_key] = subset_by_quality(
-            df=df, name=exp_config['name'], color=exp_config['color']
-        )
+        data[exp_key] = subset_by_quality(df, exp_config)
 
     return data
 
@@ -195,7 +205,7 @@ def scale_variables_for_plot(
     scaled_plot_ranges = {}
     margin_ratio = 0.1
     for name, alias in zip(variable_names, variable_aliases):
-        bounds = variables_ranges[name]['bounds']
+        bounds = variables_ranges['base'][name]['bounds']
         scaled_bounds = [v/alias_scales[alias] for v in bounds]
         margin = (scaled_bounds[1] - scaled_bounds[0]) * margin_ratio
         scaled_plot_ranges[alias] = [

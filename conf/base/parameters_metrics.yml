@@ -42,12 +42,15 @@ experiments:
   exp_1:
     color: firebrick
     name: "Experiment 1"
+    scaler: base
     path: "data/07_model_output/env_proxy/irbs_increased_data.csv"
   exp_2:
     color: forestgreen
     name: "Experiment 2"
+    scaler: base
     path: "data/07_model_output/env_proxy/parego_increased_data.csv"
   exp_3:
     color: royalblue
     name: "Experiment 3"
+    scaler: wide_target
     path: "data/07_model_output/env_proxy/sao_increased_data.csv"

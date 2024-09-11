@@ -42,15 +42,15 @@ def prepare_simulator_inputs(
         samples_0_1 = sampler.random(n=num_samples)
         
         # Scale the samples to the specified bounds
-        l_bounds = [variables_ranges[feature]['bounds'][0] for feature in features]
-        u_bounds = [variables_ranges[feature]['bounds'][1] for feature in features]
+        l_bounds = [variables_ranges['base'][feature]['bounds'][0] for feature in features]
+        u_bounds = [variables_ranges['base'][feature]['bounds'][1] for feature in features]
         samples_real = qmc.scale(samples_0_1, l_bounds, u_bounds)
         
         df_real = pd.DataFrame(samples_real, columns=features)
         
         # Handle discretes values 
         for feature in features:
-            discrete_steps = variables_ranges[feature]['discete_steps']
+            discrete_steps = variables_ranges['base'][feature]['discete_steps']
             if discrete_steps:  # not 0
                 df_real[feature] = df_real[feature].apply(
                     lambda x: round(x/discrete_steps)*discrete_steps

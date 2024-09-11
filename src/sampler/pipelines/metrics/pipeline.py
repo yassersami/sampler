@@ -24,6 +24,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 features='params:features',
                 targets='params:targets',
                 treatment='treatment',
+                scalers='scalers',
             ),
             outputs='data',
             name='metrics_read_data',

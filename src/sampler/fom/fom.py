@@ -15,7 +15,8 @@ from .term_spatial import OutlierProximityTerm, SigmoidLocalDensityTerm
 class FOMTermAccessor:
     """
     This class enables accessing terms in FigureOfMerit.terms.term_name with
-    autocompletion and provides methods to access term classes.
+    autocompletion and supports dict-like iteration methods (items, values and
+    __iter__).
     """
 
     surrogate_gpr: SurrogateGPRTerm
