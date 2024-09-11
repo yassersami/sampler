@@ -1,6 +1,7 @@
 from typing import List, Dict, Tuple, Callable, Type, Union, Optional, ClassVar
 from abc import ABC, abstractmethod
 import warnings
+from tqdm import tqdm
 import numpy as np
 import pandas as pd
 
@@ -52,6 +53,17 @@ class MultiModalOptimizer(ABC):
         self.n_dim = n_dim
         self.bounds = [(0, 1)] * n_dim
         self.optimizer_config: Dict = {'dummy_param': None}  # minimizer parameters
+        self.pbar = None
+        self._eval_counter = None
+
+    @property
+    def total_evaluations(self) -> int:
+        if 'n' in self.optimizer_config and 'iters' in self.optimizer_config:
+            return self.optimizer_config['n'] * self.optimizer_config['iters']
+        elif 'population_size' in self.optimizer_config and 'generations' in self.optimizer_config:
+            return self.optimizer_config['population_size'] * self.optimizer_config['generations']
+        else:
+            raise ValueError(f"Unknown optimizer configuration: {self.optimizer_config}")
 
     def run_multimodal_optim(self, loss_func: Callable[[np.ndarray], float]) -> np.ndarray:
         """ Run Multi Modal Minimization"""
@@ -60,15 +72,23 @@ class MultiModalOptimizer(ABC):
             f"{self.__class__.__name__} -> {self.optimizer_config} - "
             "Searching for good candidates..."
         )
-
         # Update FOM used for minimization objective (loss)
         self.loss_func = loss_func
+
+        # Reset minimization evaluations counter
+        self._eval_counter = 0
 
         # Clean multimodal progress record
         self.selector.reset_records()
 
+        # Initialize progress bar
+        self.pbar = tqdm(total=self.total_evaluations, desc="Multimodal Optimization")
+
         # Run multi-objective optimization and return local minima
         X = self.minimize()
+
+        # Close progress bar
+        self.pbar.close()
 
         # Get loss objective values of detected minima during the optimization 
         loss_values = self.loss_func(X)
@@ -87,7 +107,11 @@ class MultiModalOptimizer(ABC):
         is due weird output behavior of sko.GA when func is a method.
         """
         x = np.array(args).reshape(1, -1)
-        return self.loss_func(x).item()
+        loss_value = self.loss_func(x).item()
+        self._eval_counter += 1
+        self.pbar.update(1)
+        # print(f"i: {self.counter:04}, x: {x[0]}, loss: {loss_value:.4f}")
+        return loss_value
 
     @abstractmethod
     def minimize(self) -> np.ndarray:

@@ -30,10 +30,10 @@ def aggregate_csv_files(directory_path: str) -> pd.DataFrame:
 
 
 def prepare_new_data(
-        df: pd.DataFrame,
-        treatment: DataTreatment,
-        features: List[str],
-        targets: List[str],
+    df: pd.DataFrame,
+    treatment: DataTreatment,
+    features: List[str],
+    targets: List[str],
 ) -> pd.DataFrame:
     """
     Prepare the new data by scaling it back to physical units and classifying the

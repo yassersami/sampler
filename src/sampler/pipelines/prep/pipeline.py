@@ -19,7 +19,11 @@ def create_pipeline(**kwargs) -> Pipeline:
                 interest_region="params:interest_region",
                 simulator_config='params:simulator_config',
             ),
-            outputs="treatment",
+            outputs=dict(
+                treatment="treatment",
+                scalers="scalers",
+                base_config="base_config",
+            ),
             name="prepare_treatment_node"
         ),
         node(

@@ -166,7 +166,7 @@ def scale_variables_for_plot(
     feature_aliases: List[str],
     target_aliases: List[str],
     alias_scales: Dict[str, float],
-    variables_ranges: Dict[str, Dict],
+    variables_ranges: Dict[str, Dict[str, Dict]],
     interest_region: Dict[str, Tuple[float, float]]
 ):
     """
@@ -261,7 +261,7 @@ def plot_metrics(
     # Detailed features versus targets plots
     feat_tar_plots_dict = {}
     feat_tar_plots_dict['X_y'] = gm.plot_feat_tar(data, feature_aliases, target_aliases, latex_mapper, plot_ranges, only_interest=False)
-    feat_tar_plots_dict['X_y_only_interest'] = gm.plot_feat_tar(data, feature_aliases, target_aliases, latex_mapper, plot_ranges, only_interest=True, title_extension='(only interest)')
+    feat_tar_plots_dict['X_y_only_interest'] = gm.plot_feat_tar(data, feature_aliases, target_aliases, latex_mapper, plot_ranges, only_interest=True)
     for i, exp_key in enumerate(data.keys()):
         feat_tar_plots_dict[f'X_y_exp{i+1}'] = gm.plot_feat_tar({exp_key: data[exp_key]}, feature_aliases, target_aliases, latex_mapper, plot_ranges, only_interest=False)
 

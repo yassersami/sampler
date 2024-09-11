@@ -336,10 +336,11 @@ def plot_feat_tar(
         labels = labels[::2] + [labels[-1]]
 
     fig.tight_layout()
+    title_extension = f' (only interest)' if title_extension else ''
     fig.legend(handles=handles,
                labels=labels,
                loc='upper center', ncol=len(labels),
-               title=f'Targets(Features) {title_extension}',
+               title='Targets(Features)' + title_extension,
                title_fontsize='large')
     fig.subplots_adjust(top=0.85)
     return fig

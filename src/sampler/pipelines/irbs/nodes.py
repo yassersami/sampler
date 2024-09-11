@@ -117,10 +117,8 @@ def irbs_sampling(
     should_continue = True
 
     # Initialize tqdm progress bar with estimated time remaining
-    progress_bar = (
-        tqdm(total=max_size, dynamic_ncols=True) if run_until_max_size else 
-        tqdm(total=n_interest_max, dynamic_ncols=True)
-    )
+    pbar_total = max_size if run_until_max_size else n_interest_max
+    progress_bar = tqdm(total=pbar_total, dynamic_ncols=True, desc="IRBS Sampling")
 
     while should_continue:
         print(f"\nRound {iteration:03} (start) " + "-"*62)
@@ -197,8 +195,9 @@ def irbs_sampling(
         )
 
         # Update progress bar
-        progress_bar.update(
-            n_new_inliers - max(0, n_inliers - max_size) if run_until_max_size else
+        pbar_progress = (
+            n_new_inliers  - max(0, n_inliers  - max_size) if run_until_max_size else
             n_new_interest - max(0, n_interest - n_interest_max)
         )
+        progress_bar.update(pbar_progress)
     progress_bar.close()
