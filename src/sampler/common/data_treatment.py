@@ -215,16 +215,21 @@ class DataTreatment:
         return data
 
 
-def initialize_dataset(data: pd.DataFrame, treatment: DataTreatment) -> pd.DataFrame:
+def initialize_dataset(data: pd.DataFrame, treatment: DataTreatment, additional_values: List[str]) -> pd.DataFrame:
     """
     The data here is already scaled (features and targets)
         1. Create results DataFrame, containing essential columns
         2. Classify initial samples by setting quality column
     """
-    # Add column 'quality' with 'interest' if row is inside the interest region
-    df_res = data[treatment.features + treatment.targets].copy(deep=True)
-    df_res = treatment.classify_quality_interest(df_res, data_is_scaled=True)
-    return df_res
+    # select only essential columns
+    data = data.reindex(
+        columns=treatment.features + treatment.targets + additional_values,
+        fill_value=np.nan
+    )
+
+    # Add 'quality' class column with 'interest' if row is inside the interest region
+    data = treatment.classify_quality_interest(data, data_is_scaled=True)
+    return data
 
 
 def append_hypercube_boundary_points(data, features, n_per_dim) -> pd.DataFrame:

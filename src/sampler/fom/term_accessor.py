@@ -44,6 +44,13 @@ class FOMTermAccessor:
         # Sort term names in topological order to enable consistent fitting in FOM class
         self.term_names = self.topological_sort(self.term_names)
 
+    def __getitem__(self, term_name: str) -> FOMTermInstance:
+        """ Enables dict-like access to terms using square bracket notation. """
+        if term_name not in self.term_names:
+            raise KeyError(f"Term '{term_name}' not found")
+
+        return getattr(self, term_name)
+
     def items(self) -> Iterator[Tuple[str, FOMTermInstance]]:
         """
         Returns an iterator of (term_name, term_instance) pairs.

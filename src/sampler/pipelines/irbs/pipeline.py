@@ -41,6 +41,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 data='treated_data',
                 treatment='treatment',
                 features='params:features',
+                additional_values='params:additional_values',
                 simulator='simulator',
                 boundary_outliers_n_per_dim='params:irbs_boundary_outliers_n_per_dim'
             ),

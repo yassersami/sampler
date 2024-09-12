@@ -263,16 +263,20 @@ FOMTermType = Type[FOMTermInstance]
 
 # Kernel of Gaussian Process model
 RANDOM_STATE = 42
-RBF_KERNEL = RBF(
-    length_scale=0.5,
-    length_scale_bounds=(1e-2, 1.0)
-)
-RQ_KERNEL = RationalQuadratic(
-    length_scale=0.5,
-    alpha=1.0, 
-    length_scale_bounds=(0.01, 2.0),  # (1e-5, 10)
-    alpha_bounds=(0.1, 10.0)
-)
+KERNELS = {
+    'RBF': RBF(
+        length_scale=0.5,
+        length_scale_bounds=(1e-2, 1.0)
+    ),
+    'RQ': RationalQuadratic(
+        length_scale=0.5,
+        alpha=1.0, 
+        length_scale_bounds=(0.01, 2.0),  # (1e-5, 10)
+        alpha_bounds=(0.1, 10.0)
+    )
+}
+
+
 """
 For the implementation of the Gaussian Process Regression model utilizing the
 RationalQuadratic kernel, parameter boundaries were carefully selected to align

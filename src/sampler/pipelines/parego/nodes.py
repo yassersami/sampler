@@ -54,7 +54,7 @@ def run_parego(
     )
     data = simulator.adapt_targets(data)
 
-    res = initialize_dataset(data=data, treatment=treatment)
+    res = initialize_dataset(data, treatment, additional_values)
     yield parse_results(res, current_history_size=0)
 
     # Set progress counting variables

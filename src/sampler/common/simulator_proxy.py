@@ -178,12 +178,19 @@ class FastSimulator:
         self.n_dim_y = len(targets)
         self.interest_region = np.array(list(interest_region.values()))
         self.outlier_radius = outlier_radius
-        self.X_interest = self.find_interest_sample()
         self.X_outliers = self.set_outlier_regions_centers(n_outlier_regions)
-        self.remove_close_outliers()
 
     def proxy_function(self, X: np.ndarray) -> np.ndarray:
         return proxy_function(X, self.interest_region)
+
+    def contains_interest_samples(self, df: pd.DataFrame) -> bool:
+        """ Check if the DataFrame contains any samples within the interest region. """
+        y_values = df[self.targets].values
+        lower_bounds, upper_bounds = self.interest_region.T
+        
+        interest_mask = np.all((y_values >= lower_bounds) & (y_values <= upper_bounds), axis=1)
+        
+        return np.any(interest_mask)
 
     def find_interest_sample(self) -> np.ndarray:
         """
@@ -232,14 +239,15 @@ class FastSimulator:
 
         return X_outliers
 
-    def remove_close_outliers(self) -> np.ndarray:
+    def remove_close_outliers(self, X: np.ndarray) -> np.ndarray:
         """
-        Remove outliers that are too close to the X_interest sample.
+        Remove outliers that are too in regions around X samples.
+        Note: Not used for now but could be used in the future.
         """
-        # Calculate vectors from X_interest to outliers
-        vectors_to_outliers = self.X_outliers - self.X_interest
+        # Calculate vectors from X to outliers
+        vectors_to_outliers = self.X_outliers - X
 
-        # Calculate distances from X_interest to outliers
+        # Calculate distances from X to outliers
         distances = np.linalg.norm(vectors_to_outliers, axis=1)
 
         # Create a mask for outliers that are too close
@@ -249,7 +257,7 @@ class FastSimulator:
         num_removed = np.sum(mask_too_close)
 
         if num_removed > 0:
-            warnings.warn(f"{num_removed} outlier(s) removed due to proximity to X_interest.")
+            warnings.warn(f"{num_removed} outlier(s) removed due to proximity to X.")
 
         # Return only the outliers that are not too close
         return self.X_outliers[~mask_too_close]
@@ -333,7 +341,7 @@ class FastSimulator:
         ])
         sim_time = np.array([[0], [0], [max_simu_time]])
 
-        # Use the first outlier region (at origin) for spicy data
+        # Add spicy outlier data at origin
         outlier_region = self.X_outliers[0]
         X_outliers = outlier_region + np.random.uniform(-self.outlier_radius, self.outlier_radius, size=(y_outliers.shape[0], self.n_dim_X))
         X_outliers = np.clip(X_outliers, 0, 1)
@@ -344,12 +352,12 @@ class FastSimulator:
             columns=self.features + self.targets + ['sim_time']
         )
 
-        # Add an interest sample
-        y_interest = self.proxy_function(self.X_interest)
-        df_interest = pd.DataFrame(
-            np.hstack([self.X_interest, y_interest]), 
-            columns=self.features + self.targets
-        )
+        df_interest = pd.DataFrame(columns=self.features + self.targets)
+        if not self.contains_interest_samples(data):
+            # If data does not contain any interest sample, add one 
+            X_interest = self.find_interest_sample()
+            y_interest = self.proxy_function(X_interest)
+            df_interest.loc[0] = np.hstack([X_interest, y_interest]).ravel()
 
         # Append new data to existing DataFrame
         return pd.concat([data, df_outliers, df_interest], ignore_index=True)

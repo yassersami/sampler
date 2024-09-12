@@ -11,7 +11,7 @@ from sklearn.exceptions import NotFittedError
 from scipy.linalg import solve
 from scipy.optimize import shgo
 
-from .term_base import ModelFOMTerm, RQ_KERNEL, RANDOM_STATE
+from .term_base import ModelFOMTerm, KERNELS, RANDOM_STATE
 
 
 class LatentGPC(GaussianProcessClassifier):
@@ -346,13 +346,17 @@ class InterestGPCTerm(BinaryLatentGPCTerm):
 
     def __init__(
         self,
+        # Config kwargs
         apply_proba: bool,
         apply_std: bool,
         apply_bstd: bool,
         apply_entropy: bool,
         shgo_n: int,
         shgo_iters: int,
+        kernel: str,
+        # kwargs required from FOM attributes 
         interest_region: Dict[str, Tuple[float, float]],
+        # GaussianProcessClassifier kwargs
         **gpc_kwargs
     ):
         super().__init__(
@@ -364,7 +368,8 @@ class InterestGPCTerm(BinaryLatentGPCTerm):
             negative_class='no_interest',
             shgo_n=shgo_n,
             shgo_iters=shgo_iters,
-            kernel=RQ_KERNEL,
+            # GaussianProcessClassifier kwargs
+            kernel=KERNELS[kernel],
             random_state=RANDOM_STATE,
             **gpc_kwargs
         )
@@ -395,12 +400,15 @@ class InlierGPCTerm(BinaryLatentGPCTerm):
 
     def __init__(
         self,
+        # Config kwargs
         apply_proba: bool,
         apply_std: bool,
         apply_bstd: bool,
         apply_entropy: bool,
         shgo_n: int,
         shgo_iters: int,
+        kernel: str,
+        # GaussianProcessClassifier kwargs
         **gpc_kwargs
     ):
         super().__init__(
@@ -412,7 +420,8 @@ class InlierGPCTerm(BinaryLatentGPCTerm):
             negative_class='outlier',
             shgo_n=shgo_n,
             shgo_iters=shgo_iters,
-            kernel=RQ_KERNEL,
+            # GaussianProcessClassifier kwargs
+            kernel=KERNELS[kernel],  
             random_state=RANDOM_STATE,
             **gpc_kwargs
         )

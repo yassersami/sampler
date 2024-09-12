@@ -33,10 +33,8 @@ class FigureOfMerit:
                     arg: getattr(self, arg) for arg in TermClass.required_args
                 })
 
-                try:
-                    term_instance = TermClass(**term_args)
-                except Exception as e:
-                    raise type(e)(f"Error instantiating term '{term_name}': {str(e)}") from e
+                # Instantiate term
+                term_instance = TermClass(**term_args)
 
                 # Validate term sign
                 term_instance._validate_score_signs()
@@ -110,7 +108,7 @@ class FigureOfMerit:
 
                 # Add term dependencies if necessary
                 if len(term.dependencies) > 0:
-                    fit_args.update({dep: getattr(self.terms, dep) for dep in term.dependencies})
+                    fit_args.update({dep: self.terms[dep] for dep in term.dependencies})
 
                 # Call the fit method with prepared arguments
                 term.fit(**fit_args)

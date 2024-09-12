@@ -74,6 +74,7 @@ def irbs_prepare_data(
     data: pd.DataFrame,
     treatment: DataTreatment,
     features: List[str],
+    additional_values: List[str],
     simulator: SimulationProcessor,
     boundary_outliers_n_per_dim: int
 ):
@@ -87,7 +88,7 @@ def irbs_prepare_data(
         )
 
     # Set dataset to be completed with adaptive sampling
-    data = initialize_dataset(data, treatment)
+    data = initialize_dataset(data, treatment, additional_values)
 
     return data
 

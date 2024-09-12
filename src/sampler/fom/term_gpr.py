@@ -8,23 +8,23 @@ from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.exceptions import NotFittedError
 from scipy.optimize import shgo
 
-from .term_base import ModelFOMTerm, RQ_KERNEL, RANDOM_STATE
+from .term_base import ModelFOMTerm, KERNELS, RANDOM_STATE
 
 
 class SurrogateGPR(GaussianProcessRegressor):
     def __init__(
-        self, 
-        interest_region: Dict[str, Tuple[float, float]],
+        self,
         shgo_n: int,
         shgo_iters: int,
-        **kwargs
+        interest_region: Dict[str, Tuple[float, float]],
+        **kwargs,
     ):
-        super().__init__(kernel=RQ_KERNEL, random_state=RANDOM_STATE, **kwargs)
+        super().__init__(**kwargs)
 
         self.is_trained = False
-        self.interest_region = interest_region
         self.shgo_n = shgo_n
         self.shgo_iters = shgo_iters
+        self.interest_region = interest_region
 
         self.lowers = [region[0] for region in interest_region.values()]
         self.uppers = [region[1] for region in interest_region.values()]
@@ -126,16 +126,25 @@ class SurrogateGPRTerm(ModelFOMTerm, SurrogateGPR):
     
     def __init__(
         self,
+        # Config kwargs
         apply_interest: bool,
         apply_std: bool,
-        interest_region: Dict[str, Tuple[float, float]],
         shgo_n: int,
         shgo_iters: int,
+        kernel: str,
+        # kwargs required from FOM attributes 
+        interest_region: Dict[str, Tuple[float, float]],
+        # GaussianProcessRegressor kwargs
         **gpr_kwargs
     ):
         SurrogateGPR.__init__(
-            self, interest_region=interest_region,
-            shgo_n=shgo_n, shgo_iters=shgo_iters,
+            self,
+            shgo_n=shgo_n,
+            shgo_iters=shgo_iters,
+            interest_region=interest_region,
+            # GaussianProcessRegressor kwargs
+            kernel=KERNELS[kernel],
+            random_state=RANDOM_STATE,
             **gpr_kwargs
         )
         self.apply_interest = apply_interest
