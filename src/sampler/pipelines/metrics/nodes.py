@@ -192,7 +192,7 @@ def scale_variables_for_plot(
         name: alias for name, alias in 
         zip(variable_names, variable_aliases)
     }
-    variable_scales = [alias_scales[alias] for alias in variable_aliases]  # Scale for each variable
+    variable_scales = [alias_scales[alias] for alias in variable_aliases]  # Scale of each variable
     for exp_dic in data.values():
         for df in exp_dic.values():
             if isinstance(df, pd.DataFrame):

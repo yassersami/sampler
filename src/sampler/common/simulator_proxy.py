@@ -296,9 +296,9 @@ class FastSimulator:
         n_samples = X_scaled.shape[0]
 
         # Compute y_scaled values and measure the elapsed time
-        start_time = time.time()
+        start_time = time.perf_counter()
         y_scaled = self.proxy_function_with_outliers(X_scaled)
-        elapsed_time = time.time() - start_time
+        elapsed_time = time.perf_counter() - start_time
 
         # Get targets in real space (not in scaled one)
         XY_real = scaler.inverse_transform(np.hstack([X_scaled, y_scaled]))

@@ -8,7 +8,7 @@ from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.exceptions import NotFittedError
 from scipy.optimize import shgo
 
-from .term_base import ModelFOMTerm, KERNEL, RANDOM_STATE
+from .term_base import ModelFOMTerm, RQ_KERNEL, RANDOM_STATE
 
 
 class SurrogateGPR(GaussianProcessRegressor):
@@ -19,7 +19,7 @@ class SurrogateGPR(GaussianProcessRegressor):
         shgo_iters: int,
         **kwargs
     ):
-        super().__init__(kernel=KERNEL, random_state=RANDOM_STATE, **kwargs)
+        super().__init__(kernel=RQ_KERNEL, random_state=RANDOM_STATE, **kwargs)
 
         self.is_trained = False
         self.interest_region = interest_region

@@ -3,94 +3,8 @@ import numpy as np
 import pandas as pd
 import json
 
-from .term_base import (
-    FittableFOMTerm, ModelFOMTerm,
-    FOMTermType, FOMTermInstance, FOMTermClasses
-)
-from .term_gpr import SurrogateGPRTerm
-from .term_gpc import InterestGPCTerm, InlierGPCTerm
-from .term_spatial import OutlierProximityTerm, SigmoidLocalDensityTerm
-
-
-class FOMTermAccessor:
-    """
-    This class enables accessing terms in FigureOfMerit.terms.term_name with
-    autocompletion and supports dict-like iteration methods (items, values and
-    __iter__).
-    """
-
-    surrogate_gpr: SurrogateGPRTerm
-    interest_gpc: InterestGPCTerm
-    sigmoid_density: SigmoidLocalDensityTerm
-    outlier_proximity: OutlierProximityTerm
-    inlier_gpc: InlierGPCTerm
-
-    def __init__(self, terms: Dict[str, FOMTermInstance]):
-        # Set terms as attributes
-        for term_name, term_instance in terms.items():
-            if term_name in self.__annotations__:
-                setattr(self, term_name, term_instance)
-            else:
-                raise AttributeError(f"Unknown term: {term_name}")
-    
-        self.term_names = list(terms.keys())
-
-    def items(self) -> Iterator[Tuple[str, FOMTermInstance]]:
-        """
-        Returns an iterator of (term_name, term_instance) pairs.
-        """
-        return ((term_name, getattr(self, term_name)) for term_name in self.term_names)
-
-    def values(self) -> Iterator[FOMTermInstance]:
-        """
-        Returns an iterator of all term instances.
-        """
-        return (getattr(self, term_name) for term_name in self.term_names)
-
-    def __iter__(self) -> Iterator[str]:
-        """
-        Returns an iterator of all term names.
-        """
-        return iter(self.term_names)
-
-    @classmethod
-    def is_valid_term_class(cls, TermClass: FOMTermType) -> bool:
-        """
-        Checks if a given input is a valid FOM term class.
-        """
-        return (
-            isinstance(TermClass, type) and
-            issubclass(TermClass, FOMTermClasses)
-        )
-
-    @classmethod
-    def is_valid_term_name(cls, term_name: str) -> bool:
-        """
-        Checks if a given term name is defined and is a valid FOM term class.
-        """
-        if term_name not in cls.__annotations__:
-            return False
-        TermClass = cls.__annotations__[term_name]
-        return cls.is_valid_term_class(TermClass)
-
-    @classmethod
-    def get_term_class(cls, term_name: str) -> FOMTermType:
-        """ Returns the class for a given term name. """
-        if not cls.is_valid_term_name(term_name):
-            raise ValueError(f"'{term_name}' is not a valid FOM term class.")
-        return cls.__annotations__[term_name]
-
-    @classmethod
-    def get_term_classes(cls) -> Dict[str, FOMTermType]:
-        """
-        Returns a dictionary of all possible term names and their corresponding
-        term classes.
-        """
-        return {
-            term_name: TermClass
-            for term_name, TermClass in cls.__annotations__.items()
-            if cls.is_valid_term_class(TermClass)
-        }
+from .term_base import FittableFOMTerm, ModelFOMTerm, FOMTermType
+from .term_accessor import FOMTermAccessor
 
 
 class FigureOfMerit:
@@ -103,10 +17,6 @@ class FigureOfMerit:
         self.interest_region = interest_region
         self.terms_config = terms_config.copy()
 
-        self.n_samples = None
-        self.n_features = None
-        self.n_targets = None
-        
         # Set terms
         terms_dict = {}
         for term_name, term_args in terms_config.items():
@@ -118,18 +28,20 @@ class FigureOfMerit:
                 # Set term name class attribute
                 TermClass._set_term_name(term_name)
 
-                # Add required args from self
+                # Add required args from FOM attributes
                 term_args.update({
                     arg: getattr(self, arg) for arg in TermClass.required_args
                 })
 
                 try:
-                    terms_dict[term_name] = TermClass(**term_args)
+                    term_instance = TermClass(**term_args)
                 except Exception as e:
                     raise type(e)(f"Error instantiating term '{term_name}': {str(e)}") from e
-                
+
                 # Validate term sign
-                terms_dict[term_name]._validate_score_signs()
+                term_instance._validate_score_signs()
+
+                terms_dict[term_name] = term_instance
 
         # Create the accessor
         self.terms = FOMTermAccessor(terms_dict)
@@ -174,16 +86,8 @@ class FigureOfMerit:
     def fit(self, X: np.ndarray, y: np.ndarray) -> None:
 
         # Check if y is 1D or 2D
-        if y.ndim == 1:
-            n_targets = 1
-        elif y.ndim == 2:
-            n_targets = y.shape[1]
-        else:
+        if y.ndim > 2:
             raise ValueError(f"Unexpected shape for y: {y.shape}")
-
-        self.n_samples = X.shape[0]
-        self.n_features = X.shape[1]
-        self.n_targets = n_targets
 
         for term in self.terms.values():
             # Reset term prediction profiling
@@ -191,15 +95,25 @@ class FigureOfMerit:
 
             if isinstance(term, FittableFOMTerm):
                 fit_config = term.fit_config
+                fit_args = {}
 
-                # Adapt input data for fittable term
+                # Prepare arguments based on fit_config
                 if fit_config['X_only']:
-                    term.fit(X)
+                    fit_args['X'] = X
                 elif fit_config['drop_nan']:
                     X_clean, y_clean = self._drop_target_nans(X, y)
-                    term.fit(X_clean, y_clean)
+                    fit_args['X'] = X_clean
+                    fit_args['y'] = y_clean
                 else:
-                    term.fit(X, y)
+                    fit_args['X'] = X
+                    fit_args['y'] = y
+
+                # Add term dependencies if necessary
+                if len(term.dependencies) > 0:
+                    fit_args.update({dep: getattr(self.terms, dep) for dep in term.dependencies})
+
+                # Call the fit method with prepared arguments
+                term.fit(**fit_args)
 
                 # Validate scoring process
                 dummy_X = X[:5]

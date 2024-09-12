@@ -9,7 +9,8 @@ from sklearn.model_selection import RandomizedSearchCV
 from sklearn.cluster import MeanShift
 from scipy.optimize import shgo
 
-from .term_base import FittableFOMTerm
+from .term_base import FittableFOMTerm, ModelFOMTerm
+from .term_gpr import SurrogateGPRTerm
 
 RANDOM_STATE = 42
 
@@ -150,10 +151,12 @@ class KDEModel:
     """
     def __init__(self, kernel='gaussian'):
         self.kernel = kernel
+        self.bandwidth = None
         self.kde = None
         self.data = None
+        self.is_trained = False
         self.modes = None
-        self.bandwidth = None
+        self.max_density = None
         self.min_density = None
 
     def search_bandwidth(
@@ -197,18 +200,16 @@ class KDEModel:
     
         return best_bandwidth
 
-    def fit(self, X: np.ndarray, bandwidth: Optional[float] = None, **kwargs):
-        # Store the training data
-        self.data = X
+    def fit(self, X: np.ndarray, bandwidth: float, **kwargs):
 
-        # Use the specified bandwidth or the best one found
-        if bandwidth is None:
-            bandwidth = self.search_bandwidth(X, **kwargs)
-        self.bandwidth = bandwidth
-        
         # Fit the KDE model
-        self.kde = KernelDensity(kernel=self.kernel, bandwidth=bandwidth)
+        self.kde = KernelDensity(kernel=self.kernel, bandwidth=bandwidth, **kwargs)
         self.kde.fit(X)
+
+        # Update attributes
+        self.data = X  # store training data
+        self.bandwidth = bandwidth
+        self.is_trained = True
 
     def update_modes(self):
         """
@@ -217,13 +218,24 @@ class KDEModel:
         """
         if self.kde is None:
             raise RuntimeError("Model must be fitted before searching for max density.")
-        
+
+        print(f"{self.__class__.__name__} -> Searching for modes...")
+
         mean_shift = MeanShift(bandwidth=self.bandwidth)
         mean_shift.fit(self.data)
-        
+
         # Get modes (highest density points)
         self.modes = mean_shift.cluster_centers_
-    
+
+    def update_max_density(self):
+        """
+        Update maximum density in [0, 1]^p space using KDE density at modes.
+        """
+        if self.modes is None:
+            raise RuntimeError("Modes must be updated before searching for max density.")
+
+        self.max_density = self.predict_proba(self.modes).max()
+
     def update_min_density(self, shgo_iters: int = 5, shgo_n: int = 1000):
         """
         Update minimum density in [0, 1]^p space using SHGO minimizer to search
@@ -232,18 +244,20 @@ class KDEModel:
         if self.kde is None:
             raise RuntimeError("Model must be fitted before searching for min density.")
 
-        print("KDEModel.update_min_density -> Searching for minimum density")
+        print(f"{self.__class__.__name__} -> Searching for maximum std...")
+
+        def scalar_predict_proba(X):
+            # SHGO minimizes the density
+            return self.predict_proba(X.reshape(1, -1))[0]
 
         result = shgo(
-            self.predict_proba,
+            scalar_predict_proba,
             bounds=[(0, 1)]*self.data.shape[1],
             n=shgo_n,
             iters=shgo_iters,
             sampling_method='simplicial'
         )
         self.min_density = result.fun
-
-        print(f"KDEModel.update_min_density -> Minimum density: {self.min_density}")
 
     def predict_proba(self, X):
         if self.kde is None:
@@ -263,3 +277,54 @@ class KDEModel:
             raise RuntimeError("min_density must be updated before predicting scores.")
         densities = self.predict_proba(X)
         return (1 - densities) / (1 - self.min_density)
+
+
+class OutlierKDETerm(ModelFOMTerm, KDEModel):
+
+    required_args = []
+    fit_config = {'X_only': False, 'drop_nan': False}
+    dependencies = ['surrogate_gpr']
+
+    @property
+    def score_signs(self) -> List[Literal[1, -1]]:
+        return [-1]
+
+    def fit(self, X: np.ndarray, y: np.ndarray, surrogate_gpr: SurrogateGPRTerm, **kwargs):
+
+        # Get lenght scale from fitted GPR
+        bandwidth = surrogate_gpr.kernel_.length_scale
+
+        # Drop samplesfrom X where y is NaN
+        X_outliers = X[np.isnan(y).any(axis=1)]
+
+        # Must provide bandwidth to fit KDE
+        KDEModel.fit(self, X_outliers, bandwidth, **kwargs)
+
+        # Update maximum and minimum densities
+        self.update_modes()
+        self.update_max_density()
+        self.update_min_density()
+
+    def _predict_score(self, X: np.ndarray) -> np.ndarray:
+        """
+        Score is -1 if sample is in high density outlier region that FOM should
+        avoid, else 0.
+        """
+        normalized_density = (self.predict_proba(X) - self.min_density) / (self.max_density - self.min_density)
+        return 0 - normalized_density
+
+    def get_model_params(self) -> Dict[str, float]:
+        if not self.is_trained:
+            return {}
+
+        return {
+            'bandwidth': self.bandwidth,
+            'max_density': self.max_density
+        }
+
+    def get_parameters(self) -> Dict[str, Any]:
+        return {
+            'kernel': self.kernel,
+            'bandwidth': self.bandwidth,
+            'max_density': self.max_density
+        }

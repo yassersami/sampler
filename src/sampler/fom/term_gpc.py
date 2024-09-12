@@ -11,7 +11,7 @@ from sklearn.exceptions import NotFittedError
 from scipy.linalg import solve
 from scipy.optimize import shgo
 
-from .term_base import ModelFOMTerm, KERNEL, RANDOM_STATE
+from .term_base import ModelFOMTerm, RQ_KERNEL, RANDOM_STATE
 
 
 class LatentGPC(GaussianProcessClassifier):
@@ -364,7 +364,7 @@ class InterestGPCTerm(BinaryLatentGPCTerm):
             negative_class='no_interest',
             shgo_n=shgo_n,
             shgo_iters=shgo_iters,
-            kernel=KERNEL,
+            kernel=RQ_KERNEL,
             random_state=RANDOM_STATE,
             **gpc_kwargs
         )
@@ -412,7 +412,7 @@ class InlierGPCTerm(BinaryLatentGPCTerm):
             negative_class='outlier',
             shgo_n=shgo_n,
             shgo_iters=shgo_iters,
-            kernel=KERNEL,
+            kernel=RQ_KERNEL,
             random_state=RANDOM_STATE,
             **gpc_kwargs
         )

@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 import time
 import pandas as pd
 import numpy as np
-from sklearn.gaussian_process.kernels import RationalQuadratic
+from sklearn.gaussian_process.kernels import RBF, RationalQuadratic
 
 
 class BaseFOMTerm(ABC):
@@ -184,11 +184,14 @@ class FittableFOMTerm(BaseFOMTerm):
         fitting configuration. Subclasses must override this with their specific
         configuration. Default values are set to None and will raise an error if
         not properly defined.
+        - dependencies other terms from which this term depends. Term is
+        retreiving specific attributes from these terms to fit.
 
     Attributes:
         Inherits all attributes from BaseFOMTerm.
     """
     fit_config: ClassVar[Dict[str, Optional[bool]]] = {'X_only': None, 'drop_nan': None}
+    dependencies: ClassVar[List[str]] = []
 
     @classmethod
     def _validate_fit_config(cls) -> None:
@@ -248,6 +251,7 @@ class NonFittableFOMTerm(BaseFOMTerm):
     predefined metrics that don't need to be trained on data.
     """
 
+
 # Create tuple of possible FOM term classes
 FOMTermClasses = (FittableFOMTerm, ModelFOMTerm, NonFittableFOMTerm)
 
@@ -259,7 +263,11 @@ FOMTermType = Type[FOMTermInstance]
 
 # Kernel of Gaussian Process model
 RANDOM_STATE = 42
-KERNEL = RationalQuadratic(
+RBF_KERNEL = RBF(
+    length_scale=0.5,
+    length_scale_bounds=(1e-2, 1.0)
+)
+RQ_KERNEL = RationalQuadratic(
     length_scale=0.5,
     alpha=1.0, 
     length_scale_bounds=(0.01, 2.0),  # (1e-5, 10)
@@ -297,4 +305,32 @@ small-scale variations in the data, while mitigating the risk of numerical
 instability that could arise from extreme values. The initial values for
 length_scale and alpha were set to 0.5 and 1.0 respectively, providing a neutral
 starting point for optimization within the defined bounds.
+
+
+Comparative Analysis: RBF vs. Rational Quadratic (RQ) Kernels
+
+1. Functional Form:
+   - RBF: k(x, x') = exp(-0.5 * r^2 / l^2), where r^2 = ||x - x'||^2
+   - RQ:  k(x, x') = (1 + r^2 / (2αl^2))^(-α), where α > 0 is the scale mixture parameter
+
+2. Theoretical Properties:
+   - RBF: Implies infinitely differentiable functions, characterized by a single length scale.
+   - RQ:  Equivalent to a scale mixture of RBF kernels with different length scales, 
+          allowing for multi-scale modeling.
+
+3. Spectral Density:
+   - RBF: S(s) ∝ exp(-2π^2 l^2 s^2), exhibiting rapid decay.
+   - RQ:  S(s) ∝ (1 + 2π^2 l^2 s^2 / α)^(-α - d/2), with heavier tails.
+
+4. Hyperparameter Space:
+   - RBF: Θ = {l}, one-dimensional optimization problem.
+   - RQ:  Θ = {l, α}, two-dimensional optimization, potentially more complex.
+
+5. Computational Complexity:
+   - Both have O(n^2) complexity for n data points, but RBF is generally more efficient 
+     due to simpler calculations.
+
+6. Model Capacity:
+   - RBF: Uniform smoothness across the input space.
+   - RQ:  Adaptive smoothness, capable of capturing both short and long-range variations.
 """
