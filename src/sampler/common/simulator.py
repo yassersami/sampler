@@ -1,3 +1,5 @@
+import sys
+import contextlib
 import os
 import warnings
 import multiprocessing
@@ -98,38 +100,58 @@ def read_input_folders(folders: List[str]) -> List[Dict[str, Union[float, str]]]
     return inputs_dics
 
 
-def run_simulation_process(inputs_dic: Dict, output_dir: int) -> Dict[str, float]:
+@contextlib.contextmanager
+def redirect_stdout_stderr(stdout_path, stderr_path):
+    """
+    A context manager to redirect stdout and stderr to separate files.
+    """
+    with open(stdout_path, 'w') as stdout_file, open(stderr_path, 'w') as stderr_file:
+        with contextlib.redirect_stdout(stdout_file), contextlib.redirect_stderr(stderr_file):
+            yield
+
+
+def run_simulation_process(inputs_dic: Dict, output_dir: str) -> Dict[str, float]:
+    # Create paths for the stdout and stderr files
+    stdout_path = os.path.join(output_dir, '..', 'stdout.log')
+    stderr_path = os.path.join(output_dir, '..', 'stderr.log')
 
     # Start chronometer
     start_time = time.time()
 
-    try:
-        # Run simulation, store outputs in output_dir and get them in dict
-        db_simulation = simulator_0d.main(inputs_dic)
-        results = SimPostProc(**db_simulation.__dict__)
-        res_dic = results.manage(output_dir=output_dir)
+    with redirect_stdout_stderr(stdout_path, stderr_path):
+        try:
+            print(f"Starting simulation for {inputs_dic['workdir']}")
+            
+            # Run simulation, store outputs in output_dir and get them in dict
+            db_simulation = simulator_0d.main(inputs_dic)
+            results = SimPostProc(**db_simulation.__dict__)
+            res_dic = results.manage(output_dir=output_dir)
 
-        # If succesfull simulation return results
-        return res_dic
+            print(f"Simulation completed successfully for {inputs_dic['workdir']}")
+            return res_dic
 
-    except Exception as e:
-        # Handle failed simulations
-        elapsed_time = time.time() - start_time
-        warnings.warn(
-            f"Simulation error after {elapsed_time/60:.1f} min "
-            f"for label '{inputs_dic['workdir']}': \n"
-            f"{e.__class__.__name__}: {str(e)}\n"
-            f"Returning NaN values."
-        )
-        return {
-            'error': f"{e.__class__.__name__}: {str(e)}",
-            'sim_time': elapsed_time,
-            'timed_out': elapsed_time >= inputs_dic['max_simu_time'],
-            'Tg_Tmax': np.NaN,
-            'Pg_f': np.NaN,
-            'Pg_rate': np.NaN,
-            'Y_O2_f': np.NaN,
-        }
+        except Exception as e:
+            # Handle failed simulations
+            elapsed_time = time.time() - start_time
+            error_message = (
+                f"Simulation error after {elapsed_time/60:.1f} min "
+                f"for label '{inputs_dic['workdir']}': \n"
+                f"{e.__class__.__name__}: {str(e)}\n"
+                f"Returning NaN values."
+            )
+            print(error_message, file=sys.stderr)
+            warnings.warn(error_message)
+            return {
+                'error': f"{e.__class__.__name__}: {str(e)}",
+                'sim_time': elapsed_time,
+                'timed_out': elapsed_time >= inputs_dic['max_simu_time'],
+                'Tg_Tmax': np.NaN,
+                'Pg_f': np.NaN,
+                'Pg_rate': np.NaN,
+                'Y_O2_f': np.NaN
+            }
+
+    return res_dic
 
 
 def run_simulation(
@@ -235,6 +257,8 @@ class SimulationProcessor:
         Returns:
             pd.DataFrame: Processed data either real or treated.
         """
+        print(f"{self.__class__.__name__} -> [index: {index}] Running {self.n_proc} simulations...")
+
         X_real = self._prepare_real_input(X, is_real_X)
         df_X_real = pd.DataFrame(X_real, columns=self.features)
 

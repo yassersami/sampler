@@ -70,10 +70,13 @@ for i in range (len(gas_ct.species())):
 
 el_sorted_arg_species = np.zeros(element_species_array.shape)
 bool_el_ratio_sup1 = np.full(element_species_array.shape, False)
-for i,element in enumerate(list_of_element):
-    var = np.delete(element_species_array, i, axis = 0)
-    el_sorted_arg_species[i] = np.argsort(element_species_array[i] / np.sum(var, axis = 0))[::-1]
-    bool_el_ratio_sup1[i] = (element_species_array[i] / np.sum(var, axis = 0))>1
+for i, element in enumerate(list_of_element):
+    var = np.delete(element_species_array, i, axis=0)
+    sum_var = np.sum(var, axis=0)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        ratio = element_species_array[i] / sum_var
+    el_sorted_arg_species[i] = np.argsort(ratio)[::-1]
+    bool_el_ratio_sup1[i] = ratio > 1
 
 idx_where_el_ratio_sup1 = np.argwhere(bool_el_ratio_sup1)
 el_ratio_sup1_list = []
