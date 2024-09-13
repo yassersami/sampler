@@ -8,7 +8,7 @@ from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.exceptions import NotFittedError
 from scipy.optimize import shgo
 
-from .term_base import ModelFOMTerm, KERNELS, RANDOM_STATE
+from .term_base import ModelFOMTerm, MultiScoreMixin, KERNELS, RANDOM_STATE
 
 
 class SurrogateGPR(GaussianProcessRegressor):
@@ -17,9 +17,9 @@ class SurrogateGPR(GaussianProcessRegressor):
         shgo_n: int,
         shgo_iters: int,
         interest_region: Dict[str, Tuple[float, float]],
-        **kwargs,
+        kernel: str,
     ):
-        super().__init__(**kwargs)
+        super().__init__(kernel=KERNELS[kernel], random_state=RANDOM_STATE)
 
         self.is_trained = False
         self.shgo_n = shgo_n
@@ -119,49 +119,40 @@ class SurrogateGPR(GaussianProcessRegressor):
         return self.get_std(X) / self.max_std
 
 
-class SurrogateGPRTerm(ModelFOMTerm, SurrogateGPR):
+class SurrogateGPRTerm(MultiScoreMixin, ModelFOMTerm, SurrogateGPR):
     
     required_args = ['interest_region']
     fit_config = {'X_only': False, 'drop_nan': True}
+    all_scores= ['interest', 'std']
     
     def __init__(
         self,
         # Config kwargs
-        apply_interest: bool,
-        apply_std: bool,
+        score_config: Dict[str, bool],
+        score_weights: Dict[str, float],
         shgo_n: int,
         shgo_iters: int,
         kernel: str,
         # kwargs required from FOM attributes 
         interest_region: Dict[str, Tuple[float, float]],
-        # GaussianProcessRegressor kwargs
-        **gpr_kwargs
     ):
-        SurrogateGPR.__init__(
-            self,
+        # Set score names
+        MultiScoreMixin.__init__(self, score_config)
+        score_names = MultiScoreMixin.get_active_scores(self)
+
+        ModelFOMTerm.__init__(self, score_weights, score_names)
+
+        SurrogateGPR.__init__(self,
             shgo_n=shgo_n,
             shgo_iters=shgo_iters,
             interest_region=interest_region,
             # GaussianProcessRegressor kwargs
-            kernel=KERNELS[kernel],
-            random_state=RANDOM_STATE,
-            **gpr_kwargs
+            kernel=kernel,
         )
-        self.apply_interest = apply_interest
-        self.apply_std = apply_std
-    
-    @property
-    def score_names(self) -> List[str]:
-        score_names = []
-        if self.apply_interest:
-            score_names.append('gpr_interest')
-        if self.apply_std:
-            score_names.append('gpr_std')
-        return score_names
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> None:
         SurrogateGPR.fit(self, X, y)
-        if self.apply_std:
+        if self.score_config['std']:
             # Update max_std of current surrogate GP
             self.update_max_std()
 
@@ -169,16 +160,13 @@ class SurrogateGPRTerm(ModelFOMTerm, SurrogateGPR):
         X = np.atleast_2d(X)
 
         scores = []
-        
-        if self.apply_interest:
+
+        if self.score_config['interest']:
             scores.append(self.predict_interest_score(X))
-        
-        if self.apply_std:
+
+        if self.score_config['std']:
             scores.append(self.predict_std_score(X))
-        
-        if not scores:
-            raise AttributeError("At least one of apply_interest or apply_std must be True")
-        
+
         return tuple(scores) if len(scores) > 1 else scores[0]
 
     def get_model_params(self) -> Dict[str, float]:
@@ -196,8 +184,8 @@ class SurrogateGPRTerm(ModelFOMTerm, SurrogateGPR):
 
     def get_parameters(self) -> Dict:
         params = {
-            'apply_interest': self.apply_interest,
-            'apply_std': self.apply_std,
+            'score_names': self.score_names,
+            'weights': self.score_weights,
             'kernel_str': str(self.kernel_),
             'is_trained': self.is_trained,
         }

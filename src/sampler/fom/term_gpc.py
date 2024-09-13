@@ -5,19 +5,18 @@ import pandas as pd
 from scipy.stats import norm
 
 from sklearn.gaussian_process import GaussianProcessClassifier
-from sklearn.gaussian_process.kernels import RationalQuadratic
 from sklearn.utils.validation import check_is_fitted
 from sklearn.exceptions import NotFittedError
 from scipy.linalg import solve
 from scipy.optimize import shgo
 
-from .term_base import ModelFOMTerm, KERNELS, RANDOM_STATE
+from .term_base import ModelFOMTerm, MultiScoreMixin, KERNELS, RANDOM_STATE
 
 
 class LatentGPC(GaussianProcessClassifier):
-    
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+
+    def __init__(self, kernel: str):
+        super().__init__(kernel=KERNELS[kernel], random_state=RANDOM_STATE)
 
     def predict_a(
         self, X: np.ndarray, return_std: bool = False
@@ -81,9 +80,9 @@ class BinaryLatentGPC(LatentGPC):
         negative_class: int,
         shgo_n: int,
         shgo_iters: int,
-        **gpc_kwargs
+        kernel: str,
     ):
-        super().__init__(**gpc_kwargs)
+        super().__init__(kernel=kernel)
         self.is_trained = False
         self.max_std = None
         self.positive_class = positive_class
@@ -222,52 +221,40 @@ class BinaryLatentGPC(LatentGPC):
         return score
 
 
-class BinaryLatentGPCTerm(ModelFOMTerm, BinaryLatentGPC):
+class BinaryLatentGPCTerm(MultiScoreMixin, ModelFOMTerm, BinaryLatentGPC):
     
     required_args = []
     fit_config = {'X_only': False, 'drop_nan': False}
-    
+    all_scores= ['proba', 'std', 'bstd', 'entropy']
+
     def __init__(
         self,
-        apply_proba: bool,
-        apply_std: bool,
-        apply_bstd: bool,
-        apply_entropy: bool,
+        score_config: Dict[str, bool],
+        score_weights: Dict[str, float],
         positive_class: str,
         negative_class: str,
         shgo_n: int,
         shgo_iters: int,
-        **gpc_kwargs
+        kernel: str,
     ):
+        # Set score names
+        MultiScoreMixin.__init__(self, score_config)
+        score_names = MultiScoreMixin.get_active_scores(self)
+
+        ModelFOMTerm.__init__(self, score_weights, score_names)
+
         BinaryLatentGPC.__init__(
             self,
             positive_class=positive_class,
             negative_class=negative_class,
             shgo_n=shgo_n,
             shgo_iters=shgo_iters,
-            **gpc_kwargs
+            kernel=kernel,
         )
-        self.apply_proba = apply_proba
-        self.apply_std = apply_std
-        self.apply_bstd = apply_bstd
-        self.apply_entropy = apply_entropy
-        
-    @property
-    def score_names(self) -> List[str]:
-        score_names = []
-        if self.apply_proba:
-            score_names.append(f'{self._term_name}_{self.positive_class}_proba')
-        if self.apply_std:
-            score_names.append(f'{self._term_name}_std')
-        if self.apply_bstd:
-            score_names.append(f'{self._term_name}_{self.positive_class}_bstd')
-        if self.apply_entropy:
-            score_names.append(f'{self._term_name}_{self.positive_class}_entropy')
-        return score_names
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> None:
         BinaryLatentGPC.fit(self, X, y)
-        if self.apply_std and self.is_trained:
+        if self.score_config['std'] and self.is_trained:
             # Update max_std of current GPC
             self.update_max_std()
 
@@ -277,30 +264,24 @@ class BinaryLatentGPCTerm(ModelFOMTerm, BinaryLatentGPC):
         # Return ones (best value) if the model is not trained,
         # as no negative class samples are encountered yet
         if not self.is_trained:
-            count_active_scores = sum([self.apply_proba, self.apply_std, self.apply_bstd, self.apply_entropy])
+            count_active_scores = len(self.score_names)
             scores = tuple([np.ones(X.shape[0])]*count_active_scores)
             return scores if len(scores) > 1 else scores[0]
 
         scores = []
 
-        if self.apply_proba:
+        if self.score_config['proba']:
             proba = self.predict_proba(X)[:, self.class_to_index[self.positive_class]]  # 1
             scores.append(proba)
 
-        if self.apply_std:
+        if self.score_config['std']:
             scores.append(self.get_std_score(X))
 
-        if self.apply_bstd:
+        if self.score_config['bstd']:
             scores.append(self.get_positive_bstd(X))
 
-        if self.apply_entropy:
+        if self.score_config['entropy']:
             scores.append(self.predict_positive_entropy(X))
-
-        if not scores:
-            raise AttributeError(
-                "At least one of apply_bstd, apply_entropy, apply_proba, "
-                "or apply_std must be True"
-            )
 
         return tuple(scores) if len(scores) > 1 else scores[0]
 
@@ -319,10 +300,8 @@ class BinaryLatentGPCTerm(ModelFOMTerm, BinaryLatentGPC):
 
     def get_parameters(self) -> Dict:
         params = {
-            'apply_proba': self.apply_proba,
-            'apply_std': self.apply_std,
-            'apply_bstd': self.apply_bstd,
-            'apply_entropy': self.apply_entropy,
+            'score_names': self.score_names,
+            'weights': self.score_weights,
             'kernel_str': str(self.kernel_),
             'is_trained': self.is_trained,
         }
@@ -347,31 +326,22 @@ class InterestGPCTerm(BinaryLatentGPCTerm):
     def __init__(
         self,
         # Config kwargs
-        apply_proba: bool,
-        apply_std: bool,
-        apply_bstd: bool,
-        apply_entropy: bool,
+        score_config: Dict[str, bool],
+        score_weights: Dict[str, float],
         shgo_n: int,
         shgo_iters: int,
         kernel: str,
         # kwargs required from FOM attributes 
         interest_region: Dict[str, Tuple[float, float]],
-        # GaussianProcessClassifier kwargs
-        **gpc_kwargs
     ):
         super().__init__(
-            apply_proba = apply_proba,
-            apply_std = apply_std,
-            apply_bstd = apply_bstd,
-            apply_entropy = apply_entropy,
+            score_config=score_config,
+            score_weights=score_weights,
             positive_class='interest',
             negative_class='no_interest',
             shgo_n=shgo_n,
             shgo_iters=shgo_iters,
-            # GaussianProcessClassifier kwargs
-            kernel=KERNELS[kernel],
-            random_state=RANDOM_STATE,
-            **gpc_kwargs
+            kernel=kernel,
         )
         self.interest_region = interest_region
 
@@ -401,29 +371,20 @@ class InlierGPCTerm(BinaryLatentGPCTerm):
     def __init__(
         self,
         # Config kwargs
-        apply_proba: bool,
-        apply_std: bool,
-        apply_bstd: bool,
-        apply_entropy: bool,
+        score_config: Dict[str, bool],
+        score_weights: Dict[str, float],
         shgo_n: int,
         shgo_iters: int,
         kernel: str,
-        # GaussianProcessClassifier kwargs
-        **gpc_kwargs
     ):
         super().__init__(
-            apply_proba = apply_proba,
-            apply_std = apply_std,
-            apply_bstd = apply_bstd,
-            apply_entropy = apply_entropy,
+            score_config=score_config,
+            score_weights=score_weights,
             positive_class='inlier',
             negative_class='outlier',
             shgo_n=shgo_n,
             shgo_iters=shgo_iters,
-            # GaussianProcessClassifier kwargs
-            kernel=KERNELS[kernel],  
-            random_state=RANDOM_STATE,
-            **gpc_kwargs
+            kernel=kernel,
         )
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> None:

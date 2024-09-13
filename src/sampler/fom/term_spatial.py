@@ -19,9 +19,10 @@ class SigmoidLocalDensityTerm(FittableFOMTerm):
     """
     A fittable FOM term that computes the sigmoid local density.
     """
-    fit_config: ClassVar[Dict[str, bool]] = {'X_only': True, 'drop_nan': False}
+    fit_config = {'X_only': True, 'drop_nan': False}
 
-    def __init__(self, decay_dist: float = 0.04):
+    def __init__(self, score_weights: float, decay_dist: float = 0.04):
+        super().__init__(score_weights)
         self.decay_dist = decay_dist
         self.dataset_points = None
     
@@ -94,15 +95,16 @@ class SigmoidLocalDensityTerm(FittableFOMTerm):
 
 class OutlierProximityTerm(FittableFOMTerm):
     
-    fit_config: ClassVar[Dict[str, bool]] = {'X_only': False, 'drop_nan': False}
+    fit_config = {'X_only': False, 'drop_nan': False}
 
-    def __init__(self, exclusion_radius: float = 1e-5):
+    def __init__(self, score_weights: float, exclusion_radius: float = 1e-5):
+        super().__init__(score_weights)
         self.exclusion_radius = exclusion_radius
         self.outlier_points = None
 
     @property
-    def score_signs(self) -> List[Literal[1, -1]]:
-        return [-1]
+    def score_signs(self) -> Dict[str, Literal[1, -1]]:
+        return {score_name: -1 for score_name in self.score_names}
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> None:
         """ Detect outliers to avoid (in feature space). """
@@ -149,8 +151,8 @@ class KDEModel:
     A cool website to visualize KDE.
     https://mathisonian.github.io/kde/
     """
-    def __init__(self, kernel='gaussian'):
-        self.kernel = kernel
+    def __init__(self):
+        self.kernel = 'gaussian'
         self.bandwidth = None
         self.kde = None
         self.data = None
@@ -285,9 +287,13 @@ class OutlierKDETerm(ModelFOMTerm, KDEModel):
     fit_config = {'X_only': False, 'drop_nan': False}
     dependencies = ['surrogate_gpr']
 
+    def __init__(self, score_weights: float):
+        ModelFOMTerm.__init__(self, score_weights)
+        KDEModel.__init__(self)
+
     @property
-    def score_signs(self) -> List[Literal[1, -1]]:
-        return [-1]
+    def score_signs(self) -> Dict[str, Literal[1, -1]]:
+        return {score_name: -1 for score_name in self.score_names}
 
     def fit(self, X: np.ndarray, y: np.ndarray, surrogate_gpr: SurrogateGPRTerm, **kwargs):
 

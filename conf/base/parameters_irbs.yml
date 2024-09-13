@@ -17,35 +17,41 @@ irbs_optimizer_config:
     mutation_probability: 0.2
 
 irbs_fom_terms_config:
+
   surrogate_gpr:
     apply: true
-    apply_interest: true
-    apply_std: true
+    score_config:  {interest: true, std: true}
+    score_weights: {interest: 1   , std: 1   }
     shgo_n: 1000
     shgo_iters: 5
+    kernel: RQ
 
   interest_gpc:
     apply: false
-    apply_proba: false
-    apply_std: false
-    apply_bstd: false
-    apply_entropy: false
+    score_config:  {proba: false, std: false, bstd: false, entropy: false}
+    score_weights: {proba: 1    , std: 1    , bstd: 1    , entropy: 1    }
     shgo_n: 1000
     shgo_iters: 5
+    kernel: RQ
+
+  inlier_gpc:
+    apply: false
+    score_config:  {proba: false, std: false, bstd: false, entropy: false}
+    score_weights: {proba: 1    , std: 1    , bstd: 1    , entropy: 1    }
+    shgo_n: 1000
+    shgo_iters: 5
+    kernel: RQ
 
   sigmoid_density:
     apply: false
+    score_weights: 1
     decay_dist: 0.04
 
   outlier_proximity:
     apply: true
+    score_weights: 1
     exclusion_radius: 1.0e-5
 
-  inlier_gpc:
+  outlier_kde:
     apply: false
-    apply_proba: false
-    apply_std: false
-    apply_bstd: false
-    apply_entropy: false
-    shgo_n: 1000
-    shgo_iters: 5
+    score_weights: 1
