@@ -58,9 +58,9 @@ def run_parego(
     yield parse_results(res, current_history_size=0)
 
     # Set progress counting variables
-    max_size = stop_condition['max_size']
-    n_interest_max = stop_condition['n_interest_max']
-    run_until_max_size = stop_condition['run_until_max_size']
+    max_inliers = stop_condition['max_inliers']
+    max_interest = stop_condition['max_interest']
+    stop_on_max_inliers = stop_condition['stop_on_max_inliers']
     
     n_total = 0  # counting all simulations
     n_inliers = 0  # counting only inliers
@@ -70,8 +70,8 @@ def run_parego(
     
     # Initialize tqdm progress bar with estimated time remaining
     progress_bar = (
-        tqdm(total=max_size, dynamic_ncols=True) if run_until_max_size else 
-        tqdm(total=n_interest_max, dynamic_ncols=True)
+        tqdm(total=max_inliers, dynamic_ncols=True) if stop_on_max_inliers else 
+        tqdm(total=max_interest, dynamic_ncols=True)
     )
     
     while should_continue:
@@ -134,14 +134,14 @@ def run_parego(
 
         # Determine the end condition
         should_continue = (
-            (n_inliers < max_size) if run_until_max_size else
-            (n_interest < n_interest_max)
+            (n_inliers < max_inliers) if stop_on_max_inliers else
+            (n_interest < max_interest)
         )
 
         # Update progress bar based on the condition
         progress_bar.update(
-            n_new_inliers - max(0, n_inliers - max_size) if run_until_max_size else
-            n_new_interest - max(0, n_interest - n_interest_max)
+            n_new_inliers - max(0, n_inliers - max_inliers) if stop_on_max_inliers else
+            n_new_interest - max(0, n_interest - max_interest)
         )
     progress_bar.close()
 

@@ -64,7 +64,7 @@ def sao_optim_from_simulator(
 
     # Run optimization
     X_1D, y_obj, optiminfo_dic = run_optimization_optuna(
-        objective, stop_condition['max_size'], batch_size
+        objective, stop_condition['max_inliers'], batch_size
     )
     warnings.warn(f"All optimization history was stored in: \n{sao_history_path}\n")
 
@@ -196,7 +196,7 @@ def set_objective_optuna(
 
 
 # https://optuna.readthedocs.io/en/stable/reference/logging.html
-def run_optimization_optuna(objective, max_size, batch_size):
+def run_optimization_optuna(objective, max_inliers, batch_size):
     """
     Argmax of figure of merit (fom)
 
@@ -213,10 +213,10 @@ def run_optimization_optuna(objective, max_size, batch_size):
         sampler=optuna.samplers.TPESampler(seed=RANDOM_STATE),
         direction='minimize',
     )
-    print(f'Optimizing using optuna with max_size: {max_size}, batch_size: {batch_size}')
+    print(f'Optimizing using optuna with max_inliers: {max_inliers}, batch_size: {batch_size}')
     print(f'Optuna study.optimize start time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
 
-    study.optimize(func=objective, n_trials=max_size, timeout=None, n_jobs=batch_size)
+    study.optimize(func=objective, n_trials=max_inliers, timeout=None, n_jobs=batch_size)
 
     print(f'Optuna study.optimize end time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
     X = np.array([*study.best_params.values()])

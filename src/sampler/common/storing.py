@@ -2,6 +2,8 @@ from typing import Dict, List
 import os
 import pandas as pd
 
+from .sampling_tracker import get_max_interest_index
+
 
 def parse_results(df: pd.DataFrame, current_history_size: int) -> Dict[str, pd.DataFrame]:
     """ Create an Incremental DataSet named according to the index range. """
@@ -18,36 +20,18 @@ def join_history(
     history: Dict[str, pd.DataFrame], stop_condition: Dict
 ) -> pd.DataFrame:
     """ Joins all checkpoints of a run into a single file """
+    # Concatenate all batch checkpoints
     df_history = pd.DataFrame()
     for df_batch in history.values():
         df_history = pd.concat([df_history, df_batch], ignore_index=True)
 
-    if stop_condition['run_until_max_size']:
+    if stop_condition['stop_on_max_inliers']:
         return df_history
-
-    # Find the index of the first row where 'iteration' is not empty
-    index = df_history['iteration'].first_valid_index()
-
-    # If all values in 'iteration' are empty, set index to 0
-    if index is None:
-        index = 0
-
-    # Count index where number of interest point matches n_interest_max
-    interest_count = 0
-    while (
-        interest_count < stop_condition['n_interest_max'] and 
-        index < len(df_history)
-    ):
-        if df_history.iloc[index]['quality']=='interest':
-            interest_count += 1
-        index+=1
-
-    # truncate increased_data to respect stop_condition
-    df_history = df_history.iloc[:index]
-    assert interest_count==stop_condition['n_interest_max'], (
-        "Not enough 'interest' rows in the dataset."
-    )
-    return df_history
+    else:
+        # Truncate increased_data to respect stop_condition
+        max_interest_index = get_max_interest_index(df_history)
+        df_history = df_history.iloc[:max_interest_index]
+        return df_history
 
 
 def create_history_folder(history_path: str, should_rename: bool = True):

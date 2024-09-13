@@ -9,7 +9,7 @@ from matplotlib import pyplot as plt
 from matplotlib.patches import Rectangle
 import matplotlib.lines as mlines
 
-from .postprocessing_functions import get_first_iteration_index
+from sampler.common.sampling_tracker import get_first_iteration_index
 
 
 def plot_initial_data(
@@ -457,7 +457,7 @@ def dist_volume_voronoi(data, volume_voronoi):
     x_ratio_zoom = 0.75 if is_same_size_interest else 1.
 
     warnings.warn(
-        "Voronoi Volume is interpretable only if run_until_max_size==False "
+        "Voronoi Volume is interpretable only if stop_on_max_inliers==False "
         "(same number of interest points)"
     )
 

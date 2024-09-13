@@ -45,7 +45,7 @@ irbs_fom_terms_config:
   sigmoid_density:
     apply: false
     score_weights: 1
-    decay_dist: 0.04
+    bandwidth: 0.04
 
   outlier_proximity:
     apply: true

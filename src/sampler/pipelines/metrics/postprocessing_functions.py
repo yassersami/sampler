@@ -107,31 +107,3 @@ def subset_by_quality(
         'outliers': df[(df.quality != 'interest') & (df.quality != 'no_interest')],
         'df': df
     }
-
-
-def get_first_iteration_index(df: pd.DataFrame) -> int:
-    """
-    Get index of first sample that was generated through adaptive sampling
-    pipeline using either 'iteration' or 'datetime' column.
-    """
-    # Check if df is empty
-    if df.empty:
-        return 0
-
-    # Check if 'iteration' or 'datetime' column exists
-    if 'iteration' in df.columns:
-        column = 'iteration'
-    elif 'datetime' in df.columns:
-        column = 'datetime'
-    else:
-        raise ValueError("DataFrame does not contain 'iteration' or 'datetime' column.")
-
-    # Find the index of the first non-empty cell in the chosen column
-    first_non_empty_index = df[column].first_valid_index()
-
-    # If all cells are empty, return last index
-    if first_non_empty_index is None:
-        return df.index[-1]
-
-    # Return the first non-empty index
-    return first_non_empty_index

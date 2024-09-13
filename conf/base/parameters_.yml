@@ -9,7 +9,6 @@ targets:
 
 additional_values:
   - sim_time
-  - timed_out
   - error
 
 variables_ranges:
@@ -35,6 +34,6 @@ simulator_config:
 batch_size: 8
 
 stop_condition:
-  run_until_max_size: true
-  max_size: 200
-  n_interest_max: 50
+  max_inliers: 200
+  max_interest: 50
+  stop_on_max_inliers: true

@@ -13,6 +13,7 @@ from sampler.common.data_treatment import (
     DataTreatment, initialize_dataset, append_hypercube_boundary_points
 )
 from sampler.common.storing import parse_results
+from sampler.common.sampling_tracker import SamplingProgressTracker
 from sampler.common.simulator import SimulationProcessor
 from sampler.fom.fom import FigureOfMerit
 from sampler.optimizer.selector import SelectorFactory
@@ -107,22 +108,13 @@ def irbs_sampling(
     yield parse_results(data, current_history_size=0)
     
     # Set progress counting variables
-    max_size = stop_condition['max_size']
-    n_interest_max = stop_condition['n_interest_max']
-    run_until_max_size = stop_condition['run_until_max_size']
-
-    n_total = 0  # counting all simulations
-    n_inliers = 0  # counting only inliers
-    n_interest = 0  # counting only interesting inliers
-    iteration = 1
-    should_continue = True
+    sampling_tracker = SamplingProgressTracker(**stop_condition, targets=targets)
 
     # Initialize tqdm progress bar with estimated time remaining
-    pbar_total = max_size if run_until_max_size else n_interest_max
-    progress_bar = tqdm(total=pbar_total, dynamic_ncols=True, desc="IRBS Sampling")
+    progress_bar = tqdm(total=sampling_tracker.pbar_total, dynamic_ncols=True, desc="IRBS Sampling")
 
-    while should_continue:
-        print(f"\nRound {iteration:03} (start) " + "-"*62)
+    while sampling_tracker.should_continue():
+        print(f"\nRound {sampling_tracker.iteration:03} (start) " + "-"*62)
         start_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         # Set the new FOM that will be used in next iteration
@@ -150,59 +142,33 @@ def irbs_sampling(
         print(f"FOM terms prediction profiling: \n{fom_model.serialize_dict(iteration_profile)}")
 
         # Launch time expensive simulations
-        new_df = simulator.process_data(X_batch, is_real_X=False, index=n_total, treat_output=True)
+        new_df = simulator.process_data(X_batch, is_real_X=False, index=sampling_tracker.n_total, treat_output=True)
 
         # Add quality column with 'is_interest' value for samples in the interest region
         new_df = treatment.classify_quality_interest(new_df, data_is_scaled=True)
 
-        print(f"Round {iteration:03} (continued) - simulation results " + "-"*37)
-        print(f"New samples after simulation:\n {new_df}")
+        print(f"Simulation results: \n{new_df}")
 
-        # Add multi-objective optimization scores
+        # Concatenate simulation results and optimization scores
         new_df = pd.concat(
             [new_df, df_fom_scores, df_mmo_scores], axis=1,
             ignore_index=False  # to keep columns names
         )
 
         # Add common information to first row only
-        new_df.loc[0, 'iteration'] = iteration
+        new_df.loc[0, 'iteration'] = sampling_tracker.iteration
         new_df.loc[0, 'datetime'] = start_time
         new_df.loc[0, model_params.keys()] = model_params.values()
 
         # Store final batch results
         yield parse_results(new_df, current_history_size=data.shape[0])
 
-        # Concatenate new values to original results DataFrame
+        # Add new samples to general DataFrame
         data = pd.concat([data, new_df], axis=0, ignore_index=True)
 
-        # Update stopping condition
-        n_new_samples = new_df.shape[0]
-        n_new_inliers = new_df.dropna(subset=targets).shape[0]
-        n_new_interest = new_df[new_df['quality'] == 'interest'].shape[0]
+        # Update sampling progress
+        progress = sampling_tracker.update_state(new_df)
+        sampling_tracker.print_iteration_report()
 
-        n_total += n_new_samples
-        n_inliers += n_new_inliers
-        n_interest += n_new_interest
-        iteration += 1
-
-        # Print iteration report
-        print(
-            f"Round {iteration - 1:03} (end) - Report count: "
-            f"Total: {n_total}, "
-            f"Inliers: {n_inliers}, "
-            f"Interest: {n_interest}"
-        )
-
-        # Check stopping conditions
-        should_continue = (
-            (n_inliers < max_size) if run_until_max_size else
-            (n_interest < n_interest_max)
-        )
-
-        # Update progress bar
-        pbar_progress = (
-            n_new_inliers  - max(0, n_inliers  - max_size) if run_until_max_size else
-            n_new_interest - max(0, n_interest - n_interest_max)
-        )
-        progress_bar.update(pbar_progress)
+        progress_bar.update(progress)
     progress_bar.close()

@@ -7,7 +7,8 @@ from .term_base import (
 )
 from .term_gpr import SurrogateGPRTerm
 from .term_gpc import InterestGPCTerm, InlierGPCTerm
-from .term_spatial import OutlierProximityTerm, SigmoidLocalDensityTerm, OutlierKDETerm
+from .term_kde import OutlierKDETerm
+from .term_spatial import OutlierProximityTerm, SigmoidDensityTerm
 
 
 class FOMTermAccessor:
@@ -24,7 +25,7 @@ class FOMTermAccessor:
     surrogate_gpr: SurrogateGPRTerm
     interest_gpc: InterestGPCTerm
     inlier_gpc: InlierGPCTerm
-    sigmoid_density: SigmoidLocalDensityTerm
+    sigmoid_density: SigmoidDensityTerm
     outlier_proximity: OutlierProximityTerm
     outlier_kde: OutlierKDETerm
 

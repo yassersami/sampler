@@ -33,7 +33,7 @@ The pipeline requires the following inputs:
   - **`std`**: The std given by the trained GP.
   - **`interest`**: The probability of getting target values in the interest region.
   - **`coverage`**: A measure defining if the selected sample is covering an new empty region or an already densly sampled region.
-- **`params:irbs_max_size`**: Maximum size of the sampling
+- **`params:irbs_max_inliers`**: Maximum size of the sampling
 - **`params:irbs_batch_size`**: Batch size to sample at each itereation
 - **`params:irbs_opt_iters`**: Number of optimization iterations for the SHGO algorithm
 - **`params:irbs_opt_sampling_points`**: Number of sampling points for optimization in SHGO
