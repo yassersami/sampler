@@ -7,7 +7,7 @@ from kedro.pipeline import Pipeline, node, pipeline
 
 from sampler.pipelines.prep import create_pipeline as create_pipeline_prep
 
-from .nodes import irbs_initialize_component, irbs_prepare_data, irbs_sampling
+from .nodes import irbs_initialize_component, irbs_prepare_data, irbs_store_config, irbs_sampling
 from sampler.common.storing import join_history
 
 
@@ -32,7 +32,6 @@ def create_pipeline(**kwargs) -> Pipeline:
                 fom_model='fom_model',
                 optimizer='optimizer',
                 simulator='simulator',
-                irbs_config='irbs_config',
             ),
             name='initialize_fom_optimizer_simulator'
         ),
@@ -50,9 +49,24 @@ def create_pipeline(**kwargs) -> Pipeline:
             name='irbs_prepare_data'
         ),
         node(
-            func=irbs_sampling,
+            func=irbs_store_config,
             inputs=dict(
                 data='irbs_prepared_data',
+                treatment='treatment',
+                fom_model='fom_model',
+                optimizer='optimizer',
+                simulator='simulator',
+            ),
+            outputs=dict(
+                irbs_config='irbs_config',
+                data='irbs_prepared_data_1',  # Dummy output to keep order
+            ),
+            name='irbs_store_config'
+        ),
+        node(
+            func=irbs_sampling,
+            inputs=dict(
+                data='irbs_prepared_data_1',
                 treatment='treatment',
                 features='params:features',
                 targets='params:targets',

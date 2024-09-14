@@ -153,9 +153,7 @@ class DataTreatment:
 
         return masks
 
-    def classify_quality_interest(
-        self, data: pd.DataFrame, data_is_scaled: bool
-    ) -> pd.DataFrame:
+    def classify_quality_interest(self, data: pd.DataFrame, data_is_scaled: bool) -> pd.DataFrame:
         """
         Classifies data based on interest or scaled interest regions.
 
@@ -179,9 +177,7 @@ class DataTreatment:
 
         return data
 
-    def classify_quality_error(
-        self, data: pd.DataFrame, data_is_scaled: bool
-        ) -> pd.DataFrame:
+    def classify_quality_error(self, data: pd.DataFrame, data_is_scaled: bool) -> pd.DataFrame:
         """
         Classifies data based on outlier masks, with an option to scale the data.
 
@@ -195,7 +191,7 @@ class DataTreatment:
             # Ensure real_data is initialized before use
             real_data = data.copy()
             # Scale only the specified columns
-            real_data[scaler_cols] = self.scaler.transform(data[scaler_cols].values)
+            real_data[scaler_cols] = self.scaler.inverse_transform(data[scaler_cols].values)
         else:
             real_data = data
 
@@ -208,10 +204,12 @@ class DataTreatment:
 
         return data
 
-    def define_quality_of_data(self, data: pd.DataFrame, specify_errors=False):
-        data = self.classify_quality_interest(data, data_is_scaled=False)
-        if specify_errors:
-            data = self.classify_quality_error(data, data_is_scaled=False)
+    def classify_quality(self, data: pd.DataFrame, data_is_scaled: bool) -> pd.DataFrame:
+        # Quality specifies either 'interest' or 'no_interest'
+        data = self.classify_quality_interest(data, data_is_scaled)
+
+        # If 'no_interest' sample is outlier, classify further as specific error types
+        data = self.classify_quality_error(data, data_is_scaled)
         return data
 
 
@@ -228,7 +226,7 @@ def initialize_dataset(data: pd.DataFrame, treatment: DataTreatment, additional_
     )
 
     # Add 'quality' class column with 'interest' if row is inside the interest region
-    data = treatment.classify_quality_interest(data, data_is_scaled=True)
+    data = treatment.classify_quality(data, data_is_scaled=True)
     return data
 
 

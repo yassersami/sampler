@@ -54,16 +54,16 @@ class SimulationProcessor:
         Returns:
             pd.DataFrame: Processed data either real or treated.
         """
-        print(
-            f"{self.__class__.__name__} -> "
-            f"[index: {index}, max_sim_time: {self.max_sim_time} s] "
-            f"Running {self.n_proc} simulations..."
-        )
 
         X_real = self._prepare_real_input(X, is_real_X)
         df_X_real = pd.DataFrame(X_real, columns=self.features)
 
         if self.use_simulator:
+            print(
+                f"{self.__class__.__name__} -> "
+                f"[index: {index}, max_sim_time: {self.max_sim_time} s] "
+                f"Running {self.n_proc} simulations..."
+            )
             df_results = run_simulation(
                 df_X=df_X_real, index=index, n_proc=self.n_proc,
                 max_sim_time=self.max_sim_time, map_dir=self.map_dir

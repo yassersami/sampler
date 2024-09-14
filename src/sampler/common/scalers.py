@@ -1,4 +1,4 @@
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple, Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -150,6 +150,25 @@ def scale_interest_region(
         )
 
     return scaled_interest_region
+
+
+def set_scaler(
+    features: List[str],
+    targets: List[str],
+    ranges: Dict[str, Dict[str, Union[float, str]]],
+) -> MixedMinMaxScaler:
+    scaler_variables = features + targets
+
+    # Prepare input-output space description
+    bounds_dict = {var_name: ranges[var_name]['bounds'] for var_name in scaler_variables}
+    scale = {var_name: ranges[var_name]['scale'] for var_name in scaler_variables}
+
+    # Fit scaler to scale all values from 0 to 1
+    scaler = MixedMinMaxScaler(features=features, targets=targets, scale=scale)
+    bounds = np.array(list(bounds_dict.values())).T  # dict.values() keeps order
+    scaler.fit(bounds)
+
+    return scaler
 
 
 def linear_tent(

@@ -9,10 +9,6 @@ initial_data:
   type: pandas.CSVDataSet
   filepath: data/01_raw/100_initial_data.csv
 
-base_config:
-  type: yaml.YAMLDataSet
-  filepath: data/07_model_output/base/base_config.yml
-
 ###### IRBS (Interest Region Bayesian Sampling) ######
 irbs_config:
   type: yaml.YAMLDataSet

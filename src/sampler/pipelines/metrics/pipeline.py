@@ -8,7 +8,7 @@ from kedro.pipeline import Pipeline, node, pipeline
 from sampler.pipelines.prep import create_pipeline as create_pipeline_prep
 
 from .nodes import (
-    read_and_prepare_data, compute_metrics,
+    set_data_scalers, read_and_prepare_data, compute_metrics,
     get_variables_for_plot, scale_variables_for_plot,
     plot_metrics
 )
@@ -17,6 +17,16 @@ from .nodes import (
 def create_pipeline(**kwargs) -> Pipeline:
     pipeline_prep = create_pipeline_prep()
     pipeline_local = pipeline([
+        node(
+            func=set_data_scalers,
+            inputs=dict(
+                features='params:features',
+                targets='params:targets',
+                variables_ranges='params:variables_ranges',
+            ),
+            outputs='scalers',
+            name='metrics_set_scalers',
+        ),
         node(
             func=read_and_prepare_data,
             inputs=dict(

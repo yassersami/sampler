@@ -64,18 +64,10 @@ def irbs_initialize_component(
         map_dir=simulator_map_dir
     )
 
-    # Store FOM and Optimizer configurations
-    yaml_data = {
-        'fom_model': fom_model.get_parameters(),
-        f'optimizer_{optimizer._class_name}': optimizer.get_parameters(),
-        'max_sim_time': simulator.max_sim_time
-    }
-
     return {
         'fom_model': fom_model,
         'optimizer': optimizer,
         'simulator': simulator,
-        'irbs_config': yaml_data
     }
 
 
@@ -100,6 +92,31 @@ def irbs_prepare_data(
     data = initialize_dataset(data, treatment, additional_values)
 
     return data
+
+def irbs_store_config(
+    data: pd.DataFrame,
+    treatment: DataTreatment,
+    fom_model: FigureOfMerit,
+    optimizer: MultiModalOptimizer,
+    simulator: SimulationProcessor,
+) -> Dict:
+    """ Try to store core parameters of IRBS pipeline using main instances. """
+    
+    outliers_mask = (data.quality != 'interest') & (data.quality != 'no_interest')
+
+    irbs_config = {
+        'n_samples': data.shape[0],
+        'n_outliers': int(outliers_mask.sum()),
+        'ranges': treatment.bounds,
+        'interest_region': treatment.interest_region,
+        'fom_model': fom_model.get_parameters(),
+        f'optimizer_{optimizer._class_name}': optimizer.get_parameters(),
+        'max_sim_time': simulator.max_sim_time,
+    }
+    return {
+        'irbs_config': irbs_config,
+        'data': data  # Dummy output for node order, No modification has been done
+    }
 
 
 def irbs_sampling(
@@ -153,7 +170,7 @@ def irbs_sampling(
         new_df = simulator.process_data(X_batch, is_real_X=False, index=sampling_tracker.n_total, treat_output=True)
 
         # Add quality column with 'is_interest' value for samples in the interest region
-        new_df = treatment.classify_quality_interest(new_df, data_is_scaled=True)
+        new_df = treatment.classify_quality(new_df, data_is_scaled=True)
 
         print(f"Simulation results: \n{new_df}")
 
@@ -180,3 +197,7 @@ def irbs_sampling(
 
         progress_bar.update(progress)
     progress_bar.close()
+    print(  # Profile report since sampling started
+        "\nFOM terms prediction profiling since sampling started: \n"
+        f"{fom_model.serialize_dict(fom_model.get_profile(use_log=True))}"
+    )

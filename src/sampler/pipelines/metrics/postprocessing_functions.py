@@ -65,11 +65,9 @@ def add_quality_columns(
         Generally, out-of-bounds outliers are very few (< 5). If their number is
         abnormally high, it may indicate that the base ranges are too narrow.
     """
-    # Quality specifies either 'interest' or 'no_interest'
-    df = treatment.classify_quality_interest(df, data_is_scaled=False)
 
-    # If 'no_interest' sample is outlier, classify further as specific error types
-    df = treatment.classify_quality_error(df, data_is_scaled=False)
+    # Quality specifies either 'interest', 'no_interest' or which outlier type
+    df = treatment.classify_quality(df, data_is_scaled=False)
 
     # Check for out-of-bounds outliers
     out_of_bounds_feat = df[df['quality'] == 'out_of_bounds_feat']
@@ -102,7 +100,7 @@ def subset_by_quality(
     return {
         **exp_config,
         'interest': df[(df.quality == 'interest')],
-        'no_interest': df[(df.quality == 'no_interest')],
+        'no_interest': df[(df.quality == 'no_interest')],  # or (df.quality != 'interest') ?
         'inliers': df[(df.quality == 'interest') | (df.quality == 'no_interest')],
         'outliers': df[(df.quality != 'interest') & (df.quality != 'no_interest')],
         'df': df

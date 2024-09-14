@@ -175,7 +175,7 @@ def set_objective_optuna(
             columns=features + targets + additional_values + ['y_obj']
         )
         # Add column is_interest with True if row is inside the interest region
-        new_df = treatment.classify_quality_interest(new_df, data_is_scaled=True)
+        new_df = treatment.classify_quality(new_df, data_is_scaled=True)
         # Add datetime
         timenow = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         new_df['datetime'] = timenow

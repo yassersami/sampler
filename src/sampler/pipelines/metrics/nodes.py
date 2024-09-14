@@ -18,7 +18,38 @@ from .asvd import ASVD
 from .voronoi import get_volume_voronoi
 import sampler.pipelines.metrics.graphics_metrics as gm
 from sampler.common.data_treatment import DataTreatment
-from sampler.common.scalers import MixedMinMaxScaler
+from sampler.common.scalers import MixedMinMaxScaler, set_scaler
+
+
+def set_data_scalers(
+    features: List[str],
+    targets: List[str],
+    variables_ranges: Dict[str, Dict[str, Dict]],
+) -> Dict[str, MixedMinMaxScaler]:
+    # Use the 'base' dict as the foundation
+    base_ranges = variables_ranges['base']
+
+    # Complete other dicts with base dict
+    other_config_names = [name for name in variables_ranges if name != 'base']
+    for config_name in other_config_names:
+        # Check for invalid keys
+        for var_name in variables_ranges[config_name]:
+            if var_name not in base_ranges:
+                raise KeyError(
+                    f"Variable '{var_name}' in '{config_name}' configuration "
+                    "is not present in the base configuration."
+                )
+
+        # Complete with base
+        variables_ranges[config_name] = {**base_ranges, **variables_ranges[config_name]}
+
+    # Set a scaler for each variables configuration
+    scalers = {
+        config_name: set_scaler(features, targets, ranges)
+        for config_name, ranges in variables_ranges.items()
+    }
+
+    return scalers
 
 
 def read_and_prepare_data(

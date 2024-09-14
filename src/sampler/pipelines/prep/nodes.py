@@ -2,27 +2,8 @@ from typing import Dict, List, Tuple, Union
 import yaml
 import numpy as np
 import pandas as pd
-from sampler.common.scalers import MixedMinMaxScaler
+from sampler.common.scalers import MixedMinMaxScaler, set_scaler
 from sampler.common.data_treatment import DataTreatment
-
-
-def set_scaler(
-    features: List[str],
-    targets: List[str],
-    ranges: Dict[str, Dict[str, Union[float, str]]],
-) -> MixedMinMaxScaler:
-    scaler_variables = features + targets
-
-    # Prepare input-output space description
-    bounds_dict = {var_name: ranges[var_name]['bounds'] for var_name in scaler_variables}
-    scale = {var_name: ranges[var_name]['scale'] for var_name in scaler_variables}
-
-    # Fit scaler to scale all values from 0 to 1
-    scaler = MixedMinMaxScaler(features=features, targets=targets, scale=scale)
-    bounds = np.array(list(bounds_dict.values())).T  # dict.values() keeps order
-    scaler.fit(bounds)
-
-    return scaler
 
 
 def prepare_treatment(
@@ -38,26 +19,6 @@ def prepare_treatment(
     # Use the 'base' dict as the foundation
     base_ranges = variables_ranges['base']
 
-    # Complete other dicts with base dict
-    other_config_names = [name for name in variables_ranges if name != 'base']
-    for config_name in other_config_names:
-        # Check for invalid keys
-        for var_name in variables_ranges[config_name]:
-            if var_name not in base_ranges:
-                raise KeyError(
-                    f"Variable '{var_name}' in '{config_name}' configuration "
-                    "is not present in the base configuration."
-                )
-
-        # Complete with base
-        variables_ranges[config_name] = {**base_ranges, **variables_ranges[config_name]}
-
-    # Set a scaler for each variables configuration
-    scalers = {
-        config_name: set_scaler(features, targets, ranges)
-        for config_name, ranges in variables_ranges.items()
-    }
-
     # Get base input-output space bounds and interest region
     bounds_dict = {var_name: base_ranges[var_name]['bounds'] for var_name in features + targets}
     interest_region  = {var_name: interest_region[var_name] for var_name in targets}
@@ -72,17 +33,7 @@ def prepare_treatment(
         max_sim_time=simulator_config['max_sim_time'],
     )
 
-    # Prepare base configuration with interest_region as YAML data
-    yaml_data = {
-        'base_ranges': base_ranges,
-        'interest_region': interest_region
-    }
-
-    return {
-        'treatment': treatment,
-        'scalers': scalers,
-        'base_config': yaml_data,
-    }
+    return treatment
 
 
 def prepare_data(
