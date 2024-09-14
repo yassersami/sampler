@@ -4,60 +4,19 @@ import numpy as np
 import pandas as pd
 from scipy.spatial.distance import pdist, squareform
 
-from .base import MultiModalSelector
+from .base import MultiModalSelector, BaseFactory
 
-
-class SelectorFactory:
-    _selectors: Dict[str, Type[MultiModalSelector]] = {}
-
+class SelectorFactory(BaseFactory[MultiModalSelector]):
     @classmethod
-    def register(cls, name: str):
-        def decorator(selector_class: Type[MultiModalSelector]):
-            cls._selectors[name] = selector_class
-            return selector_class
-        return decorator
-
-    @classmethod
-    def create_from_config(
-        cls,
+    def create_from_config(cls,
         batch_size: int,
         selector_config: Dict[str, Dict]
     ) -> MultiModalSelector:
-
-        # Check if all configs have the 'apply' key
-        for name, config in selector_config.items():
-            if 'apply' not in config:
-                raise KeyError(
-                    f"Selector '{name}' is missing the 'apply' key "
-                    "in its configuration."
-                )
-
-        # Gather all active selectors
-        applied_selectors = [
-            name for name, config in selector_config.items()
-            if config['apply']
-        ]
-
-        if len(applied_selectors) != 1:
-            raise ValueError(
-                "Exactly one selector must be applied. "
-                f"Found {len(applied_selectors)}"
-            )
-
-        # Set selected selector
-        selector_name = applied_selectors[0]
-        selector_args = selector_config[selector_name].copy()
-        selector_args.pop('apply')
-
-        if selector_name not in cls._selectors:
-            raise ValueError(f"Unknown selector: {selector_name}")
-
-        SelectorClass = cls._selectors[selector_name]
-        return SelectorClass(batch_size=batch_size, **selector_args)
-
-    @classmethod
-    def list_selectors(cls):
-        return list(cls._selectors.keys())
+        return super().create_from_config(
+            selector_config,
+            item_type="selector",
+            batch_size=batch_size
+        )
 
 
 @SelectorFactory.register('diversity')

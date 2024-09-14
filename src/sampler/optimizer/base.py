@@ -1,4 +1,4 @@
-from typing import List, Dict, Tuple, Callable, Type, Union, Optional, ClassVar
+from typing import List, Dict, Tuple, Type, Callable, TypeVar, Generic
 from abc import ABC, abstractmethod
 import warnings
 import cProfile
@@ -13,6 +13,7 @@ class MultiModalSelector(ABC):
     # Multimodal progress record attributes
     _record_columns = ['dummy_score', 'dummy_loss']
     _records = {}
+    _debug_columns = ['_id']
 
     def __init__(self, batch_size: int):
         self.batch_size = batch_size
@@ -42,7 +43,10 @@ class MultiModalSelector(ABC):
             self._records[key].append(kwargs[key])
 
     def get_records_df(self) -> pd.DataFrame:
-        return pd.DataFrame(self._records)
+        return pd.DataFrame({
+            k: v for k, v in self._records.items()
+            if k not in self._debug_columns
+        })
 
 
 class MultiModalOptimizer(ABC):
@@ -60,10 +64,13 @@ class MultiModalOptimizer(ABC):
 
     @property
     def total_evaluations(self) -> int:
-        if 'n' in self.optimizer_config and 'iters' in self.optimizer_config:
-            return self.optimizer_config['n'] * self.optimizer_config['iters']
-        elif 'population_size' in self.optimizer_config and 'generations' in self.optimizer_config:
-            return self.optimizer_config['population_size'] * self.optimizer_config['generations']
+        n, iters = self.optimizer_config.get('n'), self.optimizer_config.get('iters')
+        pop_size, gens = self.optimizer_config.get('population_size'), self.optimizer_config.get('generations')
+
+        if n and iters:
+            return n * iters
+        elif pop_size and gens:
+            return pop_size * gens
         else:
             raise ValueError(f"Unknown optimizer configuration: {self.optimizer_config}")
 
@@ -130,3 +137,42 @@ class MultiModalOptimizer(ABC):
         samples
         """
         pass
+
+
+T = TypeVar('T')
+
+class BaseFactory(Generic[T]):
+    _items: Dict[str, Type[T]] = {}
+
+    @classmethod
+    def register(cls, name: str):
+        def decorator(item_class: Type[T]):
+            cls._items[name] = item_class
+            return item_class
+        return decorator
+
+    @classmethod
+    def list_items(cls):
+        return list(cls._items.keys())
+
+    @classmethod
+    def _validate_config(cls, config: Dict[str, Dict], item_type: str):
+        for name, item_config in config.items():
+            if 'apply' not in item_config:
+                raise KeyError(f"{item_type.capitalize()} '{name}' is missing the 'apply' key in its configuration.")
+            if name not in cls._items:
+                raise ValueError(f"Unknown {item_type}: {name}")
+
+        applied_items = [name for name, item_config in config.items() if item_config['apply']]
+        if len(applied_items) != 1:
+            raise ValueError(f"Exactly one {item_type} must be applied. Found {len(applied_items)}")
+
+        return applied_items[0]
+
+    @classmethod
+    def create_from_config(cls, config: Dict[str, Dict], item_type: str, **kwargs):
+        item_name = cls._validate_config(config, item_type)
+        item_args = config[item_name].copy()
+        item_args.pop('apply')
+        ItemClass = cls._items[item_name]
+        return ItemClass(**kwargs, **item_args)

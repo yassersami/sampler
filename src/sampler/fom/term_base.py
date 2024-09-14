@@ -230,6 +230,9 @@ class BaseFOMTerm(ABC):
         predicted_score: Union[np.ndarray, Tuple[np.ndarray, ...]]
     ) -> None:
         """ Check if the predicted scores has the correct sign. """
+        # Tolerance of 10% exceeding 0 limit
+        tol = 0.1
+
         # Convert single score to tuple (note: scores are tuple of 1D arrays)
         if not isinstance(predicted_score, tuple):
             predicted_score = (predicted_score,)
@@ -238,20 +241,20 @@ class BaseFOMTerm(ABC):
 
             # Check if score has right positive sign
             if score_sign == 1:
-                if np.any(score_value < 0):
+                if np.any(score_value < 0 - tol):
                     raise ValueError(
                         f"Term {self._term_name}: "
                         f"Expected positive score '{score_name}', "
-                        f"but found negative values"
+                        f"but found negative values: \n{score_value}"
                     )
 
             # Check if score has right negative sign
             else:
-                if np.any(score_value > 0):
+                if np.any(score_value > 0 + tol):
                     raise ValueError(
                         f"Term {self._term_name}: "
                         f"Expected negative score '{score_name}', "
-                        f"but found positive values"
+                        f"but found positive values: \n{score_value}"
                     )
 
     @abstractmethod
