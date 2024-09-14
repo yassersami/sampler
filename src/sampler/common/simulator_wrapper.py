@@ -40,7 +40,7 @@ EMPTY_TARGETS_DICT = {
 }
 
 
-def map_creation(df: pd.DataFrame, max_simu_time: int, map_dir: str = 'default'):
+def map_creation(df: pd.DataFrame, max_sim_time: int, map_dir: str = 'default'):
 
     constants = {
         "r_ext_pAl": 100.e-9,
@@ -58,7 +58,7 @@ def map_creation(df: pd.DataFrame, max_simu_time: int, map_dir: str = 'default')
         'k0_Al2O3_decomp': 1520000,
         'k0_MeO_decomp': 30000000,
         'bool_kin': 'false',
-        "max_simu_time": max_simu_time,  # max simulation time in seconds (2400 = 40min)
+        "max_sim_time": max_sim_time,  # max simulation time in seconds (2400 = 40min)
     }
 
     # don't set a feature constant if it's an input
@@ -73,7 +73,7 @@ def map_creation(df: pd.DataFrame, max_simu_time: int, map_dir: str = 'default')
 
 
 def create_input_folders(
-    df_X: pd.DataFrame, index: int, max_simu_time: int, map_dir: str
+    df_X: pd.DataFrame, index: int, max_sim_time: int, map_dir: str
 ) -> List[str]:
     """
     Create JSON files for simulator input at map_dir/simu_XXXXX and return a list of
@@ -89,7 +89,7 @@ def create_input_folders(
     updated_df['workdir'] = updated_df.apply(set_simu_name, axis=1)
 
     # Create simulation input files using the updated DataFrame
-    map_creation(updated_df, max_simu_time, map_dir)
+    map_creation(updated_df, max_sim_time, map_dir)
 
     # Generate and return a list of created folder paths
     folders = [os.path.join(map_dir, workdir) for workdir in updated_df['workdir']]
@@ -150,7 +150,7 @@ def run_simulation_process(inputs_dic: Dict, output_dir: str) -> Dict[str, float
             return {
                 'error': f"{e.__class__.__name__}: {str(e)}",
                 'sim_time': elapsed_time,
-                'timed_out': elapsed_time >= inputs_dic['max_simu_time'],
+                'timed_out': elapsed_time >= inputs_dic['max_sim_time'],
                 **EMPTY_TARGETS_DICT,
             }
 
@@ -161,7 +161,7 @@ def run_simulation(
     df_X: pd.DataFrame,
     n_proc: int, 
     index: int,
-    max_simu_time: int,
+    max_sim_time: int,
     map_dir: str
 ) -> pd.DataFrame:
 
@@ -170,7 +170,7 @@ def run_simulation(
         create_history_folder(map_dir, should_rename=False)
 
     # Create input folders and get their inputs dict
-    folders = create_input_folders(df_X, index, max_simu_time, map_dir)
+    folders = create_input_folders(df_X, index, max_sim_time, map_dir)
     inputs_dics_list = read_input_folders(folders)
 
     # Set a directory for each simulation to store its output
@@ -192,18 +192,18 @@ def run_simulation(
         for i, async_result in enumerate(async_results):
             try:
                 # Wait for the result with a timeout
-                result = async_result.get(timeout=inputs_dics_list[i]['max_simu_time'])
+                result = async_result.get(timeout=inputs_dics_list[i]['max_sim_time'])
                 results.append(result)
             except multiprocessing.TimeoutError:
                 # Handle case where simulation exceeds max time
                 warnings.warn(
-                    f"Simulation timed out after {inputs_dics_list[i]['max_simu_time']/60:.1f} min "
+                    f"Simulation timed out after {inputs_dics_list[i]['max_sim_time']/60:.1f} min "
                     f"for label '{inputs_dics_list[i]['workdir']}'."
                 )
                 # Append a default error result for timed-out simulations
                 results.append({
                     'error': "TimeoutError: Simulation timed out",
-                    'sim_time': inputs_dics_list[i]['max_simu_time'],
+                    'sim_time': inputs_dics_list[i]['max_sim_time'],
                     'timed_out': True,
                     **EMPTY_TARGETS_DICT,
                 })

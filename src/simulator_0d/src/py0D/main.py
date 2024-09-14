@@ -124,7 +124,7 @@ def main(inputs_dic):
     # -----------------------------------------------------------------------------------------------------------------start of temporal loop----------------------------------------
     elapsed_time = 0
     while system.compute_bool_end_simu() and (
-        elapsed_time < system.inputs_dic["max_simu_time"]
+        elapsed_time < system.inputs_dic["max_sim_time"]
     ):
         system.i = system.i + 1
         # assist_functions.print_start_loop(system, ite_print)
@@ -302,7 +302,7 @@ def main(inputs_dic):
     db_simu.DOI["sim_time"] = elapsed_time / 60  # (minutes)
 
     # Fix to tag timed out (uncompleted) simulations
-    db_simu.DOI["timed_out"] = elapsed_time >= system.inputs_dic["max_simu_time"]
+    db_simu.DOI["timed_out"] = elapsed_time >= system.inputs_dic["max_sim_time"]
 
     # print("save time=%.2f" %(time.time()-compute_time_save0))
     if inputs_dic["save_last_data"]:

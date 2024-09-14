@@ -23,7 +23,7 @@ class SimulationProcessor:
         self.additional_values = additional_values
         self.treatment = treatment
         self.use_simulator = simulator_config['use']
-        self.max_simu_time = simulator_config['max_simu_time']
+        self.max_sim_time = simulator_config['max_sim_time']
         self.map_dir = map_dir
         self.n_proc = n_proc
         if not self.use_simulator:
@@ -54,7 +54,11 @@ class SimulationProcessor:
         Returns:
             pd.DataFrame: Processed data either real or treated.
         """
-        print(f"{self.__class__.__name__} -> [index: {index}] Running {self.n_proc} simulations...")
+        print(
+            f"{self.__class__.__name__} -> "
+            f"[index: {index}, max_sim_time: {self.max_sim_time} s] "
+            f"Running {self.n_proc} simulations..."
+        )
 
         X_real = self._prepare_real_input(X, is_real_X)
         df_X_real = pd.DataFrame(X_real, columns=self.features)
@@ -62,8 +66,9 @@ class SimulationProcessor:
         if self.use_simulator:
             df_results = run_simulation(
                 df_X=df_X_real, index=index, n_proc=self.n_proc,
-                max_simu_time=self.max_simu_time, map_dir=self.map_dir
+                max_sim_time=self.max_sim_time, map_dir=self.map_dir
             )
+            input("Press Enter to continue...")
         else:
             df_results = self.proxy.run_fast_simulation(X_real, self.treatment.scaler)
 
@@ -93,6 +98,6 @@ class SimulationProcessor:
         data[self.targets] = scaled_data[self.targets].values
 
         # Add some spicy data to check how outlier and interest samples are handled
-        data = self.proxy.append_spicy_data(data, self.max_simu_time)
+        data = self.proxy.append_spicy_data(data, self.max_sim_time)
 
         return data

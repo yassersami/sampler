@@ -69,7 +69,7 @@ def prepare_treatment(
         scaler=set_scaler(features, targets, base_ranges),
         bounds=bounds_dict,
         interest_region=interest_region,
-        max_simu_time=simulator_config['max_simu_time'],
+        max_sim_time=simulator_config['max_sim_time'],
     )
 
     # Prepare base configuration with interest_region as YAML data

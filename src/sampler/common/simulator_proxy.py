@@ -321,14 +321,14 @@ class FastSimulator:
 
         return df_results
 
-    def append_spicy_data(self, data: pd.DataFrame, max_simu_time: int) -> pd.DataFrame:
+    def append_spicy_data(self, data: pd.DataFrame, max_sim_time: int) -> pd.DataFrame:
         """
         Add outlier data to test outlier cleaning process and interest data to help
         FOM terms that needs interest samples to start.
 
         Args:
             data (pd.DataFrame): Input data in scaled space.
-            max_simu_time (int): Maximum simulation time.
+            max_sim_time (int): Maximum simulation time.
 
         Returns:
             pd.DataFrame: Data with appended spicy samples.
@@ -339,7 +339,7 @@ class FastSimulator:
             [0.5] * (self.n_dim_y-1) + [np.nan],  # failed simulation causing error (missing value)
             [0.5] * self.n_dim_y,  # no_interest sample but timed out
         ])
-        sim_time = np.array([[0], [0], [max_simu_time]])
+        sim_time = np.array([[0], [0], [max_sim_time]])
 
         # Add spicy outlier data at origin
         outlier_region = self.X_outliers[0]

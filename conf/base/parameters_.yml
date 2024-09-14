@@ -29,7 +29,7 @@ interest_region:
 
 simulator_config:
   use: true
-  max_simu_time: 1200  # seconds
+  max_sim_time: 1200  # seconds
 
 batch_size: 8
 
