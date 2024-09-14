@@ -4,8 +4,8 @@ import warnings
 import numpy as np
 import pandas as pd
 
-from sampler.common.data_treatment import DataTreatment
-from sampler.common.scalers import MixedMinMaxScaler
+from sampler.core.data_processing.data_treatment import DataTreatment
+from sampler.core.data_processing.scalers import MixedMinMaxScaler
 
 
 def aggregate_csv_files(directory_path: str) -> pd.DataFrame:

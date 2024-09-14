@@ -2,9 +2,9 @@ from typing import List, Dict, Tuple, Union
 import numpy as np
 import pandas as pd
 
-from .data_treatment import DataTreatment
-from .simulator_proxy import FastSimulator
-from .simulator_wrapper import run_simulation
+from ..data_processing.data_treatment import DataTreatment
+from .proxy import FastSimulator
+from .wrapper import run_simulation
 
 
 class SimulationProcessor:

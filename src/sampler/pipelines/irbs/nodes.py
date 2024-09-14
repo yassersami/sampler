@@ -9,16 +9,16 @@ from tqdm import tqdm
 import numpy as np
 import pandas as pd
 
-from sampler.common.data_treatment import (
+from sampler.core.data_processing.data_treatment import (
     DataTreatment, initialize_dataset, append_hypercube_boundary_points
 )
-from sampler.common.storing import parse_results
-from sampler.common.sampling_tracker import SamplingProgressTracker
-from sampler.common.simulator import SimulationProcessor
-from sampler.fom.fom import FigureOfMerit
-from sampler.optimizer.selector import SelectorFactory
-from sampler.optimizer.optimizer import OptimizerFactory
-from sampler.optimizer.base import MultiModalOptimizer
+from sampler.core.data_processing.storing import parse_results
+from sampler.core.data_processing.sampling_tracker import SamplingProgressTracker
+from sampler.core.simulator.simulator import SimulationProcessor
+from sampler.core.fom.fom import FigureOfMerit
+from sampler.core.optimizer.selector import SelectorFactory
+from sampler.core.optimizer.optimizer import OptimizerFactory
+from sampler.core.optimizer.base import MultiModalOptimizer
 
 
 def irbs_initialize_component(

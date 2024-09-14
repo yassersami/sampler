@@ -9,7 +9,7 @@ from kedro.pipeline import Pipeline, node, pipeline
 from sampler.pipelines.prep import create_pipeline as create_pipeline_prep
 
 from .nodes import run_parego
-from sampler.common.storing import join_history
+from sampler.core.data_processing.storing import join_history
 
 
 def create_pipeline(**kwargs) -> Pipeline:

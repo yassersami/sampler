@@ -6,7 +6,7 @@ import pandas as pd
 from scipy.optimize import shgo
 from scipy.spatial.distance import cdist
 
-from .scalers import MixedMinMaxScaler
+from ..data_processing.scalers import MixedMinMaxScaler
 
 
 def linear_interest_mapping(

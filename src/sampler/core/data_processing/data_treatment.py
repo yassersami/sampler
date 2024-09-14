@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import itertools
 
-from sampler.common.scalers import MixedMinMaxScaler, scale_interest_region
+from .scalers import MixedMinMaxScaler, scale_interest_region
 
 
 class DataTreatment:

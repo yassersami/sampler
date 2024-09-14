@@ -9,7 +9,7 @@ from matplotlib import pyplot as plt
 from matplotlib.patches import Rectangle
 import matplotlib.lines as mlines
 
-from sampler.common.sampling_tracker import get_first_iteration_index
+from sampler.core.data_processing.sampling_tracker import get_first_iteration_index
 
 
 def plot_initial_data(

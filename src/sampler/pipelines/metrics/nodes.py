@@ -17,8 +17,8 @@ from .volume import covered_space_bound
 from .asvd import ASVD
 from .voronoi import get_volume_voronoi
 import sampler.pipelines.metrics.graphics_metrics as gm
-from sampler.common.data_treatment import DataTreatment
-from sampler.common.scalers import MixedMinMaxScaler, set_scaler
+from sampler.core.data_processing.data_treatment import DataTreatment
+from sampler.core.data_processing.scalers import MixedMinMaxScaler, set_scaler
 
 
 def set_data_scalers(

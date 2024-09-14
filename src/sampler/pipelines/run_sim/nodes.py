@@ -10,9 +10,9 @@ import pandas as pd
 from tqdm import tqdm
 from scipy.stats import qmc
 
-from sampler.common.data_treatment import DataTreatment
-from sampler.common.simulator import SimulationProcessor
-from sampler.common.storing import parse_results
+from sampler.core.data_processing.data_treatment import DataTreatment
+from sampler.core.simulator.simulator import SimulationProcessor
+from sampler.core.data_processing.storing import parse_results
 
 
 def prepare_simulator_inputs(
@@ -79,10 +79,7 @@ def evaluate_inputs(
     n_proc: int,
     output_is_real: bool
 ):
-    # Ensure 'r_ext_pMeO' is in features by copying 'r_ext_pAl' if necessary
-    if 'r_ext_pMeO' not in features:
-        data['r_ext_pMeO'] = data['r_ext_pAl']
-    
+
     # Initialize the simulation processor, n_proc to None to use cpu_count()
     simulator = SimulationProcessor(
         features=features,

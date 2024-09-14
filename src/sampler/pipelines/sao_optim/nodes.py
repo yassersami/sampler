@@ -11,10 +11,10 @@ from typing import List, Dict, Tuple, Callable, Union
 
 import optuna
 
-from sampler.common.scalers import linear_tent
-from sampler.common.data_treatment import DataTreatment
-from sampler.common.storing import create_history_folder, store_df
-from sampler.common.simulator import SimulationProcessor
+from sampler.core.data_processing.scalers import linear_tent
+from sampler.core.data_processing.data_treatment import DataTreatment
+from sampler.core.data_processing.storing import create_history_folder, store_df
+from sampler.core.simulator.simulator import SimulationProcessor
 
 
 RANDOM_STATE = 42

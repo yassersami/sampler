@@ -13,10 +13,10 @@ import numpy as np
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RationalQuadratic
 
-from sampler.common.scalers import linear_tent
-from sampler.common.data_treatment import DataTreatment, initialize_dataset
-from sampler.common.storing import parse_results
-from sampler.common.simulator import SimulationProcessor
+from sampler.core.data_processing.scalers import linear_tent
+from sampler.core.data_processing.data_treatment import DataTreatment, initialize_dataset
+from sampler.core.data_processing.storing import parse_results
+from sampler.core.simulator.simulator import SimulationProcessor
 
 from scipy.stats import norm
 from sko.GA import GA

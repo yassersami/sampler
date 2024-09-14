@@ -2,8 +2,8 @@ from typing import Dict, List, Tuple, Union
 import yaml
 import numpy as np
 import pandas as pd
-from sampler.common.scalers import MixedMinMaxScaler, set_scaler
-from sampler.common.data_treatment import DataTreatment
+from sampler.core.data_processing.scalers import MixedMinMaxScaler, set_scaler
+from sampler.core.data_processing.data_treatment import DataTreatment
 
 
 def prepare_treatment(
