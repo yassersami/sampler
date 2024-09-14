@@ -8,6 +8,8 @@ import multiprocessing
 import numpy as np
 import pandas as pd
 import time
+from tqdm import tqdm
+import queue
 
 from .storing import create_history_folder
 
@@ -157,6 +159,28 @@ def run_simulation_process(inputs_dic: Dict, output_dir: str) -> Dict[str, float
     return res_dic
 
 
+def progress_tracker(max_sim_time, progress_queue):
+    start_time = time.time()
+    elapsed_time = 0
+    with tqdm(total=max_sim_time, desc="Simulation Progress", unit="s") as pbar:
+        while elapsed_time < max_sim_time:
+            elapsed_time = min(time.time() - start_time, max_sim_time)
+            pbar.n = int(elapsed_time)
+            pbar.refresh()
+
+            time.sleep(1)  # Update every second
+
+            # Check if all simulations are done
+            try:
+                if progress_queue.get_nowait() == "DONE":
+                    
+                    break
+            except queue.Empty:
+                pass
+
+        # The progress bar will automatically close when exiting the 'with' block
+
+
 def run_simulation(
     df_X: pd.DataFrame,
     n_proc: int, 
@@ -164,6 +188,12 @@ def run_simulation(
     max_sim_time: int,
     map_dir: str
 ) -> pd.DataFrame:
+
+    if df_X.shape[0] > n_proc:
+        raise ValueError(
+            "The number of simulations should not exceed the number of cores "
+            "n_proc. Possible overload of resources."
+        )
 
     if index == 0:
         # Create simulation output directory
@@ -184,11 +214,17 @@ def run_simulation(
 
     # Set up multiprocessing
     with multiprocessing.Pool(processes=n_proc) as pool:
-        # Step 1: Create asynchronous tasks
-        async_results = [pool.apply_async(run_simulation_process, args) for args in task_params]
+        manager = multiprocessing.Manager()
+        progress_queue = manager.Queue()
 
-        results = []
+        # Set separate process for progress tracker 
+        progress_tracker_process = pool.apply_async(progress_tracker, (max_sim_time, progress_queue))
+
+        # Step 1: Create asynchronous tasks for simulation processes
+        async_results = [pool.apply_async(run_simulation_process, params) for params in task_params]
+
         # Step 2: Collect results with timeout handling
+        results = []
         for i, async_result in enumerate(async_results):
             try:
                 # Wait for the result with a timeout
@@ -207,5 +243,11 @@ def run_simulation(
                     'timed_out': True,
                     **EMPTY_TARGETS_DICT,
                 })
+
+        # Signal that all simulations are done
+        progress_queue.put("DONE")
+
+        # Wait for progress tracker to finish
+        progress_tracker_process.get()
 
     return pd.DataFrame(results)

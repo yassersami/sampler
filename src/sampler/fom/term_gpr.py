@@ -183,15 +183,12 @@ class SurrogateGPRTerm(MultiScoreMixin, ModelFOMTerm, SurrogateGPR):
         }
 
     def get_parameters(self) -> Dict:
-        params = {
-            'score_names': self.score_names,
-            'weights': self.score_weights,
-            'kernel_str': str(self.kernel_),
-            'is_trained': self.is_trained,
-        }
+        params = ModelFOMTerm.get_parameters(self)
+        params['is_trained'] = self.is_trained
 
         if self.is_trained:
             params.update({
+                'kernel_str': str(self.kernel_),
                 'kernel': self.kernel_.get_params(),
                 'log_marginal_likelihood': self.log_marginal_likelihood_value_,
                 'max_std': self.max_std,

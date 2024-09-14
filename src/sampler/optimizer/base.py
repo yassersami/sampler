@@ -1,4 +1,4 @@
-from typing import List, Dict, Tuple, Type, Callable, TypeVar, Generic
+from typing import List, Dict, Tuple, Type, Callable, TypeVar, Generic, ClassVar
 from abc import ABC, abstractmethod
 import warnings
 import cProfile
@@ -10,8 +10,10 @@ import pandas as pd
 
 class MultiModalSelector(ABC):
 
+    _class_name: ClassVar[str]
+
     # Multimodal progress record attributes
-    _record_columns = ['dummy_score', 'dummy_loss']
+    _record_columns: ClassVar[List[str]]
     _records = {}
     _debug_columns = ['_id']
 
@@ -50,6 +52,8 @@ class MultiModalSelector(ABC):
 
 
 class MultiModalOptimizer(ABC):
+    _class_name: ClassVar[str]
+
     def __init__(self, n_dim: int, selector: MultiModalSelector):
         """
         loss_func: Objective function for minimization. It is a
@@ -138,6 +142,12 @@ class MultiModalOptimizer(ABC):
         """
         pass
 
+    def get_parameters(self) -> Dict:
+        return {
+            'selector': self.selector._class_name,
+            **self.optimizer_config
+        }
+
 
 T = TypeVar('T')
 
@@ -175,4 +185,5 @@ class BaseFactory(Generic[T]):
         item_args = config[item_name].copy()
         item_args.pop('apply')
         ItemClass = cls._items[item_name]
+        ItemClass._class_name = item_name
         return ItemClass(**kwargs, **item_args)

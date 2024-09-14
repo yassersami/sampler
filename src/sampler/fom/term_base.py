@@ -301,7 +301,6 @@ class BaseFOMTerm(ABC):
         self.predict_count = 0
         self.predict_cumtime = 0.0
 
-    @abstractmethod
     def get_parameters(self) -> Dict[str, Any]:
         """
         Retrieve the fitted parameters of this FOM term.
@@ -316,7 +315,14 @@ class BaseFOMTerm(ABC):
         class and scikit-learn estimators. This ensures that scikit-learn's internal 
         mechanisms for parameter management remain intact.
         """
-        raise NotImplementedError("Subclasses must implement method")
+        params = {}
+        if isinstance(self, MultiScoreMixin):
+            params['score_names'] = self.score_names
+            params['weights'] = self.score_weights
+        else:
+            params['weights'] = next(iter(self.score_weights.values()))
+            
+        return params
 
 
 class NonFittableFOMTerm(BaseFOMTerm):

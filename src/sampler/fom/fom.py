@@ -247,40 +247,34 @@ class FigureOfMerit:
 
         return model_params
 
-    def get_profile(self) -> Dict[str, float]:
+    def get_profile(self, use_log: bool = False) -> Dict[str, Dict[str, float]]:
+        """
+        Profiling since initialization (if use_log=True) or since
+        `reset_predict_profiling` (if use_log=False).
+        """
         stats = {}
 
         tot_cumtime = 0
         tot_calls = 0
         for term_name, term in self.terms.items():
-            cumtime = term.predict_cumtime
-            calls = term.predict_count
+            if use_log:
+                cumtime = sum(term.predict_cumtime_log)
+                calls = sum(term.predict_count_log)
+            else:
+                cumtime = term.predict_cumtime
+                calls = term.predict_count
+
             tot_cumtime += cumtime
             tot_calls += calls
-            stats[f'{term_name}_cumtime'] = cumtime
-            stats[f'{term_name}_cumtime_percall'] = 0 if calls == 0 else cumtime / calls
+            stats[term_name] = {
+                'cumtime': cumtime,
+                'cumtime_percall': 0 if calls == 0 else cumtime / calls
+            }
 
-        stats['tot_cumtime'] = tot_cumtime
-        stats['tot_cumtime_percall'] = 0 if tot_calls == 0 else tot_cumtime / tot_calls
-
-        return stats
-
-    def get_log_profile(self) -> Dict[str, float]:
-        stats = {}
-
-        # Get sum of cumulative time over all terms
-        tot_cumtime = 0
-        tot_calls = 0
-        for term_name, term in self.terms.items():
-            cumtime = sum(term.predict_cumtime_log)
-            calls = sum(term.predict_count_log)
-            tot_cumtime += cumtime
-            tot_calls += calls
-            stats[f'{term_name}_cumtime'] = cumtime
-            stats[f'{term_name}_cumtime_percall'] = 0 if calls == 0 else cumtime / calls 
-
-        stats['tot_cumtime'] = tot_cumtime
-        stats['tot_cumtime_percall'] = 0 if tot_calls == 0 else tot_cumtime / tot_calls
+        stats['Total'] = {
+            'cumtime': tot_cumtime,
+            'cumtime_percall': 0 if tot_calls == 0 else tot_cumtime / tot_calls
+        }
 
         return stats
 

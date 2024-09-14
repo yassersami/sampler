@@ -68,7 +68,6 @@ class SimulationProcessor:
                 df_X=df_X_real, index=index, n_proc=self.n_proc,
                 max_sim_time=self.max_sim_time, map_dir=self.map_dir
             )
-            input("Press Enter to continue...")
         else:
             df_results = self.proxy.run_fast_simulation(X_real, self.treatment.scaler)
 

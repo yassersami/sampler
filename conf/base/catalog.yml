@@ -14,6 +14,10 @@ base_config:
   filepath: data/07_model_output/base/base_config.yml
 
 ###### IRBS (Interest Region Bayesian Sampling) ######
+irbs_config:
+  type: yaml.YAMLDataSet
+  filepath: data/07_model_output/base/irbs_config.yml
+
 irbs_history:
   type: IncrementalDataSet
   path: data/07_model_output/base/irbs_history

@@ -33,7 +33,7 @@ def prepare_treatment(
     simulator_config: Dict,
 ) -> DataTreatment:
     """
-    Prepare the DataTreatment class with the necessary configuration.
+    Prepare the DataTreatment class with the base configuration.
     """
     # Use the 'base' dict as the foundation
     base_ranges = variables_ranges['base']
@@ -60,7 +60,7 @@ def prepare_treatment(
 
     # Get base input-output space bounds and interest region
     bounds_dict = {var_name: base_ranges[var_name]['bounds'] for var_name in features + targets}
-    interest_region  = {var_name: interest_region[var_name]       for var_name in targets}
+    interest_region  = {var_name: interest_region[var_name] for var_name in targets}
 
     # Initialize and return data treatment defined by base_ranges
     treatment = DataTreatment(

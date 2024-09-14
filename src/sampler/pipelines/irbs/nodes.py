@@ -64,10 +64,18 @@ def irbs_initialize_component(
         map_dir=simulator_map_dir
     )
 
+    # Store FOM and Optimizer configurations
+    yaml_data = {
+        'fom_model': fom_model.get_parameters(),
+        f'optimizer_{optimizer._class_name}': optimizer.get_parameters(),
+        'max_sim_time': simulator.max_sim_time
+    }
+
     return {
         'fom_model': fom_model,
         'optimizer': optimizer,
-        'simulator': simulator
+        'simulator': simulator,
+        'irbs_config': yaml_data
     }
 
 
@@ -133,7 +141,7 @@ def irbs_sampling(
         model_params = fom_model.get_model_params()
 
         # Get predictions profiling
-        iteration_profile = fom_model.get_profile()
+        iteration_profile = fom_model.get_profile(use_log=False)
 
         print(f"Selected candidates to be input to the simulator: \n{X_batch}")
         print(f"Multimodal selection records: \n{df_mmo_scores}")

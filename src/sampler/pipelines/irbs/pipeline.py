@@ -31,7 +31,8 @@ def create_pipeline(**kwargs) -> Pipeline:
             outputs=dict(
                 fom_model='fom_model',
                 optimizer='optimizer',
-                simulator='simulator'
+                simulator='simulator',
+                irbs_config='irbs_config',
             ),
             name='initialize_fom_optimizer_simulator'
         ),

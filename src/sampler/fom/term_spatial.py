@@ -86,7 +86,9 @@ class SigmoidDensityTerm(FittableFOMTerm):
         return scores
     
     def get_parameters(self) -> Dict[str, float]:
-        return {'bandwidth': self.bandwidth}
+        params = FittableFOMTerm.get_parameters(self)
+        params.update({'bandwidth': self.bandwidth})
+        return params
 
 
 class OutlierProximityTerm(FittableFOMTerm):
@@ -139,4 +141,6 @@ class OutlierProximityTerm(FittableFOMTerm):
         return score
     
     def get_parameters(self) -> Dict[str, Any]:
-        return {'exclusion_radius': self.exclusion_radius}
+        params = FittableFOMTerm.get_parameters(self)
+        params.update({'exclusion_radius': self.exclusion_radius})
+        return params

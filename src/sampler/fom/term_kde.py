@@ -195,8 +195,10 @@ class OutlierKDETerm(ModelFOMTerm, KDEModel):
         }
 
     def get_parameters(self) -> Dict[str, Any]:
-        return {
+        params = ModelFOMTerm.get_parameters(self)
+        params.update({
             'kernel': self.kernel,
             'bandwidth': self.bandwidth,
             'max_density': self.max_density
-        }
+        })
+        return params
