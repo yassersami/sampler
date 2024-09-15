@@ -20,7 +20,7 @@ class KDEModel:
     """
     def __init__(self):
         self.kernel_name = 'gaussian'
-        self.kde = None
+        self.model = None
         self.data = None
         self.is_trained = False
         self.modes = None
@@ -66,7 +66,7 @@ class KDEModel:
 
         # Compute 5-fold cross-validation score
         cv_scores = cross_val_score(
-            self.kde,
+            self.model,
             X,
             cv=5,
             scoring=lambda estimator, X: estimator.score(X)
@@ -83,8 +83,8 @@ class KDEModel:
             # Fit the KDE model
             # bandwidth doesn't change during training
             # Fit is for tree-based algorithm to use for efficient density estimation
-            self.kde = KernelDensity(kernel=self.kernel_name, bandwidth=bandwidth)
-            self.kde.fit(X)
+            self.model = KernelDensity(kernel=self.kernel_name, bandwidth=bandwidth)
+            self.model.fit(X)
 
             # Update attributes
             self.data = X  # store training data
@@ -95,12 +95,12 @@ class KDEModel:
         Update modes of data clusters using Mean shift to later compute maximum
         modes density.
         """
-        if self.kde is None:
+        if self.model is None:
             raise RuntimeError("Model must be fitted before searching for max density.")
 
         print(f"{self.__class__.__name__} -> Searching for modes...")
 
-        mean_shift = MeanShift(bandwidth=self.kde.bandwidth_)
+        mean_shift = MeanShift(bandwidth=self.model.bandwidth_)
         mean_shift.fit(self.data)
 
         # Get modes (highest density points)
@@ -120,7 +120,7 @@ class KDEModel:
         Update minimum density in [0, 1]^p space using SHGO minimizer to search
         for minimum density (anti-modes minimal density).
         """
-        if self.kde is None:
+        if self.model is None:
             raise RuntimeError("Model must be fitted before searching for min density.")
 
         print(f"{self.__class__.__name__} -> Searching for maximum std...")
@@ -139,9 +139,9 @@ class KDEModel:
         self.min_density = result.fun
 
     def predict_proba(self, X):
-        if self.kde is None:
+        if self.model is None:
             raise RuntimeError("Model must be fitted before predicting.")
-        log_density = self.kde.score_samples(X)
+        log_density = self.model.score_samples(X)
         return np.exp(log_density)
 
 
@@ -211,7 +211,7 @@ class OutlierKDETerm(ModelFOMTerm, KDEModel):
     def get_bandwidth(self, X: np.ndarray, surrogate_gpr: SurrogateGPRTerm) -> float:
         if self.bandwidth_config['use_gpr_kernel']:
             # Get lenght scale from fitted GPR
-            bandwidth = surrogate_gpr.kernel_.length_scale
+            bandwidth = surrogate_gpr.model.kernel_.length_scale
 
         elif self.bandwidth_config['use_grid_search']:
             # Find optimal bandwidth using RandomizedSearchCV
@@ -252,7 +252,7 @@ class OutlierKDETerm(ModelFOMTerm, KDEModel):
             return {}
 
         return {
-            'bandwidth': self.kde.bandwidth_,
+            'bandwidth': self.model.bandwidth_,
             'cv_log_likelihood': self.compute_cv(self.data),
             'max_density': self.max_density,
             'min_density': self.min_density

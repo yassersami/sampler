@@ -15,8 +15,8 @@ from .term_base import ModelFOMTerm, MultiScoreMixin, KERNELS, RANDOM_STATE
 
 class LatentGPC(GaussianProcessClassifier):
 
-    def __init__(self, kernel: str):
-        super().__init__(kernel=KERNELS[kernel], random_state=RANDOM_STATE)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
     def predict_a(
         self, X: np.ndarray, return_std: bool = False
@@ -73,7 +73,7 @@ class LatentGPC(GaussianProcessClassifier):
         return f_star, np.sqrt(var_f_star)
 
 
-class BinaryLatentGPC(LatentGPC):
+class BinaryGPC():
     def __init__(
         self,
         positive_class: str,
@@ -82,7 +82,7 @@ class BinaryLatentGPC(LatentGPC):
         shgo_iters: int,
         kernel: str,
     ):
-        super().__init__(kernel=kernel)
+        self.model = LatentGPC(kernel=KERNELS[kernel], random_state=RANDOM_STATE)
         self.is_trained = False
         self.max_std = None
         self.positive_class = positive_class
@@ -111,15 +111,15 @@ class BinaryLatentGPC(LatentGPC):
             self.is_trained = True
             print(f"{self.__class__.__name__} -> Fitting model...")
             # Fit the Gaussian Process Classifier
-            super().fit(X, y)
+            self.model.fit(X, y)
         else:
             raise ValueError(
                 f"Expected 2 classes, but got {num_classes} classes. "
                 f"This model only supports binary classification."
             )
 
-    def get_std(self, X: np.ndarray) -> np.ndarray:
-        _, y_std = self.predict_a(X, return_std=True)
+    def predict_std(self, X: np.ndarray) -> np.ndarray:
+        _, y_std = self.model.predict_a(X, return_std=True)
         return y_std
     
     def update_max_std(self):
@@ -137,11 +137,11 @@ class BinaryLatentGPC(LatentGPC):
         def get_opposite_std(X):
             """Opposite of std to be minimized."""
             X = np.atleast_2d(X)
-            return -1 * self.get_std(X)
+            return -1 * self.predict_std(X)
 
         result = shgo(
             get_opposite_std,
-            bounds=[(0, 1)]*self.n_features_in_,
+            bounds=[(0, 1)]*self.model.n_features_in_,
             n=self.shgo_n,
             iters=self.shgo_iters,
             sampling_method='simplicial'
@@ -151,13 +151,16 @@ class BinaryLatentGPC(LatentGPC):
         max_std = min(1.0, max_std * (1 + search_error))
         self.max_std = max_std
 
-    def get_std_score(self, X: np.ndarray) -> np.ndarray:
+    def predict_positive_proba(self, X: np.ndarray) -> np.ndarray:
+        return self.model.predict_proba(X)[:, self.class_to_index[self.positive_class]]  # 1
+
+    def predict_std_score(self, X: np.ndarray) -> np.ndarray:
         X = np.atleast_2d(X)
         if self.max_std is None:
             raise NotFittedError("max_std must be updated before predicting scores.")
-        return self.get_std(X) / self.max_std
+        return self.predict_std(X) / self.max_std
 
-    def get_positive_bstd(self, X: np.ndarray) -> np.ndarray:
+    def predict_bstd_score(self, X: np.ndarray) -> np.ndarray:
         """
         Calculate Bernoulli Standard Deviation weighed by the positive class
         probability for each input sample.
@@ -180,7 +183,7 @@ class BinaryLatentGPC(LatentGPC):
         # Set scaling factor alpha
 
         # Predict positive class probabilities
-        proba = self.predict_proba(X)[:, self.class_to_index[self.positive_class]]
+        proba = self.predict_positive_proba(X)
 
         # Compute positively weighted Bernoulli std
         max_0_1 = np.sqrt((3/4)**3 * (1/4))  # Maximum value on ]0, 1[
@@ -190,7 +193,7 @@ class BinaryLatentGPC(LatentGPC):
 
         return score
 
-    def predict_positive_entropy(self, X):
+    def predict_entropy_score(self, X):
         """
         Compute the entropy weighed by the positive class probability for each
         input sample.
@@ -207,7 +210,7 @@ class BinaryLatentGPC(LatentGPC):
         X = np.atleast_2d(X)
 
         # Get probabilities for the positive class
-        proba = self.predict_proba(X)[:, self.class_to_index[self.positive_class]]
+        proba = self.predict_positive_proba(X)
 
         # Clip probabilities to avoid log(0)
         proba = np.clip(proba, 1e-15, 1 - 1e-15)
@@ -221,7 +224,7 @@ class BinaryLatentGPC(LatentGPC):
         return score
 
 
-class BinaryLatentGPCTerm(MultiScoreMixin, ModelFOMTerm, BinaryLatentGPC):
+class BinaryGPCTerm(MultiScoreMixin, ModelFOMTerm, BinaryGPC):
     
     required_args = []
     fit_config = {'X_only': False, 'drop_nan': False}
@@ -243,7 +246,7 @@ class BinaryLatentGPCTerm(MultiScoreMixin, ModelFOMTerm, BinaryLatentGPC):
 
         ModelFOMTerm.__init__(self, score_weights, score_names)
 
-        BinaryLatentGPC.__init__(
+        BinaryGPC.__init__(
             self,
             positive_class=positive_class,
             negative_class=negative_class,
@@ -253,7 +256,7 @@ class BinaryLatentGPCTerm(MultiScoreMixin, ModelFOMTerm, BinaryLatentGPC):
         )
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> None:
-        BinaryLatentGPC.fit(self, X, y)
+        BinaryGPC.fit(self, X, y)
         if self.score_config['std'] and self.is_trained:
             # Update max_std of current GPC
             self.update_max_std()
@@ -271,30 +274,32 @@ class BinaryLatentGPCTerm(MultiScoreMixin, ModelFOMTerm, BinaryLatentGPC):
         scores = []
 
         if self.score_config['proba']:
-            proba = self.predict_proba(X)[:, self.class_to_index[self.positive_class]]  # 1
+            proba = self.predict_positive_proba(X)
             scores.append(proba)
 
         if self.score_config['std']:
-            scores.append(self.get_std_score(X))
+            scores.append(self.predict_std_score(X))
 
         if self.score_config['bstd']:
-            scores.append(self.get_positive_bstd(X))
+            scores.append(self.predict_bstd_score(X))
 
         if self.score_config['entropy']:
-            scores.append(self.predict_positive_entropy(X))
+            scores.append(self.predict_entropy_score(X))
 
         return tuple(scores) if len(scores) > 1 else scores[0]
 
     def get_model_params(self) -> Dict[str, float]:
         if not self.is_trained:
             return {}
+
+        # Get kernel parameters
         kernel_params = {
-            k: v for k, v in self.kernel_.get_params().items()
+            k: v for k, v in self.model.kernel_.get_params().items()
             if not k.endswith('_bounds')
         }
         return {
             **kernel_params,
-            'lml': self.log_marginal_likelihood_value_,
+            'lml': self.model.log_marginal_likelihood_value_,
             'max_std': self.max_std,
         }
 
@@ -307,17 +312,17 @@ class BinaryLatentGPCTerm(MultiScoreMixin, ModelFOMTerm, BinaryLatentGPC):
 
         if self.is_trained:
             params.update({
-                'n_features': self.n_features_in_,
-                'n_train': self.base_estimator_.X_train_.shape[0],
-                'classes': self.classes_,
+                'n_features': self.model.n_features_in_,
+                'n_train': self.model.base_estimator_.X_train_.shape[0],
+                'classes': self.model.classes_,
             })
 
         return params
 
 
-class InterestGPCTerm(BinaryLatentGPCTerm):
+class InterestGPCTerm(BinaryGPCTerm):
 
-    required_args = BinaryLatentGPCTerm.required_args + ['interest_region']
+    required_args = BinaryGPCTerm.required_args + ['interest_region']
 
     def __init__(
         self,
@@ -362,7 +367,7 @@ class InterestGPCTerm(BinaryLatentGPCTerm):
         super().fit(X, y)
 
 
-class InlierGPCTerm(BinaryLatentGPCTerm):
+class InlierGPCTerm(BinaryGPCTerm):
 
     def __init__(
         self,

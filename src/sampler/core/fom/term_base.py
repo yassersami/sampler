@@ -403,16 +403,17 @@ class ModelFOMTerm(FittableFOMTerm):
     """
     An abstract base class for fittable model-based FOM (Figure of Merit) terms.
 
-    This class extends FittableFOMTerm to specific terms that actually train a
-    model, unlike FittableFOMTerm where subclasses could use `fit` just to store
-    train data for easier access in `predict_score`. This class includes a
-    method for retrieving fitted parameters. Subclasses must implement the
-    `get_model_params` method in addition to the fit method inherited from
-    FittableFOMTerm.
+    This class extends FittableFOMTerm to implement specific terms that actually 
+    train a model, unlike FittableFOMTerm where subclasses might use `fit` just 
+    to store training data for easier access in `predict_score`. This class 
+    introduces a `model` attribute to be fitted and a `get_model_params` method 
+    for retrieving fitted parameters. Both of these must be implemented in 
+    subclasses.
 
     Class Attributes:
         Inherits all class attributes from FittableFOMTerm, including
         fit_config.
+        model (Any): ML model to fit.
 
     Methods:
         get_model_params: Abstract method to retrieve fitted parameters.
@@ -423,6 +424,7 @@ class ModelFOMTerm(FittableFOMTerm):
         score_names: List[str] = ['_default']
     ) -> None:
         super().__init__(score_weights, score_names)
+        self.model = None
 
     @abstractmethod
     def get_model_params(self) -> Dict[str, float]:

@@ -11,7 +11,7 @@ from scipy.optimize import shgo
 from .term_base import ModelFOMTerm, MultiScoreMixin, KERNELS, RANDOM_STATE
 
 
-class SurrogateGPR(GaussianProcessRegressor):
+class SurrogateGPR():
     def __init__(
         self,
         shgo_n: int,
@@ -19,7 +19,9 @@ class SurrogateGPR(GaussianProcessRegressor):
         interest_region: Dict[str, Tuple[float, float]],
         kernel: str,
     ):
-        super().__init__(kernel=KERNELS[kernel], random_state=RANDOM_STATE)
+        self.model = GaussianProcessRegressor(
+            kernel=KERNELS[kernel], random_state=RANDOM_STATE
+        )
 
         self.is_trained = False
         self.shgo_n = shgo_n
@@ -49,16 +51,16 @@ class SurrogateGPR(GaussianProcessRegressor):
             )
 
         print(f"{self.__class__.__name__} -> Fitting model...")
-        super().fit(X, y)
+        self.model.fit(X, y)
         self.is_trained = True
 
-    def get_std(self, X: np.ndarray) -> np.ndarray:
+    def predict_std(self, X: np.ndarray) -> np.ndarray:
         """
         Compute the combined standard deviation for a GP regressor with multiple
         targets.
         """
         # Predict standard deviations for each target
-        _, y_std = self.predict(X, return_std=True)
+        _, y_std = self.model.predict(X, return_std=True)
 
         # If 1D, it's already the standard deviation for a single target
         if y_std.ndim == 1:
@@ -81,11 +83,11 @@ class SurrogateGPR(GaussianProcessRegressor):
         def get_opposite_std(X):
             """Opposite of std to be minimized."""
             X = np.atleast_2d(X)
-            return -1 * self.get_std(X)
+            return -1 * self.predict_std(X)
 
         result = shgo(
             get_opposite_std,
-            bounds=[(0, 1)]*self.n_features_in_,
+            bounds=[(0, 1)]*self.model.n_features_in_,
             n=self.shgo_n,
             iters=self.shgo_iters,
             sampling_method='simplicial'
@@ -102,7 +104,7 @@ class SurrogateGPR(GaussianProcessRegressor):
         """
         X = np.atleast_2d(X)
 
-        y_mean, y_std = self.predict(X, return_std=True)
+        y_mean, y_std = self.model.predict(X, return_std=True)
 
         point_norm = norm(loc=y_mean, scale=y_std)
 
@@ -116,7 +118,7 @@ class SurrogateGPR(GaussianProcessRegressor):
         X = np.atleast_2d(X)
         if self.max_std is None:
             raise NotFittedError("max_std must be updated before predicting scores.")
-        return self.get_std(X) / self.max_std
+        return self.predict_std(X) / self.max_std
 
 
 class SurrogateGPRTerm(MultiScoreMixin, ModelFOMTerm, SurrogateGPR):
@@ -146,7 +148,6 @@ class SurrogateGPRTerm(MultiScoreMixin, ModelFOMTerm, SurrogateGPR):
             shgo_n=shgo_n,
             shgo_iters=shgo_iters,
             interest_region=interest_region,
-            # GaussianProcessRegressor kwargs
             kernel=kernel,
         )
 
@@ -172,13 +173,15 @@ class SurrogateGPRTerm(MultiScoreMixin, ModelFOMTerm, SurrogateGPR):
     def get_model_params(self) -> Dict[str, float]:
         if not self.is_trained:
             return {}
+
+        # Get kernel parameters
         kernel_params = {
-            k: v for k, v in self.kernel_.get_params().items()
+            k: v for k, v in self.model.kernel_.get_params().items()
             if not k.endswith('_bounds')
         }
         return {
             **kernel_params,
-            'lml': self.log_marginal_likelihood_value_,
+            'lml': self.model.log_marginal_likelihood_value_,
             'max_std': self.max_std,
         }
 
@@ -191,8 +194,8 @@ class SurrogateGPRTerm(MultiScoreMixin, ModelFOMTerm, SurrogateGPR):
 
         if self.is_trained:
             params.update({
-                'n_features': self.n_features_in_,
-                'n_train': self.X_train_.shape[0],
+                'n_features': self.model.n_features_in_,
+                'n_train': self.model.X_train_.shape[0],
             })
 
         return params
