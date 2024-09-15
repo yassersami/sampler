@@ -120,22 +120,25 @@ def redirect_stdout_stderr(stdout_path, stderr_path):
 
 def run_simulation_process(inputs_dic: Dict, output_dir: str) -> Dict[str, float]:
     # Create paths for the stdout and stderr files
-    stdout_path = os.path.join(output_dir, '..', 'stdout.log')
-    stderr_path = os.path.join(output_dir, '..', 'stderr.log')
+    parent_dir = os.path.dirname(output_dir)  # better for Linux than using '..'
+    stdout_path = os.path.join(parent_dir, 'stdout.log')
+    stderr_path = os.path.join(parent_dir, 'stderr.log')
 
     # Start chronometer
     start_time = time.time()
 
+    # Notify start of process
+    print(f"Starting simulation for {inputs_dic['workdir']}")
+
     with redirect_stdout_stderr(stdout_path, stderr_path):
         try:
-            print(f"Starting simulation for {inputs_dic['workdir']}")
-            
-            # Run simulation, store outputs in output_dir and get them in dict
+            # Run simulation
             db_simulation = simulator_0d.main(inputs_dic)
             results = SimPostProc(**db_simulation.__dict__)
+
+            # Get final results and save simulation report at output_dir
             res_dic = results.manage(output_dir=output_dir)
 
-            print(f"Simulation completed successfully for {inputs_dic['workdir']}")
             return res_dic
 
         except Exception as e:
@@ -155,6 +158,9 @@ def run_simulation_process(inputs_dic: Dict, output_dir: str) -> Dict[str, float
                 'timed_out': elapsed_time >= inputs_dic['max_sim_time'],
                 **EMPTY_TARGETS_DICT,
             }
+
+    # Notify end of process
+    print(f"Simulation completed successfully for {inputs_dic['workdir']}")
 
     return res_dic
 

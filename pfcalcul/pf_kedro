@@ -20,17 +20,17 @@ if [ ! -d "src/sampler/pipelines/${pipe_name}" ]; then
     exit 1
 fi
 
+if [ ! -d "${env}" ]; then
+    echo "environment '${env}' not found" 1>&2
+    exit 1
+fi
+
 # Remove the 'conf/' prefix from the environment input
 if [[ "${env}" == conf/* ]]; then
     env="${env#conf/}"
 fi
 
-if [ ! -d "conf/${env}" ]; then
-    echo "environment 'conf/${env}' not found" 1>&2
-    exit 1
-fi
-
-now=$(date +%Y-%m-%d_%H:%M:%S)
+now=$(date +%Y-%m-%d_%H:%M:%S.%N)
 out=data/09_std/${env}/${now}   
 DIR=$(cd ${0%/*}; pwd)
 mkdir -p ${out}
@@ -74,5 +74,5 @@ echo "pwd=$(pwd)"
 time $EX
 EOF
 
-echo "starting, stdout/stderr output are stored into ${out}/"
+echo "stdout and stderr output are stored into ${out}/"
 sbatch .sbatch-${now}

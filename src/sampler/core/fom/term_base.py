@@ -271,9 +271,14 @@ class BaseFOMTerm(ABC):
         
         Note:
             - If multiple scores are returned, they should be in a consistent
-        order with self.score_names property.
-            - The score must be either in [0, 1] or [-1, 0].
-            - Score always verifies greater is better.  
+              order with self.score_names property.
+            - The score must be either positive in [0, 1] or negative in [-1, 0].
+            - Score always verifies greater-is-better.
+            - A score is negative when it is more natural to think about it as a
+              loss, but the metric still follows the "greater-is-better"
+              principle. For example, outlier proximity is 0 for good regions
+              and -1 for outlier regions. So the only purpose of negativity is
+              a more natural interpretation of the score.
         """
         raise NotImplementedError("Subclasses must implement method")
 
@@ -492,15 +497,16 @@ FOMTermType = Type[FOMTermInstance]
 
 # Kernel of Gaussian Process model
 RANDOM_STATE = 42
+BANDWIDTH_BOUNDS = (1e-2, 1.0)  # (1e-5, 10)
 KERNELS = {
     'RBF': RBF(
         length_scale=0.5,
-        length_scale_bounds=(1e-2, 1.0)
+        length_scale_bounds=BANDWIDTH_BOUNDS
     ),
     'RQ': RationalQuadratic(
         length_scale=0.5,
-        alpha=1.0, 
-        length_scale_bounds=(0.01, 2.0),  # (1e-5, 10)
+        alpha=1.0,
+        length_scale_bounds=BANDWIDTH_BOUNDS,
         alpha_bounds=(0.1, 10.0)
     )
 }
