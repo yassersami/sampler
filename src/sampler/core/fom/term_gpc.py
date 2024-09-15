@@ -15,9 +15,6 @@ from .term_base import ModelFOMTerm, MultiScoreMixin, KERNELS, RANDOM_STATE
 
 class LatentGPC(GaussianProcessClassifier):
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
     def predict_a(
         self, X: np.ndarray, return_std: bool = False
     ) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:

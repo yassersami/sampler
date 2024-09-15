@@ -153,7 +153,7 @@ class SurrogateGPRTerm(MultiScoreMixin, ModelFOMTerm, SurrogateGPR):
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> None:
         SurrogateGPR.fit(self, X, y)
-        if self.score_config['std']:
+        if self.score_config['std'] and self.is_trained:
             # Update max_std of current surrogate GP
             self.update_max_std()
 

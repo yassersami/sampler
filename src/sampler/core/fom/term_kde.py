@@ -234,16 +234,22 @@ class OutlierKDETerm(ModelFOMTerm, KDEModel):
         # Must provide bandwidth to fit KDE
         KDEModel.fit(self, X_outliers, bandwidth)
 
-        # Update maximum and minimum densities
-        self.update_modes()
-        self.update_max_density()
-        self.update_min_density()
+        if self.is_trained:
+            # Update maximum and minimum densities
+            self.update_modes()
+            self.update_max_density()
+            self.update_min_density()
 
     def _predict_score(self, X: np.ndarray) -> np.ndarray:
         """
         Score is -1 if sample is in high density outlier region that FOM should
         avoid, else 0.
         """
+        # Return zeros (best value) if the model is not trained,
+        # as no outlier samples are encountered yet
+        if not self.is_trained:
+            return np.zeros(X.shape[0])
+
         normalized_density = (self.predict_proba(X) - self.min_density) / (self.max_density - self.min_density)
         return 0 - normalized_density
 

@@ -425,6 +425,7 @@ class ModelFOMTerm(FittableFOMTerm):
     ) -> None:
         super().__init__(score_weights, score_names)
         self.model = None
+        self.is_trained = False
 
     @abstractmethod
     def get_model_params(self) -> Dict[str, float]:

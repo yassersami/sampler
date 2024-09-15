@@ -55,3 +55,4 @@ irbs_fom_terms_config:
   outlier_kde:
     apply: false
     score_weights: 1
+    bandwidth_config: {use_gpr_kernel: false, use_grid_search: false, heuristic: 'scott'}
