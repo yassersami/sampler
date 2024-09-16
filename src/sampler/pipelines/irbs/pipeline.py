@@ -8,7 +8,7 @@ from kedro.pipeline import Pipeline, node, pipeline
 from sampler.pipelines.prep import create_pipeline as create_pipeline_prep
 
 from .nodes import irbs_initialize_component, irbs_prepare_data, irbs_store_config, irbs_sampling
-from sampler.core.data_processing.storing import join_history
+from sampler.core.data_processing.storing import join_history, join_logs
 
 
 def create_pipeline(**kwargs) -> Pipeline:
@@ -75,7 +75,10 @@ def create_pipeline(**kwargs) -> Pipeline:
                 optimizer='optimizer',
                 simulator='simulator',
             ),
-            outputs='irbs_history',
+            outputs=dict(
+                history='irbs_history',
+                logs='irbs_logs',
+            ),
             name='irbs_sampling',
         ),
         node(
@@ -85,7 +88,13 @@ def create_pipeline(**kwargs) -> Pipeline:
                 stop_condition='params:stop_condition'
             ),
             outputs='irbs_increased_data',
-            name='irbs_retrieve_outputs',
+            name='irbs_join_history',
+        ),
+        node(
+            func=join_logs,
+            inputs='irbs_logs',
+            outputs='irbs_final_logs',
+            name='irbs_join_logs',
         )
     ])
     return pipeline([pipeline_prep, pipeline_local])

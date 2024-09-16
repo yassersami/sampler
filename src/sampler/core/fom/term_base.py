@@ -18,12 +18,13 @@ class BaseFOMTerm(ABC):
             Required arguments to be provided by the FOM class, not from the
             JSON config. For example: ['features', 'targets',
             'interest_region']. Subclasses should override this list as needed.
+
+    Attributes:
         predict_count (int): Number of prediction calls.
         predict_count_log (List[int]): Log of prediction counts.
         predict_cumtime (float): Cumulative time spent in predictions.
         predict_cumtime_log (List[float]): Log of cumulative prediction times.
 
-    Attributes:
         score_names (List[str]):
             Active score names. Defaults to ['_default'] for single-score terms.
 
@@ -53,11 +54,6 @@ class BaseFOMTerm(ABC):
 
     required_args: ClassVar[List[str]] = []
 
-    predict_count: ClassVar[int] = 0
-    predict_count_log: ClassVar[List[int]] = []
-    predict_cumtime: ClassVar[float] = 0
-    predict_cumtime_log: ClassVar[List[float]] = []
-
     @classmethod
     def _set_term_name(cls, name: str):
         """Set term name used in FOM TERM_CLASSES."""
@@ -67,6 +63,11 @@ class BaseFOMTerm(ABC):
         score_weights: Union[Dict[str, float], float],
         score_names: List[str] = ['_default']
     ) -> None:
+        # Initialize prediction profiling variables
+        self.predict_count: int = 0
+        self.predict_count_log: List[int] = []
+        self.predict_cumtime: float = 0
+        self.predict_cumtime_log: List[float] = []
 
         # Validate score names
         self._validate_names(score_names)
@@ -258,7 +259,7 @@ class BaseFOMTerm(ABC):
                     )
 
     @abstractmethod
-    def _predict_score(self, X: np.ndarray) -> Union[np.ndarray, Tuple[np.ndarray, ...]]:
+    def predict_score(self, X: np.ndarray) -> Union[np.ndarray, Tuple[np.ndarray, ...]]:
         """
         Calculate and return the score(s) for this FOM term.
         
@@ -282,12 +283,12 @@ class BaseFOMTerm(ABC):
         """
         raise NotImplementedError("Subclasses must implement method")
 
-    def predict_score(self, X: np.ndarray) -> Union[np.ndarray, Tuple[np.ndarray, ...]]:
+    def predict_score_with_log(self, X: np.ndarray) -> Union[np.ndarray, Tuple[np.ndarray, ...]]:
         """
-        Wrapper method that calls _predict_score and updates cumulative prediction time.
+        Wrapper method that calls predict_score and updates cumulative prediction time.
         """
         start_time = time.perf_counter()
-        score = self._predict_score(X)
+        score = self.predict_score(X)
         end_time = time.perf_counter()
 
         self.predict_count += 1
@@ -361,9 +362,11 @@ class FittableFOMTerm(BaseFOMTerm):
         fitting configuration. Subclasses must override this with their specific
         configuration. Default values are set to None and will raise an error if
         not properly defined.
-        - dependencies (List[str]): List of term names from which subclass
-        depends. Subclass consults specific attributes from these terms for its
-        fiting process.
+        - dependencies (List[str]): List of term names on which this subclass
+        depends. The subclass can access specific attributes from these terms
+        during its fitting process. When a dependency is not present in
+        fom.terms (not applied), it's up to the subclass to decide whether to
+        raise an error or handle the missing dependency gracefully.
 
     Attributes:
         Inherits all attributes from BaseFOMTerm.
@@ -376,6 +379,7 @@ class FittableFOMTerm(BaseFOMTerm):
         score_names: List[str] = ['_default']
     ) -> None:
         super().__init__(score_weights, score_names)
+        self.fit_time_log: List[float] = []
         self._validate_fit_config()
 
     @classmethod
@@ -397,6 +401,12 @@ class FittableFOMTerm(BaseFOMTerm):
     def fit(self, X: np.ndarray, y: np.ndarray) -> None:
         """ Fit the FOM term to the provided data. """
         pass
+
+    def fit_with_log(self, **kwargs) -> None:
+        """ Fit term with time log"""
+        start_time = time.time()
+        self.fit(**kwargs)
+        self.fit_time_log.append(time.time() - start_time)
 
 
 class ModelFOMTerm(FittableFOMTerm):
@@ -424,8 +434,18 @@ class ModelFOMTerm(FittableFOMTerm):
         score_names: List[str] = ['_default']
     ) -> None:
         super().__init__(score_weights, score_names)
-        self.model = None
-        self.is_trained = False
+        self._validate_model_attrs()
+    
+        # Subclass must contain following attributes for consistency
+        # self.model
+        # self.is_trained
+
+    def _validate_model_attrs(self) -> None:
+        if not hasattr(self, 'model') or not hasattr(self, 'is_trained'):
+            raise AttributeError(
+                f"ModelFOMTerm subclass '{self.__class__.__name__}' must "
+                "contain a 'model' and 'is_trained' attributes"
+            )
 
     @abstractmethod
     def get_model_params(self) -> Dict[str, float]:
@@ -500,7 +520,7 @@ FOMTermType = Type[FOMTermInstance]
 
 # Kernel of Gaussian Process model
 RANDOM_STATE = 42
-BANDWIDTH_BOUNDS = (1e-2, 1.0)  # (1e-5, 10)
+BANDWIDTH_BOUNDS = (1e-5, 1.0)
 KERNELS = {
     'RBF': RBF(
         length_scale=0.5,

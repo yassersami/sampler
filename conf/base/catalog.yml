@@ -20,9 +20,19 @@ irbs_history:
   dataset: pandas.CSVDataSet
   filename_suffix: .csv
 
+irbs_logs:
+  type: IncrementalDataSet
+  path: data/07_model_output/base/irbs_logs
+  dataset: json.JSONDataSet
+  filename_suffix: .json
+
 irbs_increased_data:
   type: pandas.CSVDataSet
   filepath: data/07_model_output/base/irbs_increased_data.csv
+
+irbs_final_logs:
+  type: pandas.CSVDataSet
+  filepath: data/07_model_output/base/irbs_final_logs.csv
 
 ###### ParEGO ######
 parego_history:

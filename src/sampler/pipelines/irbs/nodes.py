@@ -12,7 +12,7 @@ import pandas as pd
 from sampler.core.data_processing.data_treatment import (
     DataTreatment, initialize_dataset, append_hypercube_boundary_points
 )
-from sampler.core.data_processing.storing import parse_results
+from sampler.core.data_processing.storing import parse_results, parse_logs
 from sampler.core.data_processing.sampling_tracker import SamplingProgressTracker
 from sampler.core.simulator.simulator import SimulationProcessor
 from sampler.core.fom.fom import FigureOfMerit
@@ -130,8 +130,11 @@ def irbs_sampling(
     simulator: SimulationProcessor,
 ):
     # Store initial data
-    yield parse_results(data, current_history_size=0)
-    
+    yield {
+        'history': parse_results(data, current_history_size=0),
+        'logs': {},
+    }
+
     # Set progress counting variables
     sampling_tracker = SamplingProgressTracker(**stop_condition, targets=targets)
 
@@ -155,16 +158,13 @@ def irbs_sampling(
         df_fom_scores = fom_model.get_scores_df(X_batch)
 
         # Get FOM models fitting report
-        model_params = fom_model.get_model_params()
-
-        # Get predictions profiling
-        iteration_profile = fom_model.get_profile(use_log=False)
+        fom_model.reset_predict_profiling()
+        model_stats = fom_model.get_model_stats()
 
         print(f"Selected candidates to be input to the simulator: \n{X_batch}")
         print(f"Multimodal selection records: \n{df_mmo_scores}")
         print(f"FOM scores records: \n{df_fom_scores}")
-        print(f"FOM models fitting report: \n{fom_model.serialize_dict(model_params)}")
-        print(f"FOM terms prediction profiling: \n{fom_model.serialize_dict(iteration_profile)}")
+        print(f"FOM models fitting report: \n{fom_model.serialize_dict(model_stats)}")
 
         # Launch time expensive simulations
         new_df = simulator.process_data(X_batch, is_real_X=False, index=sampling_tracker.n_total, treat_output=True)
@@ -183,10 +183,12 @@ def irbs_sampling(
         # Add common information to first row only
         new_df.loc[0, 'iteration'] = sampling_tracker.iteration
         new_df.loc[0, 'datetime'] = start_time
-        new_df.loc[0, model_params.keys()] = model_params.values()
 
         # Store final batch results
-        yield parse_results(new_df, current_history_size=data.shape[0])
+        yield {
+            'history': parse_results(new_df, current_history_size=data.shape[0]),
+            'logs': parse_logs(model_stats, sampling_tracker.iteration),
+        }
 
         # Add new samples to general DataFrame
         data = pd.concat([data, new_df], axis=0, ignore_index=True)
@@ -197,6 +199,7 @@ def irbs_sampling(
 
         progress_bar.update(progress)
     progress_bar.close()
+
     print(  # Profile report since sampling started
         "\nFOM terms prediction profiling since sampling started: \n"
         f"{fom_model.serialize_dict(fom_model.get_profile(use_log=True))}"

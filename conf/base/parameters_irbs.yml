@@ -55,4 +55,30 @@ irbs_fom_terms_config:
   outlier_kde:
     apply: false
     score_weights: 1
-    bandwidth_config: {use_gpr_kernel: false, use_grid_search: false, heuristic: 'scott'}
+    heuristic: 'scott'
+    null_density_proportion: 0.1
+    bandwidth_config:
+      use_gpr_kernel: false
+      use_brentq: false
+      use_search_cv: false
+      use_heuristic: false
+
+  feature_kde:
+    apply: false
+    score_weights: 1
+    heuristic: 'scott'
+    null_density_proportion: 0.1
+    bandwidth_config:
+      use_brentq: false
+      use_search_cv: false
+      use_heuristic: false
+
+  target_kde:
+    apply: false
+    score_weights: 1
+    heuristic: 'scott'
+    null_density_proportion: 0.1
+    bandwidth_config:
+      use_brentq: false
+      use_search_cv: false
+      use_heuristic: false

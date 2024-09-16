@@ -25,7 +25,7 @@ class SigmoidDensityTerm(FittableFOMTerm):
     def fit(self, X: np.ndarray) -> None:
         self.dataset_points = X
 
-    def _predict_score(self, X: np.ndarray) -> np.ndarray:
+    def predict_score(self, X: np.ndarray) -> np.ndarray:
         """
         Compute the decay score and apply a sigmoid transformation to obtain a 
         density-like value.
@@ -114,7 +114,7 @@ class OutlierProximityTerm(FittableFOMTerm):
         # Extract feature values from these rows
         self.outlier_points = X[nan_mask]
 
-    def _predict_score(self, X: np.ndarray) -> np.ndarray:
+    def predict_score(self, X: np.ndarray) -> np.ndarray:
         """
         Proximity Avoidance Condition: Determine if the given point is
         sufficiently distant from any point with erroneous simulations. Points

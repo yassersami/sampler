@@ -121,8 +121,8 @@ class SurrogateGPR():
         return self.predict_std(X) / self.max_std
 
 
-class SurrogateGPRTerm(MultiScoreMixin, ModelFOMTerm, SurrogateGPR):
-    
+class SurrogateGPRTerm(SurrogateGPR, MultiScoreMixin, ModelFOMTerm):
+
     required_args = ['interest_region']
     fit_config = {'X_only': False, 'drop_nan': True}
     all_scores= ['interest', 'std']
@@ -138,11 +138,6 @@ class SurrogateGPRTerm(MultiScoreMixin, ModelFOMTerm, SurrogateGPR):
         # kwargs required from FOM attributes 
         interest_region: Dict[str, Tuple[float, float]],
     ):
-        # Set score names
-        MultiScoreMixin.__init__(self, score_config)
-        score_names = MultiScoreMixin.get_active_scores(self)
-
-        ModelFOMTerm.__init__(self, score_weights, score_names)
 
         SurrogateGPR.__init__(self,
             shgo_n=shgo_n,
@@ -151,13 +146,18 @@ class SurrogateGPRTerm(MultiScoreMixin, ModelFOMTerm, SurrogateGPR):
             kernel=kernel,
         )
 
+        MultiScoreMixin.__init__(self, score_config)  # Set score names
+        score_names = MultiScoreMixin.get_active_scores(self)
+
+        ModelFOMTerm.__init__(self, score_weights, score_names)
+
     def fit(self, X: np.ndarray, y: np.ndarray) -> None:
         SurrogateGPR.fit(self, X, y)
         if self.score_config['std'] and self.is_trained:
             # Update max_std of current surrogate GP
             self.update_max_std()
 
-    def _predict_score(self, X: np.ndarray) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
+    def predict_score(self, X: np.ndarray) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
         X = np.atleast_2d(X)
 
         scores = []

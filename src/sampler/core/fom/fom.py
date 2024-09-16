@@ -85,17 +85,17 @@ class FigureOfMerit:
         dummy_scores = term.predict_score(dummy_X)
         term._validate_score_shape(dummy_X, dummy_scores)
         term._validate_score_sign(dummy_scores)
-        
+
+    def reset_predict_profiling(self) -> None:
+        for term in self.terms.values():
+            term.reset_predict_profiling()
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> None:
 
-        # Check if y is 1D or 2D
-        if y.ndim > 2:
-            raise ValueError(f"Unexpected shape for y: {y.shape}")
+        # y must be 2D for consistency
+        y = np.atleast_2d(y.T).T
 
         for term in self.terms.values():
-            # Reset term prediction profiling
-            term.reset_predict_profiling()
 
             if isinstance(term, FittableFOMTerm):
                 fit_config = term.fit_config
@@ -114,10 +114,13 @@ class FigureOfMerit:
 
                 # Add term dependencies if necessary
                 if len(term.dependencies) > 0:
-                    fit_args.update({dep: self.terms[dep] for dep in term.dependencies})
+                    fit_args['dependency_terms'] = {
+                        dep: getattr(self.terms, dep, None)
+                        for dep in term.dependencies
+                    }
 
                 # Call the fit method with prepared arguments
-                term.fit(**fit_args)
+                term.fit_with_log(**fit_args)
 
             # Take advantage of having available valid samples
             # Validate scoring process after fitting (a key step)
@@ -145,7 +148,7 @@ class FigureOfMerit:
         """ Compute a weighted sum of all scores. """
         all_scores = []
         for term in self.terms.values():
-            scores = term.predict_score(X)
+            scores = term.predict_score_with_log(X)
 
             # Convert single score to tuple
             scores = (scores,) if isinstance(scores, np.ndarray) else scores
@@ -235,17 +238,11 @@ class FigureOfMerit:
         ])
 
     def get_model_params(self) -> Dict[str, float]:
-        model_params = {}
-
-        for term_name, term in self.terms.items():
-            # Get fit parameters if ModelFOMTerm
-            if isinstance(term, ModelFOMTerm):
-                term_model_params = term.get_model_params()
-                for param_name, param_value in term_model_params.items():
-                    # Use term name as prefix to avoid conflicts
-                    model_params[f"{term_name}_{param_name}"] = param_value
-
-        return model_params
+        return {
+            term_name: term.get_model_params()
+            for term_name, term in self.terms.items()
+            if isinstance(term, ModelFOMTerm)
+        }
 
     def get_profile(self, use_log: bool = False) -> Dict[str, Dict[str, float]]:
         """
@@ -256,26 +253,43 @@ class FigureOfMerit:
 
         tot_cumtime = 0
         tot_calls = 0
+        tot_fit_time = 0
         for term_name, term in self.terms.items():
             if use_log:
                 cumtime = sum(term.predict_cumtime_log)
                 calls = sum(term.predict_count_log)
+                fit_time = sum(term.fit_time_log)
             else:
-                cumtime = term.predict_cumtime
-                calls = term.predict_count
+                cumtime = term.predict_cumtime_log[-1]
+                calls = term.predict_count_log[-1]
+                fit_time = term.fit_time_log[-1]
 
             tot_cumtime += cumtime
             tot_calls += calls
+            tot_fit_time += fit_time
             stats[term_name] = {
                 'cumtime': cumtime,
-                'cumtime_percall': 0 if calls == 0 else cumtime / calls
+                'cumtime_percall': 0 if calls == 0 else cumtime / calls,
+                'fit_time': fit_time,
             }
 
         stats['Total'] = {
             'cumtime': tot_cumtime,
-            'cumtime_percall': 0 if tot_calls == 0 else tot_cumtime / tot_calls
+            'cumtime_percall': 0 if tot_calls == 0 else tot_cumtime / tot_calls,
+            'tot_fit_time': tot_fit_time,
         }
 
+        return stats
+
+    def get_model_stats(self) -> Dict[str, Dict[str, float]]:
+        stats = {}
+        profile = self.get_profile(use_log=False)
+        params = self.get_model_params()
+        for term_name in self.terms:
+            stats[term_name] = {
+                **profile[term_name],
+                **params.get(term_name, {})
+            }
         return stats
 
     def get_parameters(self) -> Dict[str, Dict[str, Any]]:

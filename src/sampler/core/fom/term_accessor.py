@@ -7,7 +7,7 @@ from .term_base import (
 )
 from .term_gpr import SurrogateGPRTerm
 from .term_gpc import InterestGPCTerm, InlierGPCTerm
-from .term_kde import OutlierKDETerm
+from .term_kde import OutlierKDETerm, FeatureKDETerm, TargetKDETerm
 from .term_spatial import OutlierProximityTerm, SigmoidDensityTerm
 
 
@@ -28,6 +28,8 @@ class FOMTermAccessor:
     sigmoid_density: SigmoidDensityTerm
     outlier_proximity: OutlierProximityTerm
     outlier_kde: OutlierKDETerm
+    feature_kde: FeatureKDETerm
+    target_kde: TargetKDETerm
 
     def __init__(self, terms: Dict[str, FOMTermInstance]):
         # Set terms as attributes
@@ -91,23 +93,16 @@ class FOMTermAccessor:
         return cls.is_valid_term_class(TermClass)
 
     @classmethod
+    def get_all_term_names(cls) -> List[str]:
+        """ Returns a list of all possible term names. """
+        return list(cls.__annotations__.keys())
+
+    @classmethod
     def get_term_class(cls, term_name: str) -> FOMTermType:
         """ Returns the class for a given term name. """
         if not cls.is_valid_term_name(term_name):
             raise ValueError(f"'{term_name}' is not a valid FOM term class.")
         return cls.__annotations__[term_name]
-
-    @classmethod
-    def get_term_classes(cls) -> Dict[str, FOMTermType]:
-        """
-        Returns a dictionary of all possible term names and their corresponding
-        term classes.
-        """
-        return {
-            term_name: TermClass
-            for term_name, TermClass in cls.__annotations__.items()
-            if cls.is_valid_term_class(TermClass)
-        }
 
     def validate_term_dependencies(self) -> None:
         """
@@ -118,11 +113,12 @@ class FOMTermAccessor:
         """
         for term_name, term in self.items():
             if isinstance(term, FittableFOMTerm):
-                invalid_dependencies = set(term.dependencies) - set(self.term_names)
+                all_term_names = self.get_all_term_names()
+                invalid_dependencies = set(term.dependencies) - set(all_term_names)
                 if invalid_dependencies:
                     raise ValueError(
-                        f"Term '{term_name}' has invalid dependencies: {invalid_dependencies}. "
-                        f"Acceptable term names are: {self.term_names}"
+                        f"Term '{term_name}' has unavailable dependencies: {invalid_dependencies}. "
+                        f"Available term names are: {all_term_names}"
                     )
 
     def topological_sort(self, term_names: List[str]) -> List[str]:
@@ -158,7 +154,9 @@ class FOMTermAccessor:
             term = getattr(self, term_name)
             if isinstance(term, FittableFOMTerm):
                 # Add edges (dependencies) only for fittable terms
-                graph[term_name].update(term.dependencies)
+                # Consider only active dependencies
+                active_dependencies = [dep for dep in term.dependencies if dep in term_names]
+                graph[term_name].update(active_dependencies)
 
         # Calculate in_degree, the number of edges j != i pointing to node i
         # Also interpreted as number of terms that depend on term i

@@ -221,8 +221,8 @@ class BinaryGPC():
         return score
 
 
-class BinaryGPCTerm(MultiScoreMixin, ModelFOMTerm, BinaryGPC):
-    
+class BinaryGPCTerm(BinaryGPC, MultiScoreMixin, ModelFOMTerm):
+
     required_args = []
     fit_config = {'X_only': False, 'drop_nan': False}
     all_scores= ['proba', 'std', 'bstd', 'entropy']
@@ -237,12 +237,6 @@ class BinaryGPCTerm(MultiScoreMixin, ModelFOMTerm, BinaryGPC):
         shgo_iters: int,
         kernel: str,
     ):
-        # Set score names
-        MultiScoreMixin.__init__(self, score_config)
-        score_names = MultiScoreMixin.get_active_scores(self)
-
-        ModelFOMTerm.__init__(self, score_weights, score_names)
-
         BinaryGPC.__init__(
             self,
             positive_class=positive_class,
@@ -252,13 +246,18 @@ class BinaryGPCTerm(MultiScoreMixin, ModelFOMTerm, BinaryGPC):
             kernel=kernel,
         )
 
+        MultiScoreMixin.__init__(self, score_config)  # Set score names
+        score_names = MultiScoreMixin.get_active_scores(self)
+
+        ModelFOMTerm.__init__(self, score_weights, score_names)
+
     def fit(self, X: np.ndarray, y: np.ndarray) -> None:
         BinaryGPC.fit(self, X, y)
         if self.score_config['std'] and self.is_trained:
             # Update max_std of current GPC
             self.update_max_std()
 
-    def _predict_score(self, X: np.ndarray) -> Union[np.ndarray, Tuple[np.ndarray, ...]]:
+    def predict_score(self, X: np.ndarray) -> Union[np.ndarray, Tuple[np.ndarray, ...]]:
         X = np.atleast_2d(X)
 
         # Return ones (best value) if the model is not trained,

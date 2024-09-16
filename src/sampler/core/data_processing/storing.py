@@ -16,6 +16,10 @@ def parse_results(df: pd.DataFrame, current_history_size: int) -> Dict[str, pd.D
     return {f'[{start_idx:03}-{end_idx:03}]': df}
 
 
+def parse_logs(logs: Dict[str, Dict[str, float]], iteration: int) -> Dict[str, Dict]:
+    return {f'log_{iteration}': logs}
+
+
 def join_history(
     history: Dict[str, pd.DataFrame], stop_condition: Dict
 ) -> pd.DataFrame:
@@ -32,6 +36,54 @@ def join_history(
         max_interest_index = get_max_interest_index(df_history)
         df_history = df_history.iloc[:max_interest_index]
         return df_history
+
+
+def join_logs(logs: Dict[str, Dict[str, Dict[str, float]]]) -> pd.DataFrame:
+    """
+    Joins all log checkpoints into a single DataFrame.
+
+    Args:
+    logs (Dict[str, Dict[str, Dict[str, float]]]): A dictionary where each key
+        is a checkpoint and each value is a dictionary of log entries.
+
+    Returns:
+    pd.DataFrame: A DataFrame containing all log entries, with columns for each
+        log key and an additional 'checkpoint' column.
+    """
+    # Initialize an empty list to store all log entries
+    all_logs = []
+
+    # Iterate through each checkpoint
+    for checkpoint, log_entries in logs.items():
+        # For each log entry in the checkpoint
+        for term_name, log_values in log_entries.items():
+            # For each log name and value
+            for log_name, value in log_values.items():
+                # Create a dictionary for this log entry
+                entry = {
+                    'term_name': term_name,
+                    'log_name': log_name,
+                    'checkpoint': checkpoint,
+                    'value': value
+                }
+                all_logs.append(entry)
+
+    # Convert the list of dictionaries to a DataFrame
+    df_logs = pd.DataFrame(all_logs)
+
+    # Pivot the DataFrame to have checkpoints as columns
+    df_pivoted = df_logs.pivot(index=['term_name', 'log_name'], columns='checkpoint', values='value')
+
+    # Reset index to make term_name and log_name regular columns
+    df_final = df_pivoted.reset_index()
+    
+    # Create a mask for duplicates in the term_name column
+    mask = df_final.duplicated('term_name')
+    
+    # Replace duplicates with an empty string
+    df_final.loc[mask, 'term_name'] = ''
+
+    return df_final
 
 
 def create_history_folder(history_path: str, should_rename: bool = True):
