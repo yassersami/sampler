@@ -7,6 +7,7 @@ from .term_base import (
 )
 from .term_gpr import SurrogateGPRTerm
 from .term_gpc import InterestGPCTerm, InlierGPCTerm
+from .term_mlp import MLPTerm
 from .term_kde import OutlierKDETerm, FeatureKDETerm, TargetKDETerm
 from .term_spatial import OutlierProximityTerm, SigmoidDensityTerm
 
@@ -25,11 +26,12 @@ class FOMTermAccessor:
     surrogate_gpr: SurrogateGPRTerm
     interest_gpc: InterestGPCTerm
     inlier_gpc: InlierGPCTerm
-    sigmoid_density: SigmoidDensityTerm
-    outlier_proximity: OutlierProximityTerm
+    surrogate_mlp: MLPTerm
     outlier_kde: OutlierKDETerm
     feature_kde: FeatureKDETerm
     target_kde: TargetKDETerm
+    outlier_proximity: OutlierProximityTerm
+    sigmoid_density: SigmoidDensityTerm
 
     def __init__(self, terms: Dict[str, FOMTermInstance]):
         # Set terms as attributes

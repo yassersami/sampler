@@ -299,7 +299,7 @@ class TargetKDETerm(KDETerm):
 
     fit_config = {'X_only': False, 'drop_nan': True}
     # All possible terms with regression model 
-    dependencies = ['surrogate_gpr']
+    dependencies = ['surrogate_gpr', 'surrogate_mlp']
 
     def get_regression_model(self, dependency_terms: Dict[str, ModelFOMTerm]) -> ModelFOMTerm:
         # Check that exactly one term is not None

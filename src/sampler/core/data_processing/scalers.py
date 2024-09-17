@@ -203,3 +203,41 @@ def linear_tent(
     y = -slope*x_dist + 1
 
     return y
+
+
+def hypercube_tent(X: np.ndarray, L: np.ndarray, U: np.ndarray) -> np.ndarray:
+    """
+    Hypercube tent function:
+    - X on hypercube boundaries      -> y = 0 
+    - X in [L, U] for each dimension -> y = 1 
+    - X elsewhere                    -> y = linear
+
+    Parameters:
+    X: shape (n, p) or (p,), values in [0, 1]^p
+    L: shape (p,), lower bounds for each dimension
+    U: shape (p,), upper bounds for each dimension
+
+    Returns:
+    y: shape (n,) or scalar
+    """
+    X = np.atleast_2d(X)
+    n, p = X.shape
+
+    if np.any(L >= U):
+        raise ValueError(f"L should be less than U\nL: {L}\nU: {U}")
+
+    if np.any(L < 0) or np.any(U > 1):
+        raise ValueError(f"L and U should be within [0, 1]\nL: {L}\nU: {U}")
+
+    y = np.ones(n)
+
+    for i in range(p):
+        # Calculate linear decrease from L to 0
+        mask_lower = X[:, i] < L[i]
+        y[mask_lower] *= X[mask_lower, i] / L[i]
+
+        # Calculate linear decrease from U to 1
+        mask_upper = X[:, i] > U[i]
+        y[mask_upper] *= (1 - X[mask_upper, i]) / (1 - U[i])
+
+    return y

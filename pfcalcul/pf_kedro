@@ -30,7 +30,7 @@ if [[ "${env}" == conf/* ]]; then
     env="${env#conf/}"
 fi
 
-now=$(date +%Y-%m-%d_%H:%M:%S.%N)
+now=$(date +%Y-%m-%d_%H:%M:%S)
 out=data/09_std/${env}/${now}   
 DIR=$(cd ${0%/*}; pwd)
 mkdir -p ${out}
