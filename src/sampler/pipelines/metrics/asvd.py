@@ -15,6 +15,34 @@ class ASVD:
     also known as Voronoi volumes or Donald volumes in some contexts.
     - _x or _xy suffix indicates wheter original or augmented space
     """
+    """
+    Augmented (Space) Simplex Volume Distribution (ASVD) class.
+
+    This class calculates and analyzes fractional vertex star volumes in both
+    original and augmented spaces. These volumes are also known as Voronoi
+    volumes or Donald volumes in certain contexts.
+
+    The class performs Delaunay triangulation on the input data, computes
+    simplex volumes, and calculates fractional vertex star volumes in both the
+    original feature space and the augmented space (features + targets).
+
+    Attributes:
+        features (List[str]): Names of feature columns.
+        targets (List[str]): Names of target columns.
+        vertices_x (np.ndarray): Vertex coordinates in the original feature space.
+        vertices_xy (np.ndarray): Vertex coordinates in the augmented space (features + targets).
+        simplices_idx (np.ndarray): Indices of simplices from Delaunay triangulation.
+        simplices_x (np.ndarray): Simplex coordinates in the original feature space.
+        simplices_xy (np.ndarray): Simplex coordinates in the augmented space.
+        simplices_volumes_x (np.ndarray): Simplex volumes in the original feature space.
+        simplices_volumes_xy (np.ndarray): Simplex volumes in the augmented space.
+        stars_volumes_x (np.ndarray): Fractional vertex star volumes in the original feature space.
+        stars_volumes_xy (np.ndarray): Fractional vertex star volumes in the augmented space.
+
+    Note:
+        - Suffix '_x' denotes attributes in the original feature space.
+        - Suffix '_xy' denotes attributes in the augmented space (features + targets).
+    """
 
     def __init__(
         self, data: pd.DataFrame, features: List[str], targets: List[str],
@@ -27,15 +55,11 @@ class ASVD:
         data: Dataframe (n, p+k) (or (n, p) if use_func is True) of samples that will
             be future (augmented) vertices.
             vertices = data[features], augmented_vertices = data[features + targets]
-        features: List of feature column names
-        targets: List of target column names
         use_func: Boolean indicating whether to use a custom function
         func: Custom function to compute targets (if use_func is True)
         """
         self.features = features
         self.targets = targets
-        self.curve_volume = {}
-        self.curve_augmentation = {}
         self.set_vertices(data, use_func, func)
 
         # Check if there are enough vertices for Delaunay triangulation
@@ -149,6 +173,8 @@ class ASVD:
             'sum_xy': simplices_sum_xy,
             'mean_x': self.stars_volumes_x.mean(),  # Mean over number of vertices
             'mean_xy': self.stars_volumes_xy.mean(),  # Mean over number of aumengted vertices
+            'std_x': self.stars_volumes_x.std(),  # Mean over number of vertices
+            'std_xy': self.stars_volumes_xy.std(),  # Mean over number of aumengted vertices
             'sum_augm': sum_augm,
             'rsd_x': rsd_x,
             'rsd_xy': rsd_xy,

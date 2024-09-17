@@ -52,8 +52,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             ),
             outputs=dict(
                 volume='volume',
-                total_asvd_scores='total_asvd_scores',
-                interest_asvd_scores='interest_asvd_scores',
+                asvd='asvd',
                 volume_voronoi='volume_voronoi'
             ),
             name='metrics_compute'
@@ -102,8 +101,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 plot_ranges='scaled_plot_ranges',
                 interest_region='scaled_interest_region',
                 volume='volume',
-                total_asvd_scores='total_asvd_scores',
-                interest_asvd_scores='interest_asvd_scores',
+                asvd='asvd',
                 volume_voronoi='volume_voronoi',
                 output_dir='path_metrics_output',
             ),

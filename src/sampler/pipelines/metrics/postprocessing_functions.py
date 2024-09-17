@@ -97,7 +97,7 @@ def add_quality_columns(
 def subset_by_quality(
     df: pd.DataFrame, exp_config: Dict[str, str],
 ) -> Dict[str, Union[str, pd.DataFrame]]:
-    return {
+    return {  # It's important that a samples keeps same index across all sub-dfs
         **exp_config,
         'interest': df[(df.quality == 'interest')],
         'no_interest': df[(df.quality == 'no_interest')],  # or (df.quality != 'interest') ?

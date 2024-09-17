@@ -11,14 +11,16 @@ from itertools import combinations
 
 from .postprocessing_functions import (
     aggregate_csv_files, scale_back_to_SI_units, add_quality_columns,
-    subset_by_quality
+    subset_by_quality,
 )
 from .volume import covered_space_bound
 from .asvd import ASVD
+from .asvd_plot import plot_asvd_scores, plot_stars_volumes_distribution, plot_multiple_asvd_distributions
 from .voronoi import get_volume_voronoi
 import sampler.pipelines.metrics.graphics_metrics as gm
 from sampler.core.data_processing.data_treatment import DataTreatment
 from sampler.core.data_processing.scalers import MixedMinMaxScaler, set_scaler
+from sampler.core.data_processing.sampling_tracker import get_first_iteration_index
 
 
 def set_data_scalers(
@@ -108,21 +110,21 @@ def compute_metrics(
 
     n_interest = {} # for each experiment, number of interest points (dict of int)
     volume = {} # for each experiment, volume space covered (dict of float)
-    total_asvd_scores = {}
-    interest_asvd_scores = {}
+    asvd = {}  # for each experiment, ASVD class
     volume_voronoi = {} # for each experiment, volumes of the Voronoi regions (clipped by the unit hypercube)
     
     variable_names = features + targets
     
-    for exp_key, value in data.items():
+    for exp_key, exp_dic in data.items():
+        first_iter_index = get_first_iteration_index(exp_dic['df'])
         # Scale all data
-        XY = value['df'][variable_names].values
+        XY = exp_dic['df'][variable_names].values
         scaled_data = pd.DataFrame(
             treatment.scaler.transform(XY),
             columns=variable_names
         )
         # Scale interest data
-        XY_interest = value['interest'][variable_names].values
+        XY_interest = exp_dic['interest'][variable_names].values
         scaled_data_interest = pd.DataFrame(
             treatment.scaler.transform(XY_interest),
             columns=variable_names
@@ -144,20 +146,13 @@ def compute_metrics(
             volume[exp_key] = np.array([0,0])
 
         if params_asvd['compute_asvd']:
+            irbs_scaled_data = scaled_data[first_iter_index:]
             # Get all data distribution using ASVD
-            total_asvd = ASVD(scaled_data, features, targets)
-            total_asvd_scores[exp_key] = total_asvd.compute_scores()
-
-            # Get only interest data distribution using ASVD
-            interest_asvd = ASVD(scaled_data_interest, features, targets)
-            interest_asvd_scores[exp_key] = interest_asvd.compute_scores()
-        else:
-            total_asvd_scores = {}
-            interest_asvd_scores = {}
+            asvd[exp_key] = ASVD(irbs_scaled_data, features, targets)
 
         # Get Voronoi volume
         if any(params_voronoi['compute_voronoi'].values()):
-            n_interest = len(value['interest'])
+            n_interest = len(exp_dic['interest'])
             volume_voronoi[exp_key] = {
                 'features': np.array([0]*n_interest),
                 'targets': np.array([0]*n_interest)
@@ -181,8 +176,7 @@ def compute_metrics(
 
     return dict(
         volume=volume,
-        total_asvd_scores=total_asvd_scores,
-        interest_asvd_scores=interest_asvd_scores,
+        asvd=asvd,
         volume_voronoi=volume_voronoi
     )
 
@@ -264,12 +258,13 @@ def plot_metrics(
     latex_mapper: Dict[str, str],
     plot_ranges: Dict[str, Tuple[float, float]],
     interest_region: Dict[str, Tuple[float, float]],
-    volume: Dict,
-    total_asvd_scores: Dict[str, Dict[str, float]],
-    interest_asvd_scores: Dict[str, Dict[str, float]],
-    volume_voronoi: Dict,
+    volume: Dict[str, float],
+    asvd: Dict[str, ASVD],
+    volume_voronoi: Dict[str, Dict[str, np.ndarray]],
     output_dir: str,
 ):
+    exp_config = {exp_key: {key: data[exp_key][key] for key in ['name', 'color']} for exp_key in data}
+
     # Initial data distribution
     initial_data_plot = gm.plot_initial_data(data, feature_aliases, target_aliases, latex_mapper, plot_ranges, only_first_exp=True)
 
@@ -290,12 +285,12 @@ def plot_metrics(
 
     # Distribution analysis
     print(f"Design space volumes: {volume}")
-    asvd_metrics_to_plot = ['sum_augm', 'rsd_x', 'rsd_xy', 'rsd_augm', 'riqr_x', 'riqr_xy']
     distribution_plots_dict = {}
-    if total_asvd_scores:
-        distribution_plots_dict['ASVD'] = gm.plot_asvd_scores(data, total_asvd_scores, asvd_metrics_to_plot)
-    if interest_asvd_scores:
-        distribution_plots_dict['ASVD_only_interest'] = gm.plot_asvd_scores(data, interest_asvd_scores, asvd_metrics_to_plot)
+    if asvd:
+        distribution_plots_dict['ASVD_scores'] = plot_asvd_scores(asvd, exp_config)
+        distribution_plots_dict['ASVD_all_exp'] = plot_multiple_asvd_distributions(asvd, exp_config)
+        for i, exp_key in enumerate(data.keys()):
+            distribution_plots_dict[f'ASVD_exp{i+1}'] = plot_stars_volumes_distribution(asvd[exp_key], exp_config[exp_key]['name'])
     if volume_voronoi:
         distribution_plots_dict['Voronoi'] = gm.dist_volume_voronoi(data, volume_voronoi)
 
