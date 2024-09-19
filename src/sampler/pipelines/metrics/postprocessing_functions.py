@@ -1,8 +1,9 @@
 import os
-from typing import Dict, List, Union
+from typing import Dict, List, Union, Tuple
 import warnings
 import numpy as np
 import pandas as pd
+from scipy.stats import gaussian_kde
 
 from sampler.core.data_processing.data_treatment import DataTreatment
 from sampler.core.data_processing.scalers import MixedMinMaxScaler
@@ -105,3 +106,39 @@ def subset_by_quality(
         'outliers': df[(df.quality != 'interest') & (df.quality != 'no_interest')],
         'df': df
     }
+
+
+def set_scaled_kde(data: np.ndarray, height: float, bandwidth: float, num_points: int = 500) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Compute a scaled Kernel Density Estimation (KDE) for the given data.
+
+    Parameters:
+    data (np.ndarray): Input data for KDE.
+    height (float): The desired maximum height of the scaled KDE.
+    bandwidth (float): The bandwidth parameter for KDE.
+    num_points (int): Number of points to evaluate the KDE on.
+
+    Returns:
+    tuple: A tuple containing:
+        - np.ndarray: x-values where KDE is evaluated
+        - np.ndarray: y-values of the scaled KDE
+    """
+
+    # Compute KDE
+    kde = gaussian_kde(data, bw_method=bandwidth)
+
+    # Define the range for KDE evaluation
+    data_min, data_max = data.min(), data.max()
+    margin = 0.1
+    x_range_min = data_min * (1 - np.sign(data_min) * margin)
+    x_range_max = data_max * (1 + np.sign(data_max) * margin)
+    x_values = np.linspace(x_range_min, x_range_max, num_points)
+
+    # Evaluate KDE
+    kde_values = kde(x_values)
+
+    # Scale KDE to match target height
+    scaling_factor = height / kde_values.max()
+    kde_scaled = kde_values * scaling_factor
+
+    return x_values, kde_scaled

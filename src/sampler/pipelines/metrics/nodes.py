@@ -9,15 +9,13 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from itertools import combinations
 
-from .postprocessing_functions import (
-    aggregate_csv_files, scale_back_to_SI_units, add_quality_columns,
-    subset_by_quality,
-)
+from .postprocessing_functions import aggregate_csv_files, scale_back_to_SI_units, add_quality_columns, subset_by_quality
 from .volume import covered_space_bound
 from .asvd import ASVD
 from .asvd_plot import plot_asvd_scores, plot_stars_volumes_distribution, plot_multiple_asvd_distributions
 from .voronoi import get_volume_voronoi
-import sampler.pipelines.metrics.graphics_metrics as gm
+from .voronoi_plot import dist_volume_voronoi
+from .graphics_metrics import plot_initial_data, plot_feature_pairs, plot_violin_distribution, targets_kde, plot_feat_tar
 from sampler.core.data_processing.data_treatment import DataTreatment
 from sampler.core.data_processing.scalers import MixedMinMaxScaler, set_scaler
 from sampler.core.data_processing.sampling_tracker import get_first_iteration_index
@@ -266,25 +264,24 @@ def plot_metrics(
     exp_config = {exp_key: {key: data[exp_key][key] for key in ['name', 'color']} for exp_key in data}
 
     # Initial data distribution
-    initial_data_plot = gm.plot_initial_data(data, feature_aliases, target_aliases, latex_mapper, plot_ranges, only_first_exp=True)
+    initial_data_plot = plot_initial_data(data, feature_aliases, target_aliases, latex_mapper, plot_ranges, only_first_exp=True)
 
     # plot features pairs
     feature_pairs_plot_dict = {}
     for feat_1, feat_2 in combinations(feature_aliases, 2):
         idx_1, idx_2 = feature_aliases.index(feat_1) + 1, feature_aliases.index(feat_2) + 1
         feature_pairs_plot_dict.update({
-            f'X_{idx_1}_{idx_2}'         : gm.plot_feature_pairs(data, (feat_1, feat_2), latex_mapper, plot_ranges, only_new=False),
-            f'X_{idx_1}_{idx_2}_only_new': gm.plot_feature_pairs(data, (feat_1, feat_2), latex_mapper, plot_ranges, only_new=True)
+            f'X_{idx_1}_{idx_2}'         : plot_feature_pairs(data, (feat_1, feat_2), latex_mapper, plot_ranges, only_new=False),
+            f'X_{idx_1}_{idx_2}_only_new': plot_feature_pairs(data, (feat_1, feat_2), latex_mapper, plot_ranges, only_new=True)
         })
 
     # targets distribution
     targets_plot_dict = {
-        'y_violin': gm.plot_violin_distribution(data, target_aliases, latex_mapper, interest_region, plot_ranges),
-        'y_kde': gm.targets_kde(data, target_aliases, latex_mapper, interest_region, plot_ranges),
+        'y_violin': plot_violin_distribution(data, target_aliases, latex_mapper, interest_region, plot_ranges),
+        'y_kde': targets_kde(data, target_aliases, latex_mapper, interest_region, plot_ranges),
     }
 
     # Distribution analysis
-    print(f"Design space volumes: {volume}")
     distribution_plots_dict = {}
     if asvd:
         distribution_plots_dict['ASVD_scores'] = plot_asvd_scores(asvd, exp_config)
@@ -292,14 +289,14 @@ def plot_metrics(
         for i, exp_key in enumerate(data.keys()):
             distribution_plots_dict[f'ASVD_exp{i+1}'] = plot_stars_volumes_distribution(asvd[exp_key], exp_config[exp_key]['name'])
     if volume_voronoi:
-        distribution_plots_dict['Voronoi'] = gm.dist_volume_voronoi(data, volume_voronoi)
+        distribution_plots_dict['Voronoi'] = dist_volume_voronoi(data, volume_voronoi)
+    if volume:
+        print(f"Design space volumes: {volume}")
 
     # Detailed features versus targets plots
     feat_tar_plots_dict = {}
-    feat_tar_plots_dict['X_y'] = gm.plot_feat_tar(data, feature_aliases, target_aliases, latex_mapper, plot_ranges, only_interest=False)
-    feat_tar_plots_dict['X_y_only_interest'] = gm.plot_feat_tar(data, feature_aliases, target_aliases, latex_mapper, plot_ranges, only_interest=True)
     for i, exp_key in enumerate(data.keys()):
-        feat_tar_plots_dict[f'X_y_exp{i+1}'] = gm.plot_feat_tar({exp_key: data[exp_key]}, feature_aliases, target_aliases, latex_mapper, plot_ranges, only_interest=False)
+        feat_tar_plots_dict[f'X_y_exp{i+1}'] = plot_feat_tar(data[exp_key], feature_aliases, target_aliases, latex_mapper, plot_ranges)
 
     # Aggregate plots
     all_plots = [

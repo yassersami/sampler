@@ -156,8 +156,8 @@ class ASVD:
         Positive values suggest decreased uniformity post-augmentation.
 
         """
-        simplices_sum_x = self.simplices_volumes_xy.sum()
-        simplices_sum_xy = self.simplices_volumes_x.sum()
+        simplices_sum_x = self.simplices_volumes_x.sum()
+        simplices_sum_xy = self.simplices_volumes_xy.sum()
         simplices_mean_x = self.simplices_volumes_x.mean()
         simplices_mean_xy = self.simplices_volumes_xy.mean()
         sum_augm = np.nan if simplices_sum_x==0 else simplices_sum_xy / simplices_sum_x
