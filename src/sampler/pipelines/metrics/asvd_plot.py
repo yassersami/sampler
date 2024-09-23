@@ -2,8 +2,8 @@ from typing import List, Dict, Tuple, Union
 import warnings
 import numpy as np
 import pandas as pd
+from scipy.stats import lognorm
 import matplotlib.pyplot as plt
-from scipy.stats import gaussian_kde
 
 from .asvd import ASVD
 from .postprocessing_functions import set_scaled_kde
@@ -39,6 +39,23 @@ def adjust_bin_width(volumes, initial_bin_width, min_bins=5):
         exp_bins = initial_bins
         bin_width = initial_bin_width
     return bin_width, exp_bins
+
+
+def fit_lognormal(data):
+    """
+    Fit a lognormal distribution to the given data.
+
+    The location parameter is fixed at 0 (floc=0), which constrains the
+    distribution to start at 0. This is often appropriate for data that cannot
+    be negative, such as volumes.
+    
+    Note:
+    - shape: Also known as the log-scale parameter (sigma)
+    - location: Fixed at 0 in this case
+    - scale: Related to the median of the distribution
+    """
+    shape, loc, scale = lognorm.fit(data, floc=0)
+    return shape
 
 
 def plot_asvd_scores(
@@ -166,6 +183,9 @@ def plot_stars_volumes_distribution(
     # Extract stars_volumes_x
     volumes = asvd_instance.stars_volumes_x
 
+    # PDF (KDE) and E[X] (Cum. Vol.) height
+    normal_height = MAX_BIN_STAR_VOL * 0.9
+
     # Create the plot
     fig, ax = plt.subplots(figsize=figsize)
 
@@ -175,9 +195,9 @@ def plot_stars_volumes_distribution(
 
     # Plot histogram with sum of volumes
     bin_volumes_sum, bin_edges, _ = ax.hist(volumes, bins=exp_bins, weights=volumes, alpha=0.7, color='steelblue', edgecolor='white', label='Volume')
-    
+
     # Scale a KDE to match histogram height
-    x_values, kde_scaled = set_scaled_kde(volumes, height=np.max(bin_volumes_sum), bandwidth=0.1)
+    x_values, kde_scaled = set_scaled_kde(volumes, height=normal_height, bandwidth=0.1)
 
     # Plot scaled KDE
     ax.plot(x_values, kde_scaled, color='dodgerblue', linewidth=2, label='Density')
@@ -191,15 +211,14 @@ def plot_stars_volumes_distribution(
     cumulative_volumes = np.cumsum(sorted_volumes)
 
     # Scale cumulative volume to match histogram height
-    scaling_factor = np.max(bin_volumes_sum) / cumulative_volumes[-1]
+    scaling_factor = normal_height / cumulative_volumes[-1]
     scaled_cum_vol = cumulative_volumes * scaling_factor
 
     # Plot cumulative volume
     ax.plot(sorted_volumes, scaled_cum_vol, color='green', label='Cum. Vol.')
 
-    # Set labels and title for the first subplot
+    # Set title
     ax.set_title(f"{exp_name}\nDistribution of Star Volumes", fontsize=font_size)
-
 
     # Set x and y-axis limits
     ax.set_xlim(0, MAX_STAR_VOL)
@@ -213,9 +232,13 @@ def plot_stars_volumes_distribution(
     cumulated_volume_to_q3 = np.sum(volumes_to_q3)
     mean_volume_to_q3 = np.mean(volumes_to_q3)
 
+    # Get log normal distribution parameters
+    lognormal_sigma = fit_lognormal(volumes)
+
     # Add summary statistics
     stats = (
         f'Bin width: {bin_width:.4f}\n'
+        f'Lognormal σ: {lognormal_sigma:.4f}\n'
         f'Std Dev: {np.std(volumes):.4f}\n'
         f'Mean: {np.mean(volumes):.4f}\n'
         f'Sum: {np.sum(volumes):.4f}\n'
@@ -302,22 +325,18 @@ def plot_multiple_asvd_distributions(
         volumes_to_q3_x = volumes_x[volumes_x <= q3_x]
         sum_to_q3_x = np.sum(volumes_to_q3_x)
 
-        # Stats for augmented volumes from 0 to Q3
-        q3_xy = np.percentile(volumes_xy, 75)
-        volumes_to_q3_xy = volumes_xy[volumes_xy <= q3_xy]
-        sum_to_q3_xy = np.sum(volumes_to_q3_xy)
+        # Get log normal distribution parameters
+        lognormal_sigma_x = fit_lognormal(volumes_x)
         
         asvd_scores[exp_key] = {
             'count': volumes_x.shape[0],
             'sum_x': sum_volumes_x,
             'sum_xy': sum_volumes_xy,
-            'Augmentat°': np.nan if sum_volumes_x==0 else sum_volumes_xy / sum_volumes_x,
-            'Q3_x': q3_x,
-            'Q3_xy': q3_xy,
-            'Early sum_x': sum_to_q3_x,
-            'Early sum_xy': sum_to_q3_xy,
-            'std_x': np.std(volumes_x),
-            'std_xy': np.std(volumes_xy), 
+            'Augmentat°': 1 if sum_volumes_x==0 else sum_volumes_xy / sum_volumes_x,
+            'Q3': q3_x,
+            'Early sum': sum_to_q3_x,
+            'Std Dev': np.std(volumes_x),
+            'Lognormal σ': lognormal_sigma_x,
         }
 
     exp_keys = list(experiments_asvd.keys())
@@ -325,7 +344,8 @@ def plot_multiple_asvd_distributions(
     score_names = list(asvd_scores[exp_keys[0]].keys())
         
     # Prepare table data
-    table_data = [['Experiment'] + [exp_name[:10] + '...' * (len(exp_name) > 10) for exp_name in exp_names]]
+    columns = ['Experiment'] + [exp_name[:10] + '...' * (len(exp_name) > 10) for exp_name in exp_names]
+    table_data = []
     for metric in score_names:
         row = [metric]
         for exp_key in exp_keys:
@@ -342,10 +362,12 @@ def plot_multiple_asvd_distributions(
         table_data.append(row)
 
     # Add table to the top right of the plot
-    table = ax.table(cellText=table_data, 
-                     colLabels=[''] + score_names,
-                     cellLoc='center', loc='upper right',
-                     bbox=[0.5, 0.5, 0.5, 0.5])  # Adjust these values as needed
+    table = ax.table(
+        cellText=table_data, 
+        colLabels=columns,
+        cellLoc='center', loc='upper right',
+        bbox=[0.5, 0.5, 0.5, 0.5]  # (x0, y0, width, height)
+    )
     table.auto_set_font_size(False)
     table.set_fontsize(font_size)
     table.scale(1, 1.5)  # Adjust the scale to fit your needs
