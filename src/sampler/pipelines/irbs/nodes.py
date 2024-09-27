@@ -20,6 +20,8 @@ from sampler.core.optimizer.selector import SelectorFactory
 from sampler.core.optimizer.optimizer import OptimizerFactory
 from sampler.core.optimizer.base import MultiModalOptimizer
 
+np.random.seed(42)
+
 
 def irbs_initialize_component(
     treatment: DataTreatment,

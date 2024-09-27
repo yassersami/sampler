@@ -530,7 +530,7 @@ KERNELS = {
         length_scale=0.5,
         alpha=1.0,
         length_scale_bounds=BANDWIDTH_BOUNDS,
-        alpha_bounds=(0.1, 10.0)
+        alpha_bounds=(0.01, 10.0)
     )
 }
 KernelInstance = Union[RBF, RationalQuadratic]

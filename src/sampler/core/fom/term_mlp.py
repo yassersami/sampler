@@ -7,18 +7,20 @@ from sklearn.neural_network import MLPRegressor
 from scipy.stats import skew, kurtosis
 
 from .term_base import ModelFOMTerm, RANDOM_STATE
-from ..data_processing.scalers import hypercube_tent
+from ..data_processing.scalers import hypercube_linear_tent, hypercube_exponential_tent
 
 
 class MLPTerm(ModelFOMTerm):
 
     required_args = ['interest_region']
     fit_config = {'X_only': False, 'drop_nan': True}
+    scaler_keys = ['linear_tent', 'exponential_tent']
 
     def __init__(
         self,
         # Config kwargs
         score_weights: Dict[str, float],
+        scaler_config: Dict[str, bool],
         # kwargs required from FOM attributes 
         interest_region: Dict[str, Tuple[float, float]],
     ):
@@ -36,11 +38,37 @@ class MLPTerm(ModelFOMTerm):
             random_state=RANDOM_STATE,
         )
         self.is_trained = False
-
-        self.lowers = np.array([region[0] for region in interest_region.values()])
-        self.uppers = np.array([region[1] for region in interest_region.values()])
-
+        
         ModelFOMTerm.__init__(self, score_weights)
+        
+        self.interest_region = np.array(list(interest_region.values()))
+        self._validate_scaler_config(scaler_config)
+        self.scaler_config = scaler_config
+        
+
+    def _validate_scaler_config(self, scaler_config):
+        """
+        Validate the scaler configuration.
+        """
+        intro = f"{self.__class__.__name__}: "
+
+        # Check if all required keys are present
+        missing_keys = [key for key in self.scaler_keys if key not in scaler_config]
+        if missing_keys:
+            raise ValueError(intro + f"Scaler config is missing keys: {missing_keys}")
+
+        # Check if boolean keys are indeed boolean
+        non_boolean_keys = [
+            key for key in self.scaler_keys
+            if not isinstance(scaler_config[key], bool)
+        ]
+        if non_boolean_keys:
+            raise ValueError(intro + f"These keys must be boolean: {non_boolean_keys}")
+
+        # Check if exactly one key is True
+        true_keys = [key for key in self.scaler_keys if scaler_config[key]]
+        if len(true_keys) != 1:
+            raise ValueError(intro + f"Exactly one of these must be True: {self.scaler_keys}")
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> None:
         print(f"{self.__class__.__name__} -> Fitting model...")
@@ -51,7 +79,10 @@ class MLPTerm(ModelFOMTerm):
         X = np.atleast_2d(X)
         y = self.model.predict(X)
         y = np.atleast_2d(y.T).T
-        scores = hypercube_tent(y, self.lowers, self.uppers)
+        if self.scaler_config['linear_tent']:
+          scores = hypercube_linear_tent(y, self.interest_region)
+        elif self.scaler_config['exponential_tent']:
+          scores = hypercube_exponential_tent(y, self.interest_region)
         return np.clip(scores, 0, 1)
 
     def get_model_params(self):

@@ -205,7 +205,7 @@ def linear_tent(
     return y
 
 
-def hypercube_tent(X: np.ndarray, L: np.ndarray, U: np.ndarray) -> np.ndarray:
+def hypercube_linear_tent(X: np.ndarray, interest_region: List[Tuple[float, float]]) -> np.ndarray:
     """
     Hypercube tent function:
     - X on hypercube boundaries      -> y = 0 
@@ -214,30 +214,57 @@ def hypercube_tent(X: np.ndarray, L: np.ndarray, U: np.ndarray) -> np.ndarray:
 
     Parameters:
     X: shape (n, p) or (p,), values in [0, 1]^p
-    L: shape (p,), lower bounds for each dimension
-    U: shape (p,), upper bounds for each dimension
+    interest_region: list of tuples of (lower, upper)
 
     Returns:
     y: shape (n,) or scalar
     """
     X = np.atleast_2d(X)
-    n, p = X.shape
 
-    if np.any(L >= U):
-        raise ValueError(f"L should be less than U\nL: {L}\nU: {U}")
+    y = np.ones(X.shape[0])  # Initialize scores for each sample
 
-    if np.any(L < 0) or np.any(U > 1):
-        raise ValueError(f"L and U should be within [0, 1]\nL: {L}\nU: {U}")
-
-    y = np.ones(n)
-
-    for i in range(p):
+    for i, (lower, upper) in enumerate(interest_region):
         # Calculate linear decrease from L to 0
-        mask_lower = X[:, i] < L[i]
-        y[mask_lower] *= X[mask_lower, i] / L[i]
+        mask_lower = X[:, i] < lower
+        y[mask_lower] *= X[mask_lower, i] / lower
 
         # Calculate linear decrease from U to 1
-        mask_upper = X[:, i] > U[i]
-        y[mask_upper] *= (1 - X[mask_upper, i]) / (1 - U[i])
+        mask_upper = X[:, i] > upper
+        y[mask_upper] *= (1 - X[mask_upper, i]) / (1 - upper)
 
     return y
+
+
+def hypercube_exponential_tent(X: np.ndarray, interest_region: List[Tuple[float, float]]) -> np.ndarray:
+    """
+    Hypercube exponential tent function:
+    - X in interest region -> y = 1 
+    - X elsewhere          -> y = decreases exponentially from 1 to 0
+
+    Parameters:
+    X: shape (n, p) or (p,), values in [0, 1]^p
+    interest_region: list of tuples of (lower, upper)
+
+    Returns:
+    y: shape (n,) or scalar
+    """
+    X = np.atleast_2d(X)
+
+    # Set decay dist as half the width of the interest region
+    decay_dist = np.array([(upper - lower)/2 for lower, upper in interest_region])
+
+    scores = np.ones(X.shape[0])  # Initialize scores for each sample
+
+    for i, (low, high) in enumerate(interest_region):
+        mask_lower = X[:, i] < low
+        mask_upper = X[:, i] > high
+        
+        # Calculate distances for values outside the interest region
+        distances = np.zeros(X.shape[0])
+        distances[mask_lower] = low - X[mask_lower, i]
+        distances[mask_upper] = X[mask_upper, i] - high
+        
+        # Apply exponential decay
+        scores *= np.exp(-distances / decay_dist[i])
+    
+    return scores

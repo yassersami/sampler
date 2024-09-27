@@ -17,7 +17,7 @@ def parse_results(df: pd.DataFrame, current_history_size: int) -> Dict[str, pd.D
 
 
 def parse_logs(logs: Dict[str, Dict[str, float]], iteration: int) -> Dict[str, Dict]:
-    return {f'log_{iteration}': logs}
+    return {f'log_{iteration:02}': logs}
 
 
 def join_history(

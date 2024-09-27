@@ -41,10 +41,11 @@ irbs_fom_terms_config:
     shgo_n: 1000
     shgo_iters: 5
     kernel: RQ
-    
+
   surrogate_mlp:
     apply: false
     score_weights: 1
+    scaler_config: {linear_tent: false, exponential_tent: false}
 
   outlier_kde:
     apply: false

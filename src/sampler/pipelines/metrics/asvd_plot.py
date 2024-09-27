@@ -27,7 +27,7 @@ def adjust_bin_width(volumes, initial_bin_width, min_bins=5):
     accordingly.
     """
     volumes_range = volumes.max() - volumes.min()
-    initial_bins = int(volumes_range / initial_bin_width)
+    initial_bins = int(round(volumes_range / initial_bin_width))
     if initial_bins < min_bins:
         exp_bins = min_bins * 2
         bin_width = volumes_range / min_bins
@@ -54,6 +54,12 @@ def fit_lognormal(data):
     - location: Fixed at 0 in this case
     - scale: Related to the median of the distribution
     """
+    # Check if any negative values
+    if np.any(data < 0):
+        raise ValueError("Negative values not allowed for lognormal distribution with floc=0")
+    # Shift data slightly away from 0
+    epsilon = 1e-10
+    data = np.maximum(data, epsilon)
     shape, loc, scale = lognorm.fit(data, floc=0)
     return shape
 
@@ -191,7 +197,7 @@ def plot_stars_volumes_distribution(
 
     # Compute number of bins for consistent bin width
     volumes_range = volumes.max() - volumes.min()
-    bin_width, exp_bins = adjust_bin_width(volumes, bin_width)
+    exp_bins = max(1, int(round(volumes_range / bin_width)))
 
     # Plot histogram with sum of volumes
     bin_volumes_sum, bin_edges, _ = ax.hist(volumes, bins=exp_bins, weights=volumes, alpha=0.7, color='steelblue', edgecolor='white', label='Volume')
@@ -274,18 +280,13 @@ def plot_multiple_asvd_distributions(
     """
     fig, ax = plt.subplots(figsize=figsize)
 
-    # Check and adjust bin_width for all experiments if necessary
-    for exp_key, asvd_instance in experiments_asvd.items():
-        volumes = asvd_instance.stars_volumes_x
-        bin_width, exp_bins = adjust_bin_width(volumes, bin_width)
-
     max_count = 0
     for exp_key, asvd_instance in experiments_asvd.items():
         volumes = asvd_instance.stars_volumes_x
 
         # Compute number of bins for consistent bin width
         volumes_range = volumes.max() - volumes.min()
-        exp_bins = int(volumes_range / bin_width)
+        exp_bins = max(1, int(round(volumes_range / bin_width)))
 
         # Compute count per bins
         count, bin_edges = np.histogram(volumes, bins=exp_bins, density=False)
