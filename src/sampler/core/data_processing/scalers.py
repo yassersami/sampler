@@ -1,8 +1,10 @@
 from typing import List, Dict, Tuple, Optional, Union
-
+import warnings
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
+from scipy.stats import norm
+from scipy.optimize import brentq
 
 
 class MixedMinMaxScaler:
@@ -219,7 +221,7 @@ def hypercube_linear_tent(X: np.ndarray, interest_region: List[Tuple[float, floa
     Returns:
     y: shape (n,) or scalar
     """
-    X = np.atleast_2d(X)
+    X = np.atleast_2d(X.T).T
 
     y = np.ones(X.shape[0])  # Initialize scores for each sample
 
@@ -248,7 +250,7 @@ def hypercube_exponential_tent(X: np.ndarray, interest_region: List[Tuple[float,
     Returns:
     y: shape (n,) or scalar
     """
-    X = np.atleast_2d(X)
+    X = np.atleast_2d(X.T).T
 
     # Set decay dist as half the width of the interest region
     decay_dist = np.array([(upper - lower)/2 for lower, upper in interest_region])
@@ -268,3 +270,88 @@ def hypercube_exponential_tent(X: np.ndarray, interest_region: List[Tuple[float,
         scores *= np.exp(-distances / decay_dist[i])
     
     return scores
+
+
+def find_sigma_for_interval(interval_width: float, sigma_bounds: Tuple[float, float] =(0.005, 0.15)) -> float:
+    """
+    Find the largest standard deviation (sigma) that makes the probability of
+    belonging to a given interval (based on its width) equal to one for a normal
+    distribution.
+
+    This function uses the Brent's method to efficiently find the optimal sigma
+    value that satisfies the target probability condition.
+
+    Parameters:
+    -----------
+    interval_width : float
+        The width of the interval of interest. Should be a positive value between 0 and 1.
+
+    sigma_bounds : Tuple[float, float], optional
+        The lower and upper bounds for the sigma search range. Default is (0.005, 0.15).
+        - Lower bound (0.005) is suitable for interval widths as small as 0.05.
+        - Upper bound (0.15) is suitable for interval widths up to 1.
+    """
+    half_width = interval_width / 2
+    target_prob = 0.999  # to avoid saturation around 1 of objective function
+    mu = 0  # Center of the interval
+
+    def objective(sigma):
+        proba = norm.cdf(half_width, loc=mu, scale=sigma) - norm.cdf(-half_width, loc=mu, scale=sigma)
+        return proba - target_prob
+
+    a, b = sigma_bounds
+    fa, fb = objective(a), objective(b)
+
+    # Check if fa and b have same signs
+    if np.sign(fa) == np.sign(fb):
+        warnings.warn(
+            f"Objective function does not change sign in interval [{a}, {b}]. "
+            "The method will return sigma that generates closest probability to 1."
+        )
+        # ...[a.....b]... if proba when sigma = b is still < 1, return b
+        return b if fb <= 0 else a
+
+    # Use brentq to find the root
+    sigma = brentq(objective, a, b, xtol=1e-2)
+    return sigma
+
+
+def interest_probability(y_mean: np.ndarray, y_std: np.ndarray, interest_region: List[Tuple[float, float]]) -> np.ndarray:
+    """
+    Computes the probability of being in the region of interest for multiple dimensions.
+
+    Parameters:
+    -----------
+    y_mean : np.ndarray
+        2D array of mean values. Shape: (n_samples, n_dimensions)
+    y_std : np.ndarray
+        2D array of standard deviation values. Shape: (n_samples, n_dimensions)
+    interest_region : List[Tuple[float, float]]
+        List of tuples defining the lower and upper bounds of the interest region for each dimension.
+        
+    Returns:
+    --------
+    np.ndarray
+        1D array of probabilities for each sample being in the region of interest across all dimensions.
+    """
+    y_mean = np.atleast_2d(y_mean.T).T
+    y_std = np.atleast_2d(y_std.T).T
+    
+    if y_mean.shape != y_std.shape:
+        raise ValueError("y_mean and y_std must have the same shape")
+    
+    if len(interest_region) != y_mean.shape[1]:
+        raise ValueError("Number of interest regions must match the number of dimensions in y_mean and y_std")
+    
+    n_samples, n_dimensions = y_mean.shape
+    
+    probabilities = np.ones((n_samples, n_dimensions))
+    
+    for i, (lower, upper) in enumerate(interest_region):
+        # CDF: cumulative distribution function P(X <= x)
+        probabilities[:, i] = (
+            norm.cdf(upper, loc=y_mean[:, i], scale=y_std[:, i]) - 
+            norm.cdf(lower, loc=y_mean[:, i], scale=y_std[:, i])
+        )
+    
+    return np.prod(probabilities, axis=1)

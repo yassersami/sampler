@@ -8,6 +8,7 @@ from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.exceptions import NotFittedError
 from scipy.optimize import shgo
 
+from ..data_processing.scalers import interest_probability
 from .term_base import ModelFOMTerm, MultiScoreMixin, KERNELS, RANDOM_STATE
 
 
@@ -26,10 +27,7 @@ class SurrogateGPR():
         self.is_trained = False
         self.shgo_n = shgo_n
         self.shgo_iters = shgo_iters
-        self.interest_region = interest_region
-
-        self.lowers = [region[0] for region in interest_region.values()]
-        self.uppers = [region[1] for region in interest_region.values()]
+        self.interest_region = np.array(list(interest_region.values()))
 
         # To normalize std of coverage function to be between 0 and 1
         self.max_std = None
@@ -44,9 +42,9 @@ class SurrogateGPR():
             raise ValueError(f"Unexpected shape for y: {y.shape}")
 
         # Validate that bounds match the target dimension
-        if len(self.lowers) != n_targets or len(self.uppers) != n_targets:
+        if len(self.interest_region) != n_targets:
             raise ValueError(
-                f"Number of bounds ({len(self.lowers)}/{len(self.uppers)}) "
+                f"Number of bounds ({len(self.interest_region)}) "
                 f"does not match the number of targets ({n_targets})"
             )
 
@@ -100,19 +98,14 @@ class SurrogateGPR():
     def predict_interest_score(self, X: np.ndarray) -> np.ndarray:
         """
         Computes the probability of being in the region of interest.
-        CDF: cumulative distribution function P(X <= x)
         """
         X = np.atleast_2d(X)
 
         y_mean, y_std = self.model.predict(X, return_std=True)
 
-        point_norm = norm(loc=y_mean, scale=y_std)
+        probabilities = interest_probability(y_mean, y_std, self.interest_region)
 
-        probabilities = point_norm.cdf(self.uppers) - point_norm.cdf(self.lowers)
-
-        if y_mean.ndim == 1:
-            return probabilities
-        return np.prod(probabilities, axis=1)
+        return probabilities
 
     def predict_std_score(self, X: np.ndarray) -> np.ndarray:
         X = np.atleast_2d(X)

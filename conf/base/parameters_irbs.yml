@@ -45,7 +45,7 @@ irbs_fom_terms_config:
   surrogate_mlp:
     apply: false
     score_weights: 1
-    scaler_config: {linear_tent: false, exponential_tent: false}
+    scaler_config: {linear_tent: false, exponential_tent: false, interest_probability: false}
 
   outlier_kde:
     apply: false

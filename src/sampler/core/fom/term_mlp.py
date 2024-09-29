@@ -7,14 +7,14 @@ from sklearn.neural_network import MLPRegressor
 from scipy.stats import skew, kurtosis
 
 from .term_base import ModelFOMTerm, RANDOM_STATE
-from ..data_processing.scalers import hypercube_linear_tent, hypercube_exponential_tent
+from ..data_processing.scalers import hypercube_linear_tent, hypercube_exponential_tent, find_sigma_for_interval, interest_probability
 
 
 class MLPTerm(ModelFOMTerm):
 
     required_args = ['interest_region']
     fit_config = {'X_only': False, 'drop_nan': True}
-    scaler_keys = ['linear_tent', 'exponential_tent']
+    scaler_keys = ['linear_tent', 'exponential_tent', 'interest_probability']
 
     def __init__(
         self,
@@ -44,7 +44,7 @@ class MLPTerm(ModelFOMTerm):
         self.interest_region = np.array(list(interest_region.values()))
         self._validate_scaler_config(scaler_config)
         self.scaler_config = scaler_config
-        
+        self.interest_std = self.get_interest_std()
 
     def _validate_scaler_config(self, scaler_config):
         """
@@ -70,6 +70,20 @@ class MLPTerm(ModelFOMTerm):
         if len(true_keys) != 1:
             raise ValueError(intro + f"Exactly one of these must be True: {self.scaler_keys}")
 
+    def get_interest_std(self) -> np.ndarray:
+        """
+        Search for biggest sigma that makes interest probability equal to 1 when
+        normal distribution mean is at the center of interest region.
+        """
+        if not self.scaler_config['interest_probability']:
+            return None
+        # Set sigma for each interval
+        interest_std = [
+            find_sigma_for_interval(upper - lower)
+            for lower, upper in self.interest_region
+        ]
+        return np.array(interest_std)
+
     def fit(self, X: np.ndarray, y: np.ndarray) -> None:
         print(f"{self.__class__.__name__} -> Fitting model...")
         self.model.fit(X, y)
@@ -80,9 +94,12 @@ class MLPTerm(ModelFOMTerm):
         y = self.model.predict(X)
         y = np.atleast_2d(y.T).T
         if self.scaler_config['linear_tent']:
-          scores = hypercube_linear_tent(y, self.interest_region)
+            scores = hypercube_linear_tent(y, self.interest_region)
         elif self.scaler_config['exponential_tent']:
-          scores = hypercube_exponential_tent(y, self.interest_region)
+            scores = hypercube_exponential_tent(y, self.interest_region)
+        elif self.scaler_config['interest_probability']:
+            y_std = np.ones_like(y)*self.interest_std
+            scores = interest_probability(y, y_std, self.interest_region)
         return np.clip(scores, 0, 1)
 
     def get_model_params(self):
