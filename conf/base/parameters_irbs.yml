@@ -46,6 +46,7 @@ irbs_fom_terms_config:
     apply: false
     score_weights: 1
     scaler_config: {linear_tent: false, exponential_tent: false, interest_probability: false}
+    center_proba: 0.8
 
   outlier_kde:
     apply: false

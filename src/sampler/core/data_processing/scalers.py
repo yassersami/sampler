@@ -272,11 +272,15 @@ def hypercube_exponential_tent(X: np.ndarray, interest_region: List[Tuple[float,
     return scores
 
 
-def find_sigma_for_interval(interval_width: float, sigma_bounds: Tuple[float, float] =(0.005, 0.15)) -> float:
+def find_sigma_for_interval(
+    interval_width: float,
+    target_proba: float = 0.9,
+    sigma_bounds: Tuple[float, float] =(0.005, 0.3)
+) -> float:
     """
     Find the largest standard deviation (sigma) that makes the probability of
-    belonging to a given interval (based on its width) equal to one for a normal
-    distribution.
+    belonging to a given interval equal to `target_proba` considering a normal
+    distribution with mu at center of interval.
 
     This function uses the Brent's method to efficiently find the optimal sigma
     value that satisfies the target probability condition.
@@ -284,35 +288,51 @@ def find_sigma_for_interval(interval_width: float, sigma_bounds: Tuple[float, fl
     Parameters:
     -----------
     interval_width : float
-        The width of the interval of interest. Should be a positive value between 0 and 1.
+        The width of the interval of interest. Should be a positive value
+        between 0 and 1.
+        
+    target_proba : float, optional
+        The target probability for the interval. Should be a value between 0 and
+        1. Default is 0.9. If set to 1, it will be adjusted to 0.999 to avoid
+        numerical issues.
 
     sigma_bounds : Tuple[float, float], optional
-        The lower and upper bounds for the sigma search range. Default is (0.005, 0.15).
-        - Lower bound (0.005) is suitable for interval widths as small as 0.05.
-        - Upper bound (0.15) is suitable for interval widths up to 1.
+        The lower and upper bounds for the sigma search range.
+        - Default is (0.005, 0.3).
+        - Lower bound (0.005) is suitable for interval widths as small as 0.05
+          with a target probability of 0.999.
+        - Upper bound (0.3) is suitable for interval widths up to 1 with a
+          target probability of 0.8.
     """
+    if target_proba == 1:
+        # Avoid saturation around 1 of objective function
+        target_proba = 0.999
+
     half_width = interval_width / 2
-    target_prob = 0.999  # to avoid saturation around 1 of objective function
     mu = 0  # Center of the interval
 
     def objective(sigma):
         proba = norm.cdf(half_width, loc=mu, scale=sigma) - norm.cdf(-half_width, loc=mu, scale=sigma)
-        return proba - target_prob
+        return proba - target_proba
 
     a, b = sigma_bounds
     fa, fb = objective(a), objective(b)
 
-    # Check if fa and b have same signs
+    # Check if fa and fb have same signs
     if np.sign(fa) == np.sign(fb):
+        pa, pb = fa + target_proba, fb + target_proba
+        returned_sigma = a if fa <= 0 else b
+        returned_prob = pa if fa <= 0 else pb
         warnings.warn(
-            f"Objective function does not change sign in interval [{a}, {b}]. "
-            "The method will return sigma that generates closest probability to 1."
+            f"fa and fb have same sign on interval [a, b]=[{a:.3f}, {b:.3f}] "
+            f"where (pa, pb)=({pa:.2f}, {pb:.2f}). "
+            f"Returning sigma={returned_sigma:.3f} that generates closest "
+            f"probability ({returned_prob:.2f}) to target_proba={target_proba:.2f}."
         )
-        # ...[a.....b]... if proba when sigma = b is still < 1, return b
-        return b if fb <= 0 else a
+        return returned_sigma
 
     # Use brentq to find the root
-    sigma = brentq(objective, a, b, xtol=1e-2)
+    sigma = brentq(objective, a, b, xtol=1e-3, rtol=1e-2)
     return sigma
 
 

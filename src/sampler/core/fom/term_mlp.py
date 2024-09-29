@@ -21,9 +21,17 @@ class MLPTerm(ModelFOMTerm):
         # Config kwargs
         score_weights: Dict[str, float],
         scaler_config: Dict[str, bool],
+        center_proba: float,  # interest region center score
         # kwargs required from FOM attributes 
         interest_region: Dict[str, Tuple[float, float]],
     ):
+        """
+        scaler_config: Dict[str, bool]
+            The configuration of the scaler used to transform the surrogate
+            prediction into a prior interest score in [0, 1].
+        center_proba : float
+            The expected probability when a sample is at the interest region center.
+        """
 
         self.model = MLPRegressor(
             hidden_layer_sizes=(128, 64, 32),
@@ -42,6 +50,7 @@ class MLPTerm(ModelFOMTerm):
         ModelFOMTerm.__init__(self, score_weights)
         
         self.interest_region = np.array(list(interest_region.values()))
+        self.center_proba = center_proba
         self._validate_scaler_config(scaler_config)
         self.scaler_config = scaler_config
         self.interest_std = self.get_interest_std()
@@ -79,13 +88,22 @@ class MLPTerm(ModelFOMTerm):
             return None
         # Set sigma for each interval
         interest_std = [
-            find_sigma_for_interval(upper - lower)
+            find_sigma_for_interval(interval_width=upper - lower, target_proba=self.center_proba)
             for lower, upper in self.interest_region
         ]
         return np.array(interest_std)
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> None:
         print(f"{self.__class__.__name__} -> Fitting model...")
+        
+        # Validate that bounds match the target dimension
+        n_dim_y = y.shape[1]
+        if len(self.interest_region) != n_dim_y:
+            raise ValueError(
+                f"Number of bounds ({len(self.interest_region)}) "
+                f"does not match the number of targets ({n_dim_y})"
+            )
+
         self.model.fit(X, y)
         self.is_trained = True
 
@@ -99,7 +117,9 @@ class MLPTerm(ModelFOMTerm):
             scores = hypercube_exponential_tent(y, self.interest_region)
         elif self.scaler_config['interest_probability']:
             y_std = np.ones_like(y)*self.interest_std
-            scores = interest_probability(y, y_std, self.interest_region)
+            proba = interest_probability(y, y_std, self.interest_region)
+            # Normalize to 1 by deviding by the maximal probability
+            scores = proba / (self.center_proba ** y.shape[1])
         return np.clip(scores, 0, 1)
 
     def get_model_params(self):
@@ -142,8 +162,15 @@ class MLPTerm(ModelFOMTerm):
         - The nature of the problem and the specific model architecture can
           affect what's considered "good" for these metrics.
         """
+        params = {}
+
+        # Add std of prior normal distribution of prediction per target dimension
+        if self.scaler_config['interest_probability']:
+            for i, optimal_std in enumerate(self.interest_std):
+                params[f'interest_std_{i}'] = optimal_std
+
         if not self.is_trained:
-            return {}
+            return params
 
         loss_curve = np.array(self.model.loss_curve_)
         n_iterations = len(loss_curve)
@@ -180,10 +207,18 @@ class MLPTerm(ModelFOMTerm):
         return params
 
     def get_parameters(self):
+        params = {
+            'scaler_config': self.scaler_config,
+            'center_proba': self.center_proba,
+        }
+        params.update(self.get_model_params())
+
         if not self.is_trained:
-            return {}
-        params = self.get_model_params()
+            return params
+
         params.update({
+            'scaler_config': self.scaler_config,
+            'center_proba': self.center_proba,
             'n_layers': len(self.model.hidden_layer_sizes) + 2,  # including input and output layers
             'hidden_layer_sizes': self.model.hidden_layer_sizes,
             'activation': self.model.activation,
