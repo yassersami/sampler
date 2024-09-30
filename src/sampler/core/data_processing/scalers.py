@@ -207,68 +207,80 @@ def linear_tent(
     return y
 
 
-def hypercube_linear_tent(X: np.ndarray, interest_region: List[Tuple[float, float]]) -> np.ndarray:
+def hypercube_linear_tent(X: np.ndarray, interest_region: List[Tuple[float, float]], plateau_height: float = 0.8) -> np.ndarray:
     """
     Hypercube tent function:
-    - X on hypercube boundaries      -> y = 0 
-    - X in [L, U] for each dimension -> y = 1 
-    - X elsewhere                    -> y = linear
+    - X in interest region -> y = linear decrease from 1 at center to plateau_height
+    - X elsewhere          -> y = linear decrease from edge score to 0 on hypercube boundaries
 
     Parameters:
     X: shape (n, p) or (p,), values in [0, 1]^p
     interest_region: list of tuples of (lower, upper)
+    plateau_height: float in [0.5, 1], expected score on edges of interest region
 
     Returns:
     y: shape (n,) or scalar
     """
     X = np.atleast_2d(X.T).T
+    n_samples, n_dim = X.shape
 
-    y = np.ones(X.shape[0])  # Initialize scores for each sample
+    plateau_height = plateau_height ** (1 / n_dim)  # Score on edges of interest region
+    y = np.ones(n_samples)  # Initialize scores for each sample
 
     for i, (lower, upper) in enumerate(interest_region):
         # Calculate linear decrease from L to 0
         mask_lower = X[:, i] < lower
-        y[mask_lower] *= X[mask_lower, i] / lower
+        y[mask_lower] *= X[mask_lower, i] / lower * plateau_height
 
         # Calculate linear decrease from U to 1
         mask_upper = X[:, i] > upper
-        y[mask_upper] *= (1 - X[mask_upper, i]) / (1 - upper)
+        y[mask_upper] *= (1 - X[mask_upper, i]) / (1 - upper) * plateau_height
+        
+        # Calculate linear decrease inside interest region (from 1 at center to plateau_height at edges)
+        mask_inside = ~(mask_lower | mask_upper)
+        center = (lower + upper) / 2
+        half_width = (upper - lower) / 2
+        y[mask_inside] *= 1 - (1 - plateau_height) * (np.abs(X[mask_inside, i] - center) / half_width)
 
     return y
 
 
-def hypercube_exponential_tent(X: np.ndarray, interest_region: List[Tuple[float, float]]) -> np.ndarray:
+def hypercube_exponential_tent(X: np.ndarray, interest_region: List[Tuple[float, float]], plateau_height: float = 0.8) -> np.ndarray:
     """
-    Hypercube exponential tent function:
-    - X in interest region -> y = 1 
-    - X elsewhere          -> y = decreases exponentially from 1 to 0
+    Hypercube exponential tent function with linear decrease inside interest region:
+    - X in interest region -> y = linear decrease from 1 at center to plateau_height
+    - X elsewhere          -> y = exponential decrease from edge score to 0
 
     Parameters:
     X: shape (n, p) or (p,), values in [0, 1]^p
     interest_region: list of tuples of (lower, upper)
+    plateau_height: float in [0.5, 1], expected score on edges of interest region
 
     Returns:
     y: shape (n,) or scalar
     """
     X = np.atleast_2d(X.T).T
+    n_samples, n_dim = X.shape
 
-    # Set decay dist as half the width of the interest region
-    decay_dist = np.array([(upper - lower)/2 for lower, upper in interest_region])
+    plateau_height = plateau_height ** (1 / n_dim)  # Score on edges of interest region
+    scores = np.ones(n_samples)  # Initialize scores for each sample
 
-    scores = np.ones(X.shape[0])  # Initialize scores for each sample
+    for i, (lower, upper) in enumerate(interest_region):
+        center = (lower + upper) / 2
+        half_width = (upper - lower) / 2
+        decay_dist = half_width
 
-    for i, (low, high) in enumerate(interest_region):
-        mask_lower = X[:, i] < low
-        mask_upper = X[:, i] > high
-        
-        # Calculate distances for values outside the interest region
-        distances = np.zeros(X.shape[0])
-        distances[mask_lower] = low - X[mask_lower, i]
-        distances[mask_upper] = X[mask_upper, i] - high
-        
-        # Apply exponential decay
-        scores *= np.exp(-distances / decay_dist[i])
-    
+        # Calculate distances from center of interest region
+        distances = np.abs(X[:, i] - center)
+        mask_inside = (distances <= half_width)
+        mask_outside = ~ mask_inside
+
+        # Linear decrease inside interest region (from 1 at center to plateau_height at edges)
+        scores[mask_inside] *= 1 - (1 - plateau_height) * (distances[mask_inside] / half_width)
+
+        # Apply exponential decay outside interest region
+        scores[mask_outside] *= np.exp(-(distances[mask_outside] - half_width) / decay_dist) * plateau_height
+
     return scores
 
 
@@ -356,22 +368,15 @@ def interest_probability(y_mean: np.ndarray, y_std: np.ndarray, interest_region:
     """
     y_mean = np.atleast_2d(y_mean.T).T
     y_std = np.atleast_2d(y_std.T).T
-    
-    if y_mean.shape != y_std.shape:
-        raise ValueError("y_mean and y_std must have the same shape")
-    
-    if len(interest_region) != y_mean.shape[1]:
-        raise ValueError("Number of interest regions must match the number of dimensions in y_mean and y_std")
-    
     n_samples, n_dimensions = y_mean.shape
-    
+
     probabilities = np.ones((n_samples, n_dimensions))
-    
+
     for i, (lower, upper) in enumerate(interest_region):
         # CDF: cumulative distribution function P(X <= x)
         probabilities[:, i] = (
             norm.cdf(upper, loc=y_mean[:, i], scale=y_std[:, i]) - 
             norm.cdf(lower, loc=y_mean[:, i], scale=y_std[:, i])
         )
-    
+
     return np.prod(probabilities, axis=1)
