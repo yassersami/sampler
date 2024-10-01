@@ -14,8 +14,8 @@ pandas==1.5.3
 numpy==1.23.5
 scikit-learn==1.2.2
 scipy==1.10.1
+kneed==0.8.5
 scikit-optimize==0.9.0
-vedo==2024.5.1
 optuna==3.6.1
 sko==0.5.7
 

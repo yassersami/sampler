@@ -119,16 +119,6 @@ def plot_stars_volumes_distribution(
     # Set tick label font sizes
     ax.tick_params(axis='both', which='major', labelsize=font_size-2)
 
-    # # Add summary statistics
-    # stats_dict = {'Bin width': bin_width, **star_scores}
-    # stats = '\n'.join([f'{key}: {format_value(value)}' for key, value in stats_dict.items()])
-
-    # # Add text on top right corner
-    # ax.text(
-    #     1.1, 1.0, stats, transform=ax.transAxes, verticalalignment='top', horizontalalignment='left',
-    #     bbox=dict(boxstyle='round', facecolor='white', alpha=0.8), fontsize=font_size-2
-    # )
-
     # Add summary statistics
     stats_dict = {'Bin width': bin_width, **star_scores}
     table_data = [[key, format_value(value)] for key, value in stats_dict.items()]
@@ -136,13 +126,13 @@ def plot_stars_volumes_distribution(
     # Add table to the top right of the plot
     table = ax.table(
         cellText=table_data,
-        # colLabels=columns,
-        cellLoc='center', loc='upper right',
-        bbox=[1., 0.5, 0.33, 0.5]  # (x0, y0, width, height)
+        cellLoc='center',
+        loc='lower left',
+        bbox=[1, 0.4, 0.33, 0.6]  # (x0, y0, width, height)
     )
     table.auto_set_font_size(False)
     table.set_fontsize(font_size)
-    table.scale(1, 2)  # Adjust the scale to fit your needs
+    table.scale(1, 2)  # (xscale, yscale)
 
     # Move legend to bottom right and adjust position
     ax.legend(loc='lower left', bbox_to_anchor=(1, 0.), fontsize=font_size)
@@ -223,12 +213,12 @@ def plot_multiple_asvd_distributions(
     table = ax.table(
         cellText=table_data, 
         colLabels=columns,
-        cellLoc='center', loc='upper right',
+        cellLoc='center', loc='lower left',
         bbox=[0.5, 0.5, 0.5, 0.5]  # (x0, y0, width, height)
     )
     table.auto_set_font_size(False)
     table.set_fontsize(font_size)
-    table.scale(1, 1.5)  # Adjust the scale to fit your needs
+    table.scale(1, 1.5)  # (xscale, yscale)
 
     # Set tick label font sizes
     ax.tick_params(axis='both', which='major', labelsize=font_size)

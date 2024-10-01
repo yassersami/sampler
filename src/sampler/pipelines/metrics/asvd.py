@@ -1,21 +1,17 @@
+from typing import Union, List, Dict, Tuple, Callable
+import warnings
 import numpy as np
 import pandas as pd
 from scipy.spatial import Delaunay
+from sklearn.cluster import DBSCAN
+from kneed import KneeLocator
+from sklearn.neighbors import NearestNeighbors
 from scipy.special import factorial
-from scipy.stats import skew, kurtosis
 from scipy.integrate import nquad, IntegrationWarning
-from typing import Union, List, Dict, Tuple, Callable
 from scipy.stats import lognorm
-import warnings
+
 
 class ASVD:
-    """
-    Augmented (Space) Simplex Volume Distribution (ASVD) class.
-
-    - This class handles the calculation and analysis of fractional vertex star volumes,
-    also known as Voronoi volumes or Donald volumes in some contexts.
-    - _x or _xy suffix indicates wheter original or augmented space
-    """
     """
     Augmented (Space) Simplex Volume Distribution (ASVD) class.
 
@@ -23,15 +19,18 @@ class ASVD:
     original and augmented spaces. These volumes are also known as Voronoi
     volumes or Donald volumes in certain contexts.
 
-    The class performs Delaunay triangulation on the input data, computes
-    simplex volumes, and calculates fractional vertex star volumes in both the
-    original feature space and the augmented space (features + targets).
+    The class performs the following steps:
+    1. Applies DBSCAN clustering to the input data in the original feature space.
+    2. Conducts Delaunay triangulation on each identified cluster.
+    3. Computes simplex volumes.
+    4. Computes fractional vertex star volumes.
 
     Attributes:
         features (List[str]): Names of feature columns.
         targets (List[str]): Names of target columns.
         vertices_x (np.ndarray): Vertex coordinates in the original feature space.
         vertices_xy (np.ndarray): Vertex coordinates in the augmented space (features + targets).
+        cluster_labels (np.ndarray): Cluster label for each vertex.
         simplices_idx (np.ndarray): Indices of simplices from Delaunay triangulation.
         simplices_x (np.ndarray): Simplex coordinates in the original feature space.
         simplices_xy (np.ndarray): Simplex coordinates in the augmented space.
@@ -43,6 +42,8 @@ class ASVD:
     Note:
         - Suffix '_x' denotes attributes in the original feature space.
         - Suffix '_xy' denotes attributes in the augmented space (features + targets).
+        - Steps 3. and 4. are computed in both the original feature space and
+          the augmented space (features + targets).
     """
 
     def __init__(
@@ -72,6 +73,7 @@ class ASVD:
             self.stars_volumes_xy = np.array([0])
         else:
             # Proceed with normal computation
+            self.set_clusters()
             self.set_simplices()
             self.compute_simplices_volumes()
             self.compute_stars_volumes()
@@ -88,19 +90,59 @@ class ASVD:
         self.vertices_x = vertices_x
         self.vertices_xy = vertices_xy
 
-    def set_simplices(self):
-        # Create Delaunay triangulation
-        tri = Delaunay(self.vertices_x)
-        simplices_idx = tri.simplices
+    def set_clusters(self):
+        # Automatically determine DBSCAN parameters
+        n_neighbors = min(len(self.vertices_x) - 1, 10)  # Use 10 neighbors or less if fewer points
+        nbrs = NearestNeighbors(n_neighbors=n_neighbors).fit(self.vertices_x)
+        distances, _ = nbrs.kneighbors(self.vertices_x)
         
-        # Set original and augmented simplices coordinates
-        simplices_x = self.vertices_x[simplices_idx]
-        simplices_xy = self.vertices_xy[simplices_idx]
-    
-        # New attributes
-        self.simplices_idx = simplices_idx
-        self.simplices_x = simplices_x
-        self.simplices_xy = simplices_xy
+        # Sort distances to the nth neighbor (farthest neighbor)
+        distances = np.sort(distances[:, -1])
+        
+        # Find the elbow point for epsilon
+        kneedle = KneeLocator(range(len(distances)), distances, curve='convex', direction='increasing')
+        epsilon = distances[kneedle.elbow] if kneedle.elbow else np.median(distances)
+
+        # Perform DBSCAN clustering
+        clustering = DBSCAN(eps=epsilon, min_samples=3).fit(self.vertices_x)
+        labels = clustering.labels_
+
+        # Store clustering information as attributes
+        self.cluster_labels = labels
+        self.n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
+        self.cluster_sizes = np.bincount(labels[labels >= 0])
+
+    def set_simplices(self):
+        # Initialize lists to store simplices and their indices
+        all_simplices_idx = []
+        all_simplices_x = []
+        all_simplices_xy = []
+
+        # Process each cluster
+        for cluster_id in range(self.n_clusters):
+            # Get indices of points in this cluster
+            cluster_indices = np.where(self.cluster_labels == cluster_id)[0]
+            cluster_points = self.vertices_x[cluster_indices]
+
+            # Skip clusters with too few points for triangulation
+            if len(cluster_points) < len(self.features) + 1:
+                continue
+
+            # Create Delaunay triangulation for this cluster
+            tri = Delaunay(cluster_points)
+            
+            # Map local indices to global indices
+            global_simplices_idx = cluster_indices[tri.simplices]
+
+            # Add to the lists
+            all_simplices_idx.append(global_simplices_idx)
+            all_simplices_x.append(self.vertices_x[global_simplices_idx])
+            all_simplices_xy.append(self.vertices_xy[global_simplices_idx])
+
+        # Combine all simplices
+        self.simplices_idx = np.vstack(all_simplices_idx) if all_simplices_idx else np.array([])
+        self.simplices_x = np.vstack(all_simplices_x) if all_simplices_x else np.array([])
+        self.simplices_xy = np.vstack(all_simplices_xy) if all_simplices_xy else np.array([])
 
     def compute_simplices_volumes(self):
         # Compute original and augmented simplex volume
@@ -184,7 +226,8 @@ class ASVD:
         lognormal_sigma = fit_lognormal(volumes)
 
         star_scores = {
-            'count': volumes.shape[0],
+            'Count': volumes.shape[0],
+            'Clusters': self.n_clusters,
             'Augmentat°': self.get_augmentation(use_star),
             'Lognormal σ': lognormal_sigma,
             'Std Dev': np.std(volumes),
