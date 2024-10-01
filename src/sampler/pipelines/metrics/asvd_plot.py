@@ -2,7 +2,6 @@ from typing import List, Dict, Tuple, Union
 import warnings
 import numpy as np
 import pandas as pd
-from scipy.stats import lognorm
 import matplotlib.pyplot as plt
 
 from .asvd import ASVD
@@ -41,137 +40,17 @@ def adjust_bin_width(volumes, initial_bin_width, min_bins=5):
     return bin_width, exp_bins
 
 
-def fit_lognormal(data):
-    """
-    Fit a lognormal distribution to the given data.
-
-    The location parameter is fixed at 0 (floc=0), which constrains the
-    distribution to start at 0. This is often appropriate for data that cannot
-    be negative, such as volumes.
-    
-    Note:
-    - shape: Also known as the log-scale parameter (sigma)
-    - location: Fixed at 0 in this case
-    - scale: Related to the median of the distribution
-    """
-    # Check if any negative values
-    if np.any(data < 0):
-        raise ValueError("Negative values not allowed for lognormal distribution with floc=0")
-    # Shift data slightly away from 0
-    epsilon = 1e-10
-    data = np.maximum(data, epsilon)
-    shape, loc, scale = lognorm.fit(data, floc=0)
-    return shape
-
-
-def plot_asvd_scores(
-    experiments_asvd: Dict[str, ASVD],
-    exp_config: Dict[str, Dict[str, str]],
-    figsize: Tuple[int, int] = (15, 10),
-    font_size: int = 14,
-):
-    """
-    Plot scores for different experiments using a grouped bar plot and display remaining
-    metrics in a table.
-
-    Variables:
-    - data and experiments_asvd have same keys.
-    - experiments_asvd (Dict[str, ASVD]): A dictionary of ASVD instance for each
-      experiment.
-    - exp_config (Dict[str, Dict[str, str]]): A dictionary for experiment name and color.
-    - asvd_scores (Dict[str, Dict[str, float]]): A dictionary where keys are experiment
-      keys and values are dictionaries of scores.
-    - metrics_to_plot (List[str]): List of metric names to plot in the bar chart.
-      If None, all metrics are plotted.
-    """
-    
-    metrics_to_plot = ['sum_augm', 'rsd_x', 'rsd_xy', 'rsd_augm', 'riqr_x', 'riqr_xy']
-
-    asvd_scores = {}
-    for exp_key, exp_asvd in experiments_asvd.items():
-        asvd_scores[exp_key] = exp_asvd.compute_scores()
-
-    exp_keys = list(experiments_asvd.keys())
-    exp_names = [exp_config[exp_key]['name'] for exp_key in exp_keys]
-
-    # Get all unique metrics while preserving order
-    all_metrics = []
-    for exp in asvd_scores.values():
-        all_metrics.extend(metric for metric in exp.keys() if metric not in all_metrics)
-
-    if metrics_to_plot is None:
-        metrics_to_plot = all_metrics.copy()
+def format_value(value):
+    """ Format a value for display in plots. """
+    if isinstance(value, int):
+        return f'{value}'
+    elif isinstance(value, float):
+        if abs(value) >= 0.01 or value == 0:
+            return f'{value:.2f}'
+        else:
+            return f'{value:.2e}'
     else:
-        metrics_to_plot = [metric for metric in metrics_to_plot if metric in all_metrics]
-
-    metrics_for_table = [metric for metric in all_metrics if metric not in metrics_to_plot]
-
-    n_experiments = len(exp_keys)
-    n_metrics_plot = len(metrics_to_plot)
-
-    # Adjust figure size and subplot ratio based on whether we have a table
-    if metrics_for_table:
-        fig, (ax_bar, ax_table) = plt.subplots(nrows=2, ncols=1, figsize=figsize, 
-                                               gridspec_kw={'height_ratios': [3, 1]})
-    else:
-        fig, ax_bar = plt.subplots(figsize=figsize)
-
-    # Grouped Bar Plot
-    bar_width = 0.8 / n_experiments
-    index = np.arange(n_metrics_plot)
-
-    for i, (exp_key, exp_name) in enumerate(zip(exp_keys, exp_names)):
-        values = [asvd_scores[exp_key].get(metric, np.nan) for metric in metrics_to_plot]
-        position = index + i * bar_width
-        rects = ax_bar.bar(
-            position, values, bar_width, label=exp_name, alpha=0.8,
-            color=exp_config[exp_key]['color']
-        )
-
-        # Add value labels on top of each bar
-        for rect in rects:
-            height = rect.get_height()
-            if np.isfinite(height):
-                ax_bar.text(rect.get_x() + rect.get_width()/2., height,
-                            f'{height:.2f}', ha='center', va='bottom', rotation=90, fontsize=font_size-2)
-
-    ax_bar.set_ylabel('Values', fontsize=font_size)
-    ax_bar.set_title('Comparison of Metrics Across Experiments', fontsize=font_size+2)
-    ax_bar.set_xticks(index + bar_width * (n_experiments - 1) / 2)
-    ax_bar.set_xticklabels(metrics_to_plot, rotation=45, ha='right', fontsize=font_size)
-    ax_bar.legend(fontsize=font_size)
-
-    # Set tick label font sizes
-    ax_bar.tick_params(axis='both', which='major', labelsize=font_size)
-
-    # Table (if there are metrics for the table)
-    if metrics_for_table:
-        table_data = []
-        for exp_key, exp_name in zip(exp_keys, exp_names):
-            row = [exp_name[:10] + '...' * (len(exp_name) > 10)]
-            for metric in metrics_for_table:
-                value = asvd_scores[exp_key].get(metric, 'N/A')
-                if isinstance(value, int):
-                    row.append(f'{value}')
-                elif isinstance(value, float):
-                    if value > 0.01:
-                        row.append(f'{value:.2f}')
-                    else:
-                        row.append(f'{value:.2e}')
-                else:
-                    row.append(str(value))
-            table_data.append(row)
-
-        ax_table.axis('off')
-        table = ax_table.table(cellText=table_data, 
-                               colLabels=['Experiment'] + metrics_for_table,
-                               cellLoc='center', loc='center')
-        table.auto_set_font_size(False)
-        table.set_fontsize(font_size)
-        table.scale(1, 1.5)  # Adjust the scale to fit your needs
-
-    plt.tight_layout()
-    return fig
+        return str(value)
 
 
 def plot_stars_volumes_distribution(
@@ -208,10 +87,6 @@ def plot_stars_volumes_distribution(
     # Plot scaled KDE
     ax.plot(x_values, kde_scaled, color='dodgerblue', linewidth=2, label='Density')
 
-    # Calculate Q3 and add vertical line
-    q3 = np.percentile(volumes, 75)
-    ax.axvline(q3, color='goldenrod', linewidth=2, linestyle='--', label='Q3')
-
     # Calculate cumulative volume
     sorted_volumes = np.sort(volumes)
     cumulative_volumes = np.cumsum(sorted_volumes)
@@ -223,8 +98,19 @@ def plot_stars_volumes_distribution(
     # Plot cumulative volume
     ax.plot(sorted_volumes, scaled_cum_vol, color='green', label='Cum. Vol.')
 
+    # Get star volume scores
+    star_scores = asvd_instance.get_scores(use_star=True)
+
+    # Mark Q3 with vertical line
+    ax.axvline(star_scores['3rd Quartile'], color='goldenrod', linewidth=2, linestyle='--', label='Q3')
+
+    # Mark D9 with vertical line
+    ax.axvline(star_scores['9th Decile'], color='red', linewidth=2, linestyle='--', label='D9')
+
     # Set title
     ax.set_title(f"{exp_name}\nDistribution of Star Volumes", fontsize=font_size)
+    ax.set_xlabel(f'Star Volume', fontsize=font_size)
+    ax.set_ylabel(f'Total Volume per Bin', fontsize=font_size)
 
     # Set x and y-axis limits
     ax.set_xlim(0, MAX_STAR_VOL)
@@ -233,30 +119,33 @@ def plot_stars_volumes_distribution(
     # Set tick label font sizes
     ax.tick_params(axis='both', which='major', labelsize=font_size-2)
 
-    # Stats for volumes from 0 to Q3
-    volumes_to_q3 = volumes[volumes <= q3]
-    cumulated_volume_to_q3 = np.sum(volumes_to_q3)
-    mean_volume_to_q3 = np.mean(volumes_to_q3)
+    # # Add summary statistics
+    # stats_dict = {'Bin width': bin_width, **star_scores}
+    # stats = '\n'.join([f'{key}: {format_value(value)}' for key, value in stats_dict.items()])
 
-    # Get log normal distribution parameters
-    lognormal_sigma = fit_lognormal(volumes)
+    # # Add text on top right corner
+    # ax.text(
+    #     1.1, 1.0, stats, transform=ax.transAxes, verticalalignment='top', horizontalalignment='left',
+    #     bbox=dict(boxstyle='round', facecolor='white', alpha=0.8), fontsize=font_size-2
+    # )
 
     # Add summary statistics
-    stats = (
-        f'Bin width: {bin_width:.4f}\n'
-        f'Lognormal σ: {lognormal_sigma:.4f}\n'
-        f'Std Dev: {np.std(volumes):.4f}\n'
-        f'Mean: {np.mean(volumes):.4f}\n'
-        f'Sum: {np.sum(volumes):.4f}\n'
-        f'Q3 limit: {q3:.4f}\n'
-        f'Early Mean: {mean_volume_to_q3:.4f}\n'
-        f'Early Sum: {cumulated_volume_to_q3:.4f}'
+    stats_dict = {'Bin width': bin_width, **star_scores}
+    table_data = [[key, format_value(value)] for key, value in stats_dict.items()]
+
+    # Add table to the top right of the plot
+    table = ax.table(
+        cellText=table_data,
+        # colLabels=columns,
+        cellLoc='center', loc='upper right',
+        bbox=[1., 0.5, 0.33, 0.5]  # (x0, y0, width, height)
     )
-    ax.text(0.99, 0.98, stats, transform=ax.transAxes, verticalalignment='top', horizontalalignment='right',
-            bbox=dict(boxstyle='round', facecolor='white', alpha=0.8), fontsize=font_size-2)
+    table.auto_set_font_size(False)
+    table.set_fontsize(font_size)
+    table.scale(1, 2)  # Adjust the scale to fit your needs
 
     # Move legend to bottom right and adjust position
-    ax.legend(loc='upper right', bbox_to_anchor=(1, 0.6), fontsize=font_size)
+    ax.legend(loc='lower left', bbox_to_anchor=(1, 0.), fontsize=font_size)
 
     # Improve layout
     plt.tight_layout()
@@ -290,7 +179,7 @@ def plot_multiple_asvd_distributions(
 
         # Compute count per bins
         count, bin_edges = np.histogram(volumes, bins=exp_bins, density=False)
-        
+
         # Scale a KDE to match histogram height
         x_values, kde_counts = set_scaled_kde(volumes, height=np.max(count), bandwidth=0.1)
 
@@ -312,54 +201,22 @@ def plot_multiple_asvd_distributions(
     ax.legend(loc='upper right', bbox_to_anchor=(1, 0.4), fontsize=font_size)
 
     # Compute ASVD scores
-    asvd_scores = {}
-    for exp_key, exp_asvd in experiments_asvd.items():
-        volumes_x = exp_asvd.stars_volumes_x
-        volumes_xy = exp_asvd.stars_volumes_xy
+    asvd_scores = {
+        exp_key: exp_asvd.get_scores(use_star=True)
+        for exp_key, exp_asvd in experiments_asvd.items()
+    }
 
-        # Total volume
-        sum_volumes_x = volumes_x.sum()
-        sum_volumes_xy = volumes_xy.sum()
-
-        # Stats for volumes from 0 to Q3
-        q3_x = np.percentile(volumes_x, 75)
-        volumes_to_q3_x = volumes_x[volumes_x <= q3_x]
-        sum_to_q3_x = np.sum(volumes_to_q3_x)
-
-        # Get log normal distribution parameters
-        lognormal_sigma_x = fit_lognormal(volumes_x)
-        
-        asvd_scores[exp_key] = {
-            'count': volumes_x.shape[0],
-            'sum_x': sum_volumes_x,
-            'sum_xy': sum_volumes_xy,
-            'Augmentat°': 1 if sum_volumes_x==0 else sum_volumes_xy / sum_volumes_x,
-            'Q3': q3_x,
-            'Early sum': sum_to_q3_x,
-            'Std Dev': np.std(volumes_x),
-            'Lognormal σ': lognormal_sigma_x,
-        }
-
+    # Prepare table data
     exp_keys = list(experiments_asvd.keys())
     exp_names = [exp_config[exp_key]['name'] for exp_key in exp_keys]
     score_names = list(asvd_scores[exp_keys[0]].keys())
-        
-    # Prepare table data
     columns = ['Experiment'] + [exp_name[:10] + '...' * (len(exp_name) > 10) for exp_name in exp_names]
     table_data = []
     for metric in score_names:
         row = [metric]
         for exp_key in exp_keys:
             value = asvd_scores[exp_key].get(metric, 'N/A')
-            if isinstance(value, int):
-                row.append(f'{value}')
-            elif isinstance(value, float):
-                if value > 0.01:
-                    row.append(f'{value:.2f}')
-                else:
-                    row.append(f'{value:.2e}')
-            else:
-                row.append(str(value))
+            row.append(format_value(value))
         table_data.append(row)
 
     # Add table to the top right of the plot

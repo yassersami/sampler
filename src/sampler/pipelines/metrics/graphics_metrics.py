@@ -4,11 +4,10 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
-import matplotlib.lines as mlines
-from scipy.stats import gaussian_kde
 import seaborn as sns
 
 from .postprocessing_functions import set_scaled_kde
+from .asvd import ASVD, get_cum_vol
 from sampler.core.data_processing.sampling_tracker import get_first_iteration_index
 
 
@@ -265,6 +264,7 @@ def plot_violin_distribution(
 
 def targets_kde(
     data: Dict,
+    asvd: Dict[str, ASVD],
     targets: List[str],
     latex_mapper: Dict[str, str],
     interest_region: Dict[str, Tuple[float, float]],
@@ -280,18 +280,28 @@ def targets_kde(
     max_count = 0
     for col, target in enumerate(targets):
         ax = axs[col]
-        for exp_name, exp_data in data.items():
+        for exp_key, exp_data in data.items():
             values = exp_data['inliers'][target]
 
             # Count samples per bin
             count, bin_edges = np.histogram(values, bins=bins, density=False)
             
             # Scale a KDE to match histogram max count height
-            x_values, kde_counts = set_scaled_kde(values, height=np.max(count), bandwidth=0.1)
+            x_values, kde_counts = set_scaled_kde(values, height=np.max(count), bandwidth=bandwidth)
 
+            # Set label
+            num_interest = exp_data['interest'].shape[0]
+            q3, cumsum_q3 = get_cum_vol(asvd[exp_key].stars_volumes_x, 75)
+            augmentation = asvd[exp_key].get_augmentation(use_star=True)
+            exp_stats = (
+                f"Interest: {num_interest}\n"
+                f"Eff. Vol.: {cumsum_q3:.4f}\n"
+                f"Augmentat°: {augmentation:.2f}\n"
+            )
             # Plot KDE
             ax.fill_between(x_values, kde_counts, 0, alpha=0.3, color=exp_data['color'])
             ax.plot(x_values, kde_counts, label=exp_data['name'], color=exp_data['color'], linewidth=2)
+            ax.plot([], [], ' ', label=exp_stats)
 
             # Update max count for y-axis limit
             max_count = max(max_count, np.max(count))
@@ -304,9 +314,6 @@ def targets_kde(
         # Set tick label font sizes
         ax.tick_params(axis='both', which='major', labelsize=font_size-2)
 
-    # Get colors legend
-    colors_legend = [mlines.Line2D([], [], color=dic['color'], label=dic['name']) for dic in data.values()]
-
     if len(targets) > 1:
         axs[1].set_ylabel('')
         axs[1].set_yticklabels([])
@@ -316,8 +323,8 @@ def targets_kde(
                     ha='right', va='bottom', size=font_size+6)
 
     axs[0].set_ylabel(f'Count per {100/bins:.0f}% of target range', fontsize=font_size)
-    legend = axs[-1].legend(handles=colors_legend, loc='upper left', bbox_to_anchor=(1.1, 1))
-    legend.set_title('Experiments', prop={'size': font_size})
+    legend = axs[-1].legend(loc='upper left', bbox_to_anchor=(1.1, 1))
+    legend.set_title('Experiments\n', prop={'size': font_size})
     for text in legend.get_texts():
         text.set_fontsize(font_size-2)
 

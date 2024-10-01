@@ -5,6 +5,7 @@ from scipy.special import factorial
 from scipy.stats import skew, kurtosis
 from scipy.integrate import nquad, IntegrationWarning
 from typing import Union, List, Dict, Tuple, Callable
+from scipy.stats import lognorm
 import warnings
 
 class ASVD:
@@ -109,12 +110,11 @@ class ASVD:
         # New attributes
         self.simplices_volumes_x = simplices_volumes_x
         self.simplices_volumes_xy = simplices_volumes_xy
-        
 
     def compute_stars_volumes(self):
         # Set vertices for which to do computation
         vertices_idx = np.arange(self.vertices_x.shape[0])
-    
+
         # Compute original and augmented fractional vertex star volume
         df_fvs_volumes_x = compute_stars_volumes(
             vertices_idx, self.simplices_idx, self.simplices_volumes_x
@@ -129,71 +129,83 @@ class ASVD:
         self.stars_volumes_x = stars_volumes_x  # fractional vertex star volume
         self.stars_volumes_xy = stars_volumes_xy  # augmented fractional vertex star volume
 
-    def compute_scores(self):
+    def get_augmentation(self, use_star: bool):
+        """ Compute augmentation ratio of volumes """
+        if use_star:
+            # Focus on fractional star volumes
+            volumes = self.stars_volumes_x
+            volumes_xy = self.stars_volumes_xy
+        else: 
+            # Use simplex volumes
+            volumes = self.simplices_volumes_x
+            volumes_xy = self.simplices_volumes_xy
+
+        # Compute total volumes
+        sum_volumes = volumes.sum()
+        sum_volumes_xy = volumes_xy.sum()
+
+        augmentation = 1 if sum_volumes==0 else sum_volumes_xy / sum_volumes
+        return augmentation
+
+    def get_scores(self, use_star: bool):
         """
-        Computes the following metrics for assessing the quality of simplicial complexes in representing response curves:
+        Computes the following metrics for assessing the quality of simplicial
+        complexes in representing response curves:
 
-        1. Volumetric Statistics:
-        Computes mean volume per vertex and total volume of the simplicial complex.
-        
-        2. Augmentation Ratio (AR):
-        Quantifies the extent of captured variation by calculating the ratio of total volume augmentation. 
-        Higher values indicate better representation. This metric serves as a discrete approximation of 
-        the generalized 1D function arc length integral:
+        1. Augmentation Ratio:
+        Quantifies the extent of captured variation by calculating the ratio of
+        total volume augmentation. Higher values indicate better representation.
+        This metric serves as a discrete approximation of the generalized 1D
+        function arc length integral:
 
-        AR = 1/(b-a) * ∫[a to b] √(1 + (dy/dx)²) dx
+                    AR = 1/(b-a) * ∫[a to b] √(1 + (dy/dx)²) dx
 
-        3. Relative Standard Deviation (RSD):
-        Measures the uniformity of sample distribution, normalized by the mean to eliminate bias 
-        from varying simplex counts. Computed for:
-        a) Augmented space along the target function curve (RSD_xy)
-        b) Original feature space (RSD_x)
-        Lower values indicate more uniform distribution.
+        2. Distribution Characteristics:
+        - 'Lognormal σ': Sigma parameter of the fitted log-normal distribution
+                         to volumes.
+        - 'Std Dev': Standard deviation of volumes.
 
-        4. RSD Augmentation (RSDA):
-        Defined as RSDA = RSD_xy - RSD_x
-        Negative values indicate improved uniformity on the response curve relative to the feature space.
-        Positive values suggest decreased uniformity post-augmentation.
-
+        3. Volume key statistics at 75th and 90th percentiles.
         """
-        simplices_sum_x = self.simplices_volumes_x.sum()
-        simplices_sum_xy = self.simplices_volumes_xy.sum()
-        simplices_mean_x = self.simplices_volumes_x.mean()
-        simplices_mean_xy = self.simplices_volumes_xy.mean()
-        sum_augm = np.nan if simplices_sum_x==0 else simplices_sum_xy / simplices_sum_x
-        rsd_x = self.simplices_volumes_x.std() / simplices_mean_x
-        rsd_xy = self.simplices_volumes_xy.std() / simplices_mean_xy
-        rsd_augm = np.zeros_like(rsd_x)
-        rsd_augm = np.where(rsd_x != 0, rsd_xy / rsd_x, np.nan)
-        riqr_x = (np.percentile(self.simplices_volumes_x, 75) - np.percentile(self.simplices_volumes_x, 25))/simplices_mean_x
-        riqr_xy = (np.percentile(self.simplices_volumes_xy, 75) - np.percentile(self.simplices_volumes_xy, 25))/simplices_mean_xy
-        return {
-            'count': self.vertices_x.shape[0],
-            'sum_x': simplices_sum_x,
-            'sum_xy': simplices_sum_xy,
-            'mean_x': self.stars_volumes_x.mean(),  # Mean over number of vertices
-            'mean_xy': self.stars_volumes_xy.mean(),  # Mean over number of aumengted vertices
-            'std_x': self.stars_volumes_x.std(),  # Mean over number of vertices
-            'std_xy': self.stars_volumes_xy.std(),  # Mean over number of aumengted vertices
-            'sum_augm': sum_augm,
-            'rsd_x': rsd_x,
-            'rsd_xy': rsd_xy,
-            'rsd_augm': rsd_augm,
-            'riqr_x': riqr_x,
-            'riqr_xy': riqr_xy,
+        if use_star:
+            # Focus on fractional star volumes
+            volumes = self.stars_volumes_x
+            volumes_xy = self.stars_volumes_xy
+        else: 
+            # Use simplex volumes
+            volumes = self.simplices_volumes_x
+            volumes_xy = self.simplices_volumes_xy
+
+        # Stats for volumes from 0 to 75th and 90th percentiles
+        q3, cumsum_q3 = get_cum_vol(volumes, 75)
+        d9, cumsum_d9 = get_cum_vol(volumes, 90)
+
+        # Get log normal distribution parameters
+        lognormal_sigma = fit_lognormal(volumes)
+
+        star_scores = {
+            'count': volumes.shape[0],
+            'Augmentat°': self.get_augmentation(use_star),
+            'Lognormal σ': lognormal_sigma,
+            'Std Dev': np.std(volumes),
+            'sum': volumes.sum(),
+            '3rd Quartile': q3,
+            'Q3 Cum. Vol': cumsum_q3,
+            '9th Decile': d9,
+            'D9 Cum. Vol': cumsum_d9,
         }
+        return star_scores
 
-    def compute_statistics(self):
+    def get_statistics(self):
         # Simplex Volume scores dicts
         simplices_scores_x = describe_volumes(self.simplices_volumes_x)
         simplices_scores_xy = describe_volumes(self.simplices_volumes_xy)
-        simplices_scores_xy['sum_augm'] = simplices_scores_xy['sum'] / simplices_scores_x['sum']
-        simplices_scores_xy['rsd_augm'] = simplices_scores_xy['rsd'] - simplices_scores_x['rsd']
+        simplices_scores_xy['sum_augm'] = self.get_augmentation(use_star=False)
+
         # Fractional Vertex Star Volume scores dicts
         stars_scores_x = describe_volumes(self.stars_volumes_x)
         stars_scores_xy = describe_volumes(self.stars_volumes_xy)
-        stars_scores_xy['sum_augm'] = stars_scores_xy['sum'] / stars_scores_x['sum']
-        stars_scores_xy['rsd_augm'] = stars_scores_xy['rsd'] - stars_scores_x['rsd']
+        stars_scores_xy['sum_augm'] = self.get_augmentation(use_star=True)
 
         df_scores = pd.DataFrame({
             ('simplices', 'volumes_x'): simplices_scores_x,
@@ -201,9 +213,7 @@ class ASVD:
             ('stars', 'volumes_x'): stars_scores_x,
             ('stars', 'volumes_xy'): stars_scores_xy,
         })
-        # Reorder rows
-        df_scores = insert_row_in_order(df_scores, [('sum_augm', 2), ('rsd_augm', 6)])
-    
+
         return df_scores
 
 
@@ -281,52 +291,6 @@ def compute_stars_volumes(
     return df_stars_volumes
 
 
-def describe_volumes(volumes: np.ndarray) -> pd.DataFrame:
-    """
-    Calculate various metrics for the volumes of augmented and original simplices.
-    """
-    # Calculate descriptive statistics
-    df_scores = pd.DataFrame(volumes).describe()
-
-    # Add metrics
-    df_scores.loc['sum', 0] = volumes.sum()
-    df_scores.loc['rsd', 0] = volumes.std() / volumes.mean()  # relative standard deviation (RSD) or coefficient of variation (CV)
-    df_scores.loc['iqr', 0] = np.percentile(volumes, 75) - np.percentile(volumes, 25)  #  interquartile range (IQR)
-    df_scores.loc['skewness', 0] = skew(volumes)
-    df_scores.loc['kurtosis', 0] = kurtosis(volumes)
-    
-    df_scores = insert_row_in_order(df_scores, [('sum', 1), ('rsd', 4)])
-    dict_scores = df_scores.iloc[:, 0].to_dict()
-    return dict_scores
-
-
-def insert_row_in_order(
-    df: pd.DataFrame, 
-    rows_and_positions: List[Tuple[Union[str, int], int]]
-) -> pd.DataFrame:
-    """
-    Insert specified rows into a DataFrame at given positions.
-    
-    Parameters:
-    df (pd.DataFrame): The input DataFrame.
-    rows_and_positions (List[Tuple[Union[str, int], int]]): A list of tuples, 
-        each containing a row name/index and its desired position.
-    """
-    current_order = df.index.tolist()
-    
-    # Sort rows_and_positions by position in ascending order
-    rows_and_positions.sort(key=lambda x: x[1])
-    
-    for row_name, position in rows_and_positions:
-        if row_name not in df.index:
-            raise ValueError(f"Row '{row_name}' not found in DataFrame. \n{df}")
-        current_order.remove(row_name)
-        position = min(position, len(current_order))  # Ensure position is within bounds
-        current_order.insert(position, row_name)
-    
-    return df.loc[current_order]
-
-
 def compute_response_curve_augmentation(
     predictor: Callable[[np.ndarray], np.ndarray],
     region: List[Tuple[float, float]],
@@ -383,6 +347,67 @@ def compute_response_curve_augmentation(
     augmentation = volume / region_volume
     
     return augmentation
+
+
+def get_cum_vol(volumes: np.ndarray, percentile: int):
+    """ Get percentile of volumes and cumulated volume up to percentile. """
+    p_vol = np.percentile(volumes, percentile)
+    volumes_to_p = volumes[volumes <= p_vol]
+    cumulated_volume_to_p = np.sum(volumes_to_p)
+    return p_vol, cumulated_volume_to_p
+
+
+def describe_volumes(volumes: np.ndarray) -> dict:
+    """
+    Calculate various metrics for the volumes of augmented and original simplices.
+    """
+    # Key Percentiles
+    q3, q3_cumsum = get_cum_vol(volumes, 75)
+    d9, d9_cumsum = get_cum_vol(volumes, 90)
+
+    # Get log normal distribution shape
+    lognormal_sigma = fit_lognormal(volumes)
+
+    # Compile results
+    dict_scores = {
+        'count': len(volumes),
+        'mean': np.mean(volumes),
+        'std': np.std(volumes),
+        'lognormal σ': lognormal_sigma,
+        'min': np.min(volumes),
+        '25%': np.percentile(volumes, 25),
+        '50%': np.percentile(volumes, 50),  # median
+        '75%': q3,
+        '90%': d9,
+        'max': np.max(volumes),
+        'q3_cumsum': q3_cumsum,
+        'd9_cumsum': d9_cumsum,
+        'sum': np.sum(volumes),
+    }
+
+    return dict_scores
+
+def fit_lognormal(data):
+    """
+    Fit a lognormal distribution to the given data.
+
+    The location parameter is fixed at 0 (floc=0), which constrains the
+    distribution to start at 0. This is often appropriate for data that cannot
+    be negative, such as volumes.
+    
+    Note:
+    - shape: Also known as the log-scale parameter (sigma)
+    - location: Fixed at 0 in this case
+    - scale: Related to the median of the distribution
+    """
+    # Check if any negative values
+    if np.any(data < 0):
+        raise ValueError("Negative values not allowed for lognormal distribution with floc=0")
+    # Shift data slightly away from 0
+    epsilon = 1e-10
+    data = np.maximum(data, epsilon)
+    shape, loc, scale = lognorm.fit(data, floc=0)
+    return shape
 
 
 if __name__ == '__main__':

@@ -12,7 +12,7 @@ from itertools import combinations
 from .postprocessing_functions import aggregate_csv_files, scale_back_to_SI_units, add_quality_columns, subset_by_quality
 from .volume import covered_space_bound
 from .asvd import ASVD
-from .asvd_plot import plot_asvd_scores, plot_stars_volumes_distribution, plot_multiple_asvd_distributions
+from .asvd_plot import plot_stars_volumes_distribution, plot_multiple_asvd_distributions
 from .voronoi import get_volume_voronoi
 from .voronoi_plot import dist_volume_voronoi
 from .graphics_metrics import plot_initial_data, plot_feature_pairs, plot_violin_distribution, targets_kde, plot_feat_tar
@@ -278,13 +278,12 @@ def plot_metrics(
     # targets distribution
     targets_plot_dict = {
         'y_violin': plot_violin_distribution(data, target_aliases, latex_mapper, interest_region, plot_ranges),
-        'y_kde': targets_kde(data, target_aliases, latex_mapper, interest_region, plot_ranges),
+        'y_kde': targets_kde(data, asvd, target_aliases, latex_mapper, interest_region, plot_ranges),
     }
 
     # Distribution analysis
     distribution_plots_dict = {}
     if asvd:
-        distribution_plots_dict['ASVD_scores'] = plot_asvd_scores(asvd, exp_config)
         distribution_plots_dict['ASVD_all_exp'] = plot_multiple_asvd_distributions(asvd, exp_config)
         for i, exp_key in enumerate(data.keys()):
             distribution_plots_dict[f'ASVD_exp{i+1}'] = plot_stars_volumes_distribution(asvd[exp_key], exp_config[exp_key]['name'])
