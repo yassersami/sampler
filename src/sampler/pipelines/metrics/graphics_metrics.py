@@ -25,10 +25,16 @@ def plot_initial_data(
         first_exp = next(iter(data.keys()))
         data = {first_exp: data[first_exp]}
 
+    # Get first iteration index of each experiment
+    first_iter_index = {
+        exp_key: get_first_iteration_index(exp_dic['df'])
+        for exp_key, exp_dic in data.items()
+    }
+
     # Get initial data for each experiment
     initial_data = {
-        dic['name']: dic['df'].loc[:get_first_iteration_index(dic['df'])-1]
-        for dic in data.values()
+        exp_dic['name']: exp_dic['df'].loc[:first_iter_index[exp_key]-1]
+        for exp_key, exp_dic in data.items()
     }
 
     # Concatenate all initial dataframes
@@ -39,7 +45,7 @@ def plot_initial_data(
     outlier_counts = df_to_plot[df_to_plot[targets].isna().any(axis=1)]['exp_name'].value_counts()
 
     # Create color palette
-    original_palette = {dic['name']: dic['color'] for dic in data.values()}
+    original_palette = {exp_dic['name']: exp_dic['color'] for exp_dic in data.values()}
 
     # Create a mapping from original labels to labels with counts
     label_mapping = {
@@ -227,9 +233,18 @@ def plot_violin_distribution(
     # Ensure axs is always a list, even for a single subplot
     axs = [axs] if len(targets) == 1 else axs
 
+    # Get first iteration index of each experiment
+    first_iter_index = {
+        exp_key: get_first_iteration_index(exp_dic['df'])
+        for exp_key, exp_dic in data.items()
+    }
+
     for col, target in enumerate(targets):
         sns.violinplot(
-            data=[d['inliers'][target] for k, d in data.items()],
+            data=[
+                exp_dic['inliers'].loc[first_iter_index[exp_key]:, target]
+                for exp_key, exp_dic in data.items()
+            ],
             palette=[val['color'] for val in data.values()],
             cut=0,  # limit to data range
             bw=0.1,
@@ -281,7 +296,8 @@ def targets_kde(
     for col, target in enumerate(targets):
         ax = axs[col]
         for exp_key, exp_data in data.items():
-            values = exp_data['inliers'][target]
+            first_iter_index = get_first_iteration_index(exp_data['df'])
+            values = exp_data['inliers'].loc[first_iter_index:, target]
 
             # Count samples per bin
             count, bin_edges = np.histogram(values, bins=bins, density=False)
@@ -290,7 +306,7 @@ def targets_kde(
             x_values, kde_counts = set_scaled_kde(values, height=np.max(count), bandwidth=bandwidth)
 
             # Set label
-            num_interest = exp_data['interest'].shape[0]
+            num_interest = exp_data['interest'].loc[first_iter_index:].shape[0]
             q3, cumsum_q3 = get_cum_vol(asvd[exp_key].stars_volumes_x, 75)
             augmentation = asvd[exp_key].get_augmentation(use_star=True)
             exp_stats = (

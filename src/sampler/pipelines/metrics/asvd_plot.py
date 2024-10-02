@@ -183,7 +183,7 @@ def plot_multiple_asvd_distributions(
     # Set labels and title
     ax.set_xlabel('Star Volume', fontsize=font_size)
     ax.set_xbound(0, MAX_STAR_VOL)
-    ax.set_ylabel(f'Count per {bin_width} range of star volume', fontsize=font_size)
+    ax.set_ylabel(f'Count per interval of width {bin_width:.0e}', fontsize=font_size)
     ax.set_ylim(0, MAX_SAMPLES*1.05)
     ax.set_title('Distribution of Star Volumes for Multiple Experiments', fontsize=font_size+2)
 

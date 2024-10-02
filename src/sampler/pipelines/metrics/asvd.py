@@ -1,7 +1,8 @@
-from typing import Union, List, Dict, Tuple, Callable
+from typing import Union, List, Dict, Tuple, Callable, Optional
 import warnings
 import numpy as np
 import pandas as pd
+from scipy.spatial import cKDTree
 from scipy.spatial import Delaunay
 from sklearn.cluster import DBSCAN
 from kneed import KneeLocator
@@ -20,10 +21,11 @@ class ASVD:
     volumes or Donald volumes in certain contexts.
 
     The class performs the following steps:
-    1. Applies DBSCAN clustering to the input data in the original feature space.
-    2. Conducts Delaunay triangulation on each identified cluster.
-    3. Computes simplex volumes.
-    4. Computes fractional vertex star volumes.
+    1. Filters close points that are within a specified tolerance of each other.
+    2. Applies DBSCAN clustering to the input data in the original feature space.
+    3. Conducts Delaunay triangulation on each identified cluster.
+    4. Computes simplex volumes.
+    5. Computes fractional vertex star volumes.
 
     Attributes:
         features (List[str]): Names of feature columns.
@@ -42,13 +44,13 @@ class ASVD:
     Note:
         - Suffix '_x' denotes attributes in the original feature space.
         - Suffix '_xy' denotes attributes in the augmented space (features + targets).
-        - Steps 3. and 4. are computed in both the original feature space and
+        - Steps 4. and 5. are computed in both the original feature space and
           the augmented space (features + targets).
     """
 
     def __init__(
         self, data: pd.DataFrame, features: List[str], targets: List[str],
-        use_func: bool=False, func: Callable=None
+        use_func: Optional[bool] =False, func: Optional[Callable] =None, tol: Optional[float] =1e-3
     ):
         """
         Initialize the ASVD object.
@@ -62,7 +64,7 @@ class ASVD:
         """
         self.features = features
         self.targets = targets
-        self.set_vertices(data, use_func, func)
+        self.set_vertices(data, use_func, func, tol)
 
         # Check if there are enough vertices for Delaunay triangulation
         if data.shape[0] < len(self.features) + 1:
@@ -78,11 +80,27 @@ class ASVD:
             self.compute_simplices_volumes()
             self.compute_stars_volumes()
 
-    def set_vertices(self, data, use_func, func):
+    def set_vertices(self,
+        data: pd.DataFrame,
+        use_func: bool,
+        func: Callable[[np.ndarray], np.ndarray],
+        tol: float
+    ):
+        # Filter close points that are within a specified tolerance of each other
+        unique_indices = filter_close_points(data[self.features].values, tol)
+        data_unique = data.iloc[unique_indices]
+
+        # Inform user of filtered close points
+        if data_unique.shape[0] != data.shape[0]:
+            warnings.warn(
+                f"Filtered {data.shape[0] - data_unique.shape[0]} points "
+                f"that were within {tol} radius of each other."
+            )
+
         # Set vertices
-        vertices_x = data[self.features].values
+        vertices_x = data_unique[self.features].values
         if not use_func:
-            vertices_y = data[self.targets].values
+            vertices_y = data_unique[self.targets].values
         else:
             vertices_y = np.array([func(vertex).ravel() for vertex in vertices_x])
         vertices_xy = np.column_stack((vertices_x, vertices_y))
@@ -95,13 +113,13 @@ class ASVD:
         n_neighbors = min(len(self.vertices_x) - 1, 10)  # Use 10 neighbors or less if fewer points
         nbrs = NearestNeighbors(n_neighbors=n_neighbors).fit(self.vertices_x)
         distances, _ = nbrs.kneighbors(self.vertices_x)
-        
+
         # Sort distances to the nth neighbor (farthest neighbor)
         distances = np.sort(distances[:, -1])
-        
+
         # Find the elbow point for epsilon
         kneedle = KneeLocator(range(len(distances)), distances, curve='convex', direction='increasing')
-        epsilon = distances[kneedle.elbow] if kneedle.elbow else np.median(distances)
+        epsilon = distances[kneedle.elbow] if kneedle.elbow else np.percentile(distances, 75)
 
         # Perform DBSCAN clustering
         clustering = DBSCAN(eps=epsilon, min_samples=3).fit(self.vertices_x)
@@ -130,7 +148,7 @@ class ASVD:
 
             # Create Delaunay triangulation for this cluster
             tri = Delaunay(cluster_points)
-            
+
             # Map local indices to global indices
             global_simplices_idx = cluster_indices[tri.simplices]
 
@@ -183,8 +201,8 @@ class ASVD:
             volumes_xy = self.simplices_volumes_xy
 
         # Compute total volumes
-        sum_volumes = volumes.sum()
-        sum_volumes_xy = volumes_xy.sum()
+        sum_volumes = np.sum(volumes)
+        sum_volumes_xy = np.nansum(volumes_xy)
 
         augmentation = 1 if sum_volumes==0 else sum_volumes_xy / sum_volumes
         return augmentation
@@ -211,12 +229,14 @@ class ASVD:
         """
         if use_star:
             # Focus on fractional star volumes
-            volumes = self.stars_volumes_x
-            volumes_xy = self.stars_volumes_xy
-        else: 
+            volumes = self.stars_volumes_x.copy()
+        else:
             # Use simplex volumes
-            volumes = self.simplices_volumes_x
-            volumes_xy = self.simplices_volumes_xy
+            volumes = self.simplices_volumes_x.copy()
+
+        # Keep only non null volumes
+        null_mask = (volumes < 1e-6)
+        volumes = volumes[~null_mask]
 
         # Stats for volumes from 0 to 75th and 90th percentiles
         q3, cumsum_q3 = get_cum_vol(volumes, 75)
@@ -226,8 +246,7 @@ class ASVD:
         lognormal_sigma = fit_lognormal(volumes)
 
         star_scores = {
-            'Count': volumes.shape[0],
-            'Clusters': self.n_clusters,
+            'Vertices': volumes.shape[0],
             'Augmentat°': self.get_augmentation(use_star),
             'Lognormal σ': lognormal_sigma,
             'Std Dev': np.std(volumes),
@@ -260,6 +279,54 @@ class ASVD:
         return df_scores
 
 
+def filter_close_points(points: np.ndarray, tol: float) -> np.ndarray:
+    """
+    Filter out points that are within a specified tolerance of each other.
+
+    This function uses a KD-tree to efficiently find points that are close
+    to each other within a given tolerance. It keeps one representative
+    point from each group of close points.
+
+    This approach ensures that:
+    - Points within tolerance of each other are grouped together.
+    - Only one point from each group (the first encountered) is kept.
+    - The order of points is maintained (earlier points are preferred over
+        later ones).
+
+    Parameters:
+    -----------
+    points : numpy.ndarray
+        An array of shape (n_points, n_dimensions) containing the coordinates of
+        points.
+    tolerance : float
+        The maximum distance between points to be considered duplicates.
+
+    Returns:
+    --------
+    numpy.ndarray
+        An array of indices of the unique points.
+    """
+    # Construct KD-tree for efficient nearest neighbor queries
+    tree = cKDTree(points)
+
+    # Find all points within tolerance of each point
+    # groups[i] contains indices of all points within tolerance of point i (including i itself)
+    groups = tree.query_ball_point(points, r=tol)
+
+    unique_indices = []
+    seen = set()
+
+    # Iterate through all points
+    for i, group in enumerate(groups):
+        if i not in seen:
+            # This point hasn't been seen before, so it's unique
+            unique_indices.append(i)
+            # Mark this point and all its close neighbors as seen
+            seen.update(group)
+
+    return np.array(unique_indices)
+
+
 def compute_simplex_volume(simplex):
     """
     Calculate the volume of a simplex in n-dimensional space.
@@ -280,9 +347,10 @@ def compute_simplex_volume(simplex):
     volume = np.sqrt(np.linalg.det(gram_matrix)) / factorial(p_plus_1 - 1)
 
     if np.isnan(volume):
+        # If vertices are collinear or overlap return 0
         warnings.warn(f"NaN volume detected for simplex: \n{simplex}")
         return 0
-    
+
     return volume
 
 
@@ -293,7 +361,13 @@ def compute_simplices_volumes(simplices):
     simplices: array of shape (n_simplices, p+1, p+k). List of simplices, where
     each simplex is a list of (p+1) vertices with (p+k) coordinates.
     """
-    volumes = [compute_simplex_volume(simplex) for simplex in simplices]
+    volumes = []
+    for simplex in simplices:
+        if np.isnan(simplex).any():
+            # If an augmented vertex is NaN, set the volume to NaN
+            volumes.append(np.nan)
+        else:
+            volumes.append(compute_simplex_volume(simplex))
     volumes = np.array(volumes)
     return volumes
 
@@ -404,6 +478,12 @@ def describe_volumes(volumes: np.ndarray) -> dict:
     """
     Calculate various metrics for the volumes of augmented and original simplices.
     """
+    # Count total number of volumes
+    count_total = len(volumes)
+
+    # Keep only volumes that are not NaN
+    volumes = volumes[~np.isnan(volumes)]
+
     # Key Percentiles
     q3, q3_cumsum = get_cum_vol(volumes, 75)
     d9, d9_cumsum = get_cum_vol(volumes, 90)
@@ -413,7 +493,8 @@ def describe_volumes(volumes: np.ndarray) -> dict:
 
     # Compile results
     dict_scores = {
-        'count': len(volumes),
+        'count': count_total,
+        'nans': count_total - len(volumes),
         'mean': np.mean(volumes),
         'std': np.std(volumes),
         'lognormal σ': lognormal_sigma,
