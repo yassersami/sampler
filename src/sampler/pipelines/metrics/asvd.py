@@ -142,8 +142,11 @@ class ASVD:
             cluster_indices = np.where(self.cluster_labels == cluster_id)[0]
             cluster_points = self.vertices_x[cluster_indices]
 
-            # Skip clusters with too few points for triangulation
-            if len(cluster_points) < len(self.features) + 1:
+            # Skip clusters impossible triangulation configurations
+            if (
+                len(cluster_points) < len(self.features) + 1  # too few points for triangulation
+                or are_points_colinear(cluster_points)        # colinear points
+            ):
                 continue
 
             # Create Delaunay triangulation for this cluster
@@ -221,8 +224,8 @@ class ASVD:
                     AR = 1/(b-a) * ∫[a to b] √(1 + (dy/dx)²) dx
 
         2. Distribution Characteristics:
-        - 'Lognormal σ': Sigma parameter of the fitted log-normal distribution
-                         to volumes.
+        - 'Lognormal shape': Sigma parameter of the fitted log-normal
+                             distribution to volumes.
         - 'Std Dev': Standard deviation of volumes.
 
         3. Volume key statistics at 75th and 90th percentiles.
@@ -238,6 +241,10 @@ class ASVD:
         null_mask = (volumes < 1e-6)
         volumes = volumes[~null_mask]
 
+        # If all volumes are null, set volumes to unique null volume
+        if len(volumes) == 0:
+            volumes = np.array([0])
+
         # Stats for volumes from 0 to 75th and 90th percentiles
         q3, cumsum_q3 = get_cum_vol(volumes, 75)
         d9, cumsum_d9 = get_cum_vol(volumes, 90)
@@ -248,9 +255,9 @@ class ASVD:
         star_scores = {
             'Vertices': volumes.shape[0],
             'Augmentat°': self.get_augmentation(use_star),
-            'Lognormal σ': lognormal_sigma,
+            'Lognorm': lognormal_sigma,
             'Std Dev': np.std(volumes),
-            'sum': volumes.sum(),
+            'Sum': volumes.sum(),
             '3rd Quartile': q3,
             'Q3 Cum. Vol': cumsum_q3,
             '9th Decile': d9,
@@ -466,6 +473,47 @@ def compute_response_curve_augmentation(
     return augmentation
 
 
+def are_points_colinear(points, tolerance=1e-8):
+    """
+    Determine if all points in the array are colinear.
+
+    Parameters:
+    points : numpy.ndarray
+        An array of shape (n_points, n_dimensions) where each row represents a point.
+    tolerance : float, optional
+        The numerical tolerance for considering points colinear. Default is 1e-8.
+
+    Returns:
+    bool
+        True if all points are colinear, False otherwise.
+    """
+    if points.shape[0] <= 2:
+        # Two or fewer points are always colinear
+        return True
+
+    # Shift all points so that the first point is at the origin
+    shifted_points = points - points[0]
+
+    # Find the first non-zero point to use as a reference vector
+    for i in range(1, len(shifted_points)):
+        if not np.allclose(shifted_points[i], 0, atol=tolerance):
+            reference_vector = shifted_points[i]
+            break
+    else:
+        # All points are identical
+        return True
+
+    # Check if all other points are scalar multiples of the reference vector
+    for point in shifted_points[i+1:]:
+        if not np.allclose(point, 0, atol=tolerance):
+            # Check if vectors are parallel
+            cross_product = np.cross(reference_vector, point)
+            if not np.allclose(cross_product, 0, atol=tolerance):
+                return False
+
+    return True
+
+
 def get_cum_vol(volumes: np.ndarray, percentile: int):
     """ Get percentile of volumes and cumulated volume up to percentile. """
     p_vol = np.percentile(volumes, percentile)
@@ -497,7 +545,7 @@ def describe_volumes(volumes: np.ndarray) -> dict:
         'nans': count_total - len(volumes),
         'mean': np.mean(volumes),
         'std': np.std(volumes),
-        'lognormal σ': lognormal_sigma,
+        'lognormal_shape': lognormal_sigma,
         'min': np.min(volumes),
         '25%': np.percentile(volumes, 25),
         '50%': np.percentile(volumes, 50),  # median

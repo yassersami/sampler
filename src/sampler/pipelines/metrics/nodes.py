@@ -7,6 +7,7 @@ import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 from itertools import combinations
 
 from .postprocessing_functions import aggregate_csv_files, scale_back_to_SI_units, add_quality_columns, subset_by_quality
@@ -19,6 +20,14 @@ from .graphics_metrics import plot_initial_data, plot_feature_pairs, plot_violin
 from sampler.core.data_processing.data_treatment import DataTreatment
 from sampler.core.data_processing.scalers import MixedMinMaxScaler, set_scaler
 from sampler.core.data_processing.sampling_tracker import get_first_iteration_index
+
+cm = 1/2.54  # centimeters in inches
+# Latex page without margins is 15.3 cm x 23.8 cm
+
+mpl.rcParams["text.usetex"] = True
+mpl.rcParams["font.family"] = "serif"
+mpl.rcParams["font.size"] = 12
+mpl.rcParams["figure.figsize"] = (7*cm, 5*cm)  # (width, height) in inches
 
 
 def set_data_scalers(
@@ -324,7 +333,7 @@ def plot_metrics(
         png_path = os.path.join(output_dir_png, f'{plot_name}.png')
         svg_path = os.path.join(output_dir_svg, f'{plot_name}.svg')
 
-        plot.savefig(png_path, format='png')
+        plot.savefig(png_path, format='png', dpi=300)
         plot.savefig(svg_path, format='svg')
         
         plots_paths_png[plot_name] = png_path

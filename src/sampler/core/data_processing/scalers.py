@@ -284,6 +284,30 @@ def hypercube_exponential_tent(X: np.ndarray, interest_region: List[Tuple[float,
     return scores
 
 
+def select_root_nearest_bound(fa: float, fb: float, a: float, b: float) -> Tuple[float, float]:
+    """
+    Select the bound (a or b) that is closest to the root.
+    
+    This function is used when the Intermediate Value Theorem cannot be applied
+    (and thus brentq method cannot be used) due to fa and fb having the same
+    sign. It selects the bound (either a or b) that corresponds to the closest
+    image to zero, which is likely to be nearest to the root.
+
+    Args:
+    fa, fb (float): Function value at lower and upper bounds
+    a, b (float): Lower and upper bounds of the interval
+    """
+    x_root = a  if abs(fa) <= abs(fb) else b
+    f_root = fa if abs(fa) <= abs(fb) else fb
+    warnings.warn(
+        f"f(a) and f(b) have same sign on interval [a, b]=[{a:.3f}, {b:.3f}] "
+        f"where (f(a), f(b))=({fa:.2f}, {fb:.2f}).\n"
+        f"Returning closest value to root x={x_root:.3f} that generates closest "
+        f"image f(x)={f_root:.2f} to 0."
+    )
+    return x_root, f_root
+
+
 def find_sigma_for_interval(
     interval_width: float,
     target_proba: float = 0.9,
@@ -330,18 +354,10 @@ def find_sigma_for_interval(
     a, b = sigma_bounds
     fa, fb = objective(a), objective(b)
 
-    # Check if fa and fb have same signs
+    # Check if f(a) and f(b) have same signs
     if np.sign(fa) == np.sign(fb):
-        pa, pb = fa + target_proba, fb + target_proba
-        returned_sigma = a if fa <= 0 else b
-        returned_prob = pa if fa <= 0 else pb
-        warnings.warn(
-            f"fa and fb have same sign on interval [a, b]=[{a:.3f}, {b:.3f}] "
-            f"where (pa, pb)=({pa:.2f}, {pb:.2f}). "
-            f"Returning sigma={returned_sigma:.3f} that generates closest "
-            f"probability ({returned_prob:.2f}) to target_proba={target_proba:.2f}."
-        )
-        return returned_sigma
+        sigma, _ = select_root_nearest_bound(fa, fb, a, b)
+        return sigma
 
     # Use brentq to find the root
     sigma = brentq(objective, a, b, xtol=1e-3, rtol=1e-2)

@@ -52,7 +52,8 @@ irbs_fom_terms_config:
     apply: false
     score_weights: 1
     heuristic: 'scott'
-    null_density_proportion: 0.1
+    low_density_threshold: 0.1
+    low_density_ratio: 0.1
     bandwidth_config:
       use_gpr_kernel: false
       use_brentq: false
@@ -63,7 +64,8 @@ irbs_fom_terms_config:
     apply: false
     score_weights: 1
     heuristic: 'scott'
-    null_density_proportion: 0.1
+    low_density_threshold: 0.1
+    low_density_ratio: 0.1
     bandwidth_config:
       use_brentq: false
       use_search_cv: false
@@ -73,7 +75,8 @@ irbs_fom_terms_config:
     apply: false
     score_weights: 1
     heuristic: 'scott'
-    null_density_proportion: 0.1
+    low_density_threshold: 0.1
+    low_density_ratio: 0.1
     bandwidth_config:
       use_brentq: false
       use_search_cv: false

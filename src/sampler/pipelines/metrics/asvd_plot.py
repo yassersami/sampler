@@ -3,15 +3,19 @@ import warnings
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 
 from .asvd import ASVD
 from .postprocessing_functions import set_scaled_kde
 
+cm = 1/2.54  # centimeters in inches
+FONT_SIZE = 10
+
 # x and y bounds: max values encoutred accross all experiments
-MAX_STAR_VOL = 0.05
-MAX_BIN_STAR_VOL = 0.05
+STAR_VOL_BIN_WIDTH = 1.e-3
+MAX_STAR_VOL = 0.04
+MAX_BIN_STAR_VOL = 0.08
 MAX_SAMPLES = 150
-STAR_VOL_BIN_WIDTH = 5.e-4
 
 
 def adjust_bin_width(volumes, initial_bin_width, min_bins=5):
@@ -48,14 +52,14 @@ def format_value(value):
         if abs(value) >= 0.01 or value == 0:
             return f'{value:.2f}'
         else:
-            return f'{value:.2e}'
+            return f'{value:.0e}'
     else:
         return str(value)
 
 
 def plot_stars_volumes_distribution(
-    asvd_instance: ASVD, exp_name: str, bin_width: float =STAR_VOL_BIN_WIDTH ,
-    figsize=(12, 6), font_size=14
+    asvd_instance: ASVD, exp_name: str, bin_width: float =STAR_VOL_BIN_WIDTH,
+    fig_size=(12*cm, 10*cm), font_size=FONT_SIZE
 ):
     """
     Plot the distribution of stars_volumes_x using a histogram and KDE plot.
@@ -64,15 +68,18 @@ def plot_stars_volumes_distribution(
     asvd_instance (ASVD): An instance of the ASVD class
     exp_name (str): Name of the experiment
     """
-
     # Extract stars_volumes_x
     volumes = asvd_instance.stars_volumes_x
 
     # PDF (KDE) and E[X] (Cum. Vol.) height
     normal_height = MAX_BIN_STAR_VOL * 0.9
 
-    # Create the plot
-    fig, ax = plt.subplots(figsize=figsize)
+    # Create figure with gridspec
+    fig = plt.figure(figsize=fig_size)
+    gs = gridspec.GridSpec(1, 2, width_ratios=[3, 1])  # 1 row, 2 columns
+
+    # Plot area
+    ax = fig.add_subplot(gs[0])
 
     # Compute number of bins for consistent bin width
     volumes_range = volumes.max() - volumes.min()
@@ -85,7 +92,7 @@ def plot_stars_volumes_distribution(
     x_values, kde_scaled = set_scaled_kde(volumes, height=normal_height, bandwidth=0.1)
 
     # Plot scaled KDE
-    ax.plot(x_values, kde_scaled, color='dodgerblue', linewidth=2, label='Density')
+    ax.plot(x_values, kde_scaled, color='dodgerblue', linewidth=1, label='Density')
 
     # Calculate cumulative volume
     sorted_volumes = np.sort(volumes)
@@ -102,12 +109,12 @@ def plot_stars_volumes_distribution(
     star_scores = asvd_instance.get_scores(use_star=True)
 
     # Mark Q3 with vertical line
-    ax.axvline(star_scores['3rd Quartile'], color='goldenrod', linewidth=2, linestyle='--', label='Q3')
+    ax.axvline(star_scores['3rd Quartile'], color='goldenrod', linewidth=1, linestyle='--', label='Q3')
 
     # Mark D9 with vertical line
-    ax.axvline(star_scores['9th Decile'], color='red', linewidth=2, linestyle='--', label='D9')
+    ax.axvline(star_scores['9th Decile'], color='red', linewidth=1, linestyle='--', label='D9')
 
-    # Set title
+    # Set title and labels
     ax.set_title(f"{exp_name}\nDistribution of Star Volumes", fontsize=font_size)
     ax.set_xlabel(f'Star Volume', fontsize=font_size)
     ax.set_ylabel(f'Total Volume per Bin', fontsize=font_size)
@@ -117,25 +124,32 @@ def plot_stars_volumes_distribution(
     ax.set_ylim(0, MAX_BIN_STAR_VOL)
     
     # Set tick label font sizes
-    ax.tick_params(axis='both', which='major', labelsize=font_size-2)
+    ax.tick_params(axis='both', which='major', labelsize=font_size)
+
+    # Table area
+    ax_table = fig.add_subplot(gs[1])
+    ax_table.axis('off')  # Hide axes
 
     # Add summary statistics
     stats_dict = {'Bin width': bin_width, **star_scores}
     table_data = [[key, format_value(value)] for key, value in stats_dict.items()]
 
-    # Add table to the top right of the plot
-    table = ax.table(
+    table = ax_table.table(
         cellText=table_data,
         cellLoc='center',
-        loc='lower left',
-        bbox=[1, 0.4, 0.33, 0.6]  # (x0, y0, width, height)
+        loc='lower center'
     )
+    # Make first column cells left aligned
+    for (row, col), cell in table.get_celld().items():
+        if col == 0:  # First column
+            cell.set_text_props(ha='left')
     table.auto_set_font_size(False)
-    table.set_fontsize(font_size)
-    table.scale(1, 2)  # (xscale, yscale)
-
-    # Move legend to bottom right and adjust position
-    ax.legend(loc='lower left', bbox_to_anchor=(1, 0.), fontsize=font_size)
+    table.set_fontsize(font_size-2)
+    table.auto_set_column_width(list(range(len(table_data[0]))))
+    
+    # Add plot legend on top center of table subplot
+    handles, labels = ax.get_legend_handles_labels()
+    ax_table.legend(handles, labels, loc='upper center', bbox_to_anchor=(0.5, 1), fontsize=font_size)
 
     # Improve layout
     plt.tight_layout()
@@ -146,7 +160,7 @@ def plot_stars_volumes_distribution(
 def plot_multiple_asvd_distributions(
     experiments_asvd: Dict[str, ASVD],
     exp_config: Dict[str, Dict[str, str]],
-    bin_width=STAR_VOL_BIN_WIDTH, figsize=(15, 8), font_size=14
+    bin_width=STAR_VOL_BIN_WIDTH, fig_size=(12*cm, 12*cm), font_size=FONT_SIZE
 ):
     """
     Plot the distribution of stars_volumes_x for multiple ASVD instances.
@@ -155,9 +169,14 @@ def plot_multiple_asvd_distributions(
     experiments_asvd (dict): A dictionary where keys are experiment names and values are ASVD instances
     exp_config (dict): A dictionary with experiment configurations
     bins (int): Number of bins for the histograms (default: 30)
-    figsize (tuple): Figure size (default: (15, 8))
+    fig_size (tuple): Figure size (default: (15, 8))
     """
-    fig, ax = plt.subplots(figsize=figsize)
+    # Create figure with gridspec
+    fig = plt.figure(figsize=fig_size)
+    gs = gridspec.GridSpec(2, 1, height_ratios=[3, 1])  # 2 rows, 1 column
+
+    # Plot area
+    ax = fig.add_subplot(gs[0])
 
     max_count = 0
     for exp_key, asvd_instance in experiments_asvd.items():
@@ -175,7 +194,7 @@ def plot_multiple_asvd_distributions(
 
         # Plot KDE
         ax.fill_between(x_values, kde_counts, 0, alpha=0.3, color=exp_config[exp_key]['color'])
-        ax.plot(x_values, kde_counts, label=exp_config[exp_key]['name'], color=exp_config[exp_key]['color'], linewidth=2)
+        ax.plot(x_values, kde_counts, label=exp_config[exp_key]['name'], color=exp_config[exp_key]['color'], linewidth=1)
 
         # Update max density for y-axis limit
         max_count = max(max_count, np.max(count))
@@ -185,43 +204,53 @@ def plot_multiple_asvd_distributions(
     ax.set_xbound(0, MAX_STAR_VOL)
     ax.set_ylabel(f'Count per interval of width {bin_width:.0e}', fontsize=font_size)
     ax.set_ylim(0, MAX_SAMPLES*1.05)
-    ax.set_title('Distribution of Star Volumes for Multiple Experiments', fontsize=font_size+2)
 
-    # Move legend to bottom right and adjust position
-    ax.legend(loc='upper right', bbox_to_anchor=(1, 0.4), fontsize=font_size)
+    # Move legend to upper right
+    ax.legend(loc='upper right', bbox_to_anchor=(1, 1), fontsize=font_size)
 
-    # Compute ASVD scores
+    # Set tick label font sizes
+    ax.tick_params(axis='both', which='major', labelsize=font_size)
+
+    # Compute ASVD scores and prepare table data
     asvd_scores = {
         exp_key: exp_asvd.get_scores(use_star=True)
         for exp_key, exp_asvd in experiments_asvd.items()
     }
-
-    # Prepare table data
     exp_keys = list(experiments_asvd.keys())
     exp_names = [exp_config[exp_key]['name'] for exp_key in exp_keys]
     score_names = list(asvd_scores[exp_keys[0]].keys())
     columns = ['Experiment'] + [exp_name[:10] + '...' * (len(exp_name) > 10) for exp_name in exp_names]
-    table_data = []
-    for metric in score_names:
-        row = [metric]
-        for exp_key in exp_keys:
-            value = asvd_scores[exp_key].get(metric, 'N/A')
-            row.append(format_value(value))
-        table_data.append(row)
+    table_data = [
+        [metric] + [format_value(asvd_scores[exp_key].get(metric, 'N/A')) for exp_key in exp_keys]
+        for metric in score_names
+    ]
 
-    # Add table to the top right of the plot
-    table = ax.table(
-        cellText=table_data, 
+    # Table area
+    ax_table = fig.add_subplot(gs[1])
+    ax_table.axis('off')  # Hide axes
+    table = ax_table.table(
+        cellText=table_data,
         colLabels=columns,
-        cellLoc='center', loc='lower left',
-        bbox=[0.5, 0.5, 0.5, 0.5]  # (x0, y0, width, height)
+        cellLoc='center',
+        loc='upper center'
     )
+    # Make first column cells left aligned
+    for (row, col), cell in table.get_celld().items():
+        if col == 0:  # First column
+            cell.set_text_props(ha='left')
     table.auto_set_font_size(False)
-    table.set_fontsize(font_size)
-    table.scale(1, 1.5)  # (xscale, yscale)
+    table.set_fontsize(font_size-2)
+    table.auto_set_column_width(list(range(len(table_data[0]))))
 
-    # Set tick label font sizes
-    ax.tick_params(axis='both', which='major', labelsize=font_size)
+    # Add indices on top right
+    ax.text(
+        -0.03, 1.03, 'a)', transform=ax.transAxes, 
+        ha='right', va='bottom', size=font_size+2
+    )
+    ax_table.text(
+        -0.03, 1.03, 'b)', transform=ax_table.transAxes, 
+        ha='right', va='bottom', size=font_size+2
+    )
 
     # Improve layout
     plt.tight_layout()

@@ -167,8 +167,8 @@ class FigureOfMerit:
         This method transforms the scores into a loss function where lower values 
         are better, with 0 being the optimal value. The transformation is as follows:
 
-                loss =   Σ(w_i * (1 - s_i)) for positive scores
-                       - Σ(w_j * s_j)       for negative scores
+                loss =   sum_(w_i * (1 - s_i)) for positive scores
+                       - sum_(w_j * s_j)       for negative scores
 
         where w_i and w_j are weights, and s_i and s_j are scores.
         """

@@ -8,7 +8,7 @@ from scipy.optimize import shgo
 
 from .term_base import ModelFOMTerm, BANDWIDTH_BOUNDS, RANDOM_STATE
 from .term_gpr import SurrogateGPRTerm
-from .kde_utils import brentq_bandwidth, search_cv_bandwidth, mean_shift_modes
+from .kde_utils import LowDensityRatioBandwidth, search_cv_bandwidth, mean_shift_modes
 
 
 class KDEModel:
@@ -24,6 +24,7 @@ class KDEModel:
         self.modes = None
         self.max_density = None
         self.min_density = None
+        self.low_density_ratio_ = None
 
     def fit(self, X: np.ndarray, bandwidth: float):
         # Check if X is empty
@@ -94,19 +95,29 @@ class KDETerm(KDEModel, ModelFOMTerm):
     def __init__(self,
         score_weights: float,
         heuristic: Union[float, str],
-        null_density_proportion: float,
+        low_density_threshold: float,
+        low_density_ratio: float,
         bandwidth_config: Dict[str, Union[bool, float, str]]
     ):
         KDEModel.__init__(self)
         ModelFOMTerm.__init__(self, score_weights)
 
         self._validate_heuristic(heuristic)
-        self._validate_null_density_proportion(null_density_proportion)
+        self._validate_low_density_ratio(low_density_ratio)
         self._validate_bandwidth_config(bandwidth_config)
 
         self.bandwidth_config = bandwidth_config
         self.heuristic = heuristic
-        self.null_density_proportion = null_density_proportion
+        self.low_density_threshold = low_density_threshold
+        self.low_density_ratio = low_density_ratio
+        
+        # Estimater of optimal bandwidth for targeted low density ratio
+        self.brentq_bandwidth = LowDensityRatioBandwidth(
+            default_bounds=BANDWIDTH_BOUNDS,
+            threshold=low_density_threshold,
+            target_ratio=low_density_ratio,
+        )
+
 
     @property
     def score_signs(self) -> Dict[str, Literal[1, -1]]:
@@ -160,16 +171,16 @@ class KDETerm(KDEModel, ModelFOMTerm):
                 f"a float within {BANDWIDTH_BOUNDS} range"
             )
 
-    def _validate_null_density_proportion(self, null_density_proportion):
-        # Check if null_density_proportion is a number
-        if not isinstance(null_density_proportion, (int, float)):
-            raise ValueError("'null_density_proportion' must be a number")
+    def _validate_low_density_ratio(self, low_density_ratio):
+        # Check if low_density_ratio is a number
+        if not isinstance(low_density_ratio, (int, float)):
+            raise ValueError("'low_density_ratio' must be a number")
 
-        # Check if null_density_proportion is valid number
-        if null_density_proportion > 0.5:
+        # Check if low_density_ratio is valid number
+        if low_density_ratio > 0.5:
             raise ValueError(
-                "'null_density_proportion' must preferably be in [0, 0.5] range. "
-                f"Got: {null_density_proportion}"
+                "'low_density_ratio' must preferably be in [0, 0.5] range. "
+                f"Got: {low_density_ratio}"
             )
 
     def get_bandwidth(self, X: np.ndarray) -> float:
@@ -177,13 +188,14 @@ class KDETerm(KDEModel, ModelFOMTerm):
 
         if self.bandwidth_config['use_brentq']:
             # Find optimal bandwidth using BrentQ
-            print(intro + f"Searching optimal bandwidth using BrentQ...")
-            previous_bw = self.model.bandwidth_ if self.is_trained else None
-            bandwidth = brentq_bandwidth(X, self.kernel_name, self.null_density_proportion, previous_bw)
+            print(intro + f"Searching for optimal bandwidth using BrentQ...")
+            bandwidth, low_density_ratio_ = self.brentq_bandwidth.brentq_search(X)
+            # Store estimated low density volume ratio
+            self.low_density_ratio_ = low_density_ratio_
 
         elif self.bandwidth_config['use_search_cv']:
             # Find optimal bandwidth using RandomizedSearchCV
-            print(intro + "Searching bandwidth using CV-log-likelihood...")
+            print(intro + "Searching for bandwidth using CV-log-likelihood...")
             bandwidth = search_cv_bandwidth(X, self.kernel_name)
 
         elif self.bandwidth_config['use_heuristic']:
@@ -218,6 +230,7 @@ class KDETerm(KDEModel, ModelFOMTerm):
 
         return {
             'bandwidth': self.model.bandwidth_,
+            'low_density_ratio_': self.low_density_ratio_,  # The estimated one
             'max_density': self.max_density,
             'min_density': self.min_density
         }
@@ -225,6 +238,8 @@ class KDETerm(KDEModel, ModelFOMTerm):
     def get_parameters(self) -> Dict[str, Any]:
         params = ModelFOMTerm.get_parameters(self)
         params.update({
+            'low_density_threshold': self.low_density_threshold,
+            'low_density_ratio': self.low_density_ratio,
             'bandwidth_config': self.bandwidth_config,
             'kernel': self.kernel_name,
             **self.get_model_params(),

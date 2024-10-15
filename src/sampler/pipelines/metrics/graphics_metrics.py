@@ -8,8 +8,11 @@ import seaborn as sns
 
 from .postprocessing_functions import set_scaled_kde
 from .asvd import ASVD, get_cum_vol
+from .asvd_plot import format_value
 from sampler.core.data_processing.sampling_tracker import get_first_iteration_index
 
+cm = 1/2.54  # centimeters in inches
+FONT_SIZE = 10
 
 def plot_initial_data(
     data: Dict[str, Dict],
@@ -122,7 +125,7 @@ def plot_feature_pairs(
     latex_mapper: Dict[str, str],
     plot_ranges: Dict[str, Tuple[float, float]],
     only_new: bool = False,
-    font_size: int = 14
+    font_size: int = FONT_SIZE
 ):
     n_exp = len(data)
 
@@ -130,8 +133,8 @@ def plot_feature_pairs(
     x, y = feature_pair
 
     # Adjust figure size
-    fig_width = 4 * n_exp + 1
-    fig_height = 6  # Fixed height since we're only plotting one pair
+    fig_width = max(15*cm, (4 * n_exp + 1)*cm)
+    fig_height = 10*cm  # Fixed height since we're only plotting one pair
     fig, axs = plt.subplots(
         1, n_exp, sharey='row', figsize=(fig_width, fig_height),
         constrained_layout=False, squeeze=False
@@ -148,51 +151,38 @@ def plot_feature_pairs(
         num_no_interest = exp_dic_copy['no_interest'].shape[0]
         num_interest = exp_dic_copy['interest'].shape[0]
         num_outliers = exp_dic_copy['outliers'].shape[0]
+        marker_size = 9
         interest_colors = plt.cm.autumn_r(np.linspace(1, 0, num_interest))
 
         ax = axs[0, n_col]
+        ax.scatter(  # Fake scatter to add interest marker to legend
+            [], [], 
+            s=marker_size, c='red', alpha=0.7,
+            label=f'Interest: {num_interest}'
+        )
         ax.scatter(
             x=exp_dic_copy['no_interest'][x],
             y=exp_dic_copy['no_interest'][y],
-            c='gray', alpha=0.3, label='No interest'
+            s=marker_size, c='gray', alpha=0.3,
+            label=f'No interest: {num_no_interest}'
         )
         ax.scatter(
             x=exp_dic_copy['outliers'][x],
             y=exp_dic_copy['outliers'][y],
-            c='black', alpha=0.7, marker='x', label='Outlier'
+            s=marker_size+2, c='black', alpha=0.7, marker='x', linewidths=0.75,
+            label=f'Outlier: {num_outliers}'
         )
         ax.scatter(
             x=exp_dic_copy['interest'][x],
             y=exp_dic_copy['interest'][y],
-            c=interest_colors, alpha=0.5, label='Interest'
+            s=marker_size, c=interest_colors, alpha=0.5,
         )
-
-        # Create legend for each column
-        handles, _ = ax.get_legend_handles_labels()
-
-        # Create a handle for the 'interest' marker
-        interest_marker = plt.Line2D(
-            [0], [0], marker='o', color='w', markerfacecolor='red',
-            alpha=0.7, label=''
-        )
-
-        # Initialize handles and labels for the legend
-        legend_handles = [interest_marker, handles[0]]
-        legend_labels = [
-            f'Interest: {num_interest}',
-            f'No Interest: {num_no_interest}',
-        ]
-
-        # Add outliers to the legend if present
-        if num_outliers != 0:
-            legend_handles.append(handles[1])
-            legend_labels.append(f'Outlier: {num_outliers}')
 
         # Create the legend on the specified axis
         ax.legend(
-            handles=legend_handles, labels=legend_labels,
             loc='lower center', bbox_to_anchor=(0.5, 1.05),
-            title=exp_dic['name'], title_fontsize=font_size
+            title=exp_dic['name'], title_fontsize=font_size,
+            fontsize=font_size
         )
 
         # Set axis labels
@@ -203,19 +193,17 @@ def plot_feature_pairs(
             ax.set_ylim(plot_ranges[y])
 
         # Set tick label font sizes
-        ax.tick_params(axis='both', which='major', labelsize=font_size-2)
+        ax.tick_params(axis='both', which='major', labelsize=font_size)
+        
+    fig.tight_layout(rect=[0, 0.1, 1.0, 1.0])  # Adjust subplots layout, not global figure
 
     # Add a vertical color bar with custom ticks outside the subplots
-    cbar_width = 0.2 / fig_width
-    pos = ax.get_position()
-    cbar_ax = fig.add_axes([0.88, pos.y0, cbar_width, 0.6])  # [left, bottom, width, height]
-    cbar = fig.colorbar(plt.cm.ScalarMappable(cmap='autumn_r'), cax=cbar_ax, orientation='vertical')
+    cbar_ax = fig.add_axes([0.2, 0.1, 0.6, 0.02])  # [left, bottom, width, height]
+    cbar = fig.colorbar(plt.cm.ScalarMappable(cmap='autumn_r'), cax=cbar_ax, orientation='horizontal')
     cbar.set_ticks([0, 1])  # Set ticks at the start and end
     cbar.set_ticklabels(['first', 'last'])  # Label the ticks
     cbar.set_label('Interest order', fontsize=font_size)
-    cbar.ax.tick_params(labelsize=font_size-2)
-
-    fig.tight_layout(rect=[0, 0, 0.85, 0.95])  # Adjust subplots layout, not global figure
+    cbar.ax.tick_params(labelsize=font_size)
 
     return fig
 
@@ -226,9 +214,12 @@ def plot_violin_distribution(
     latex_mapper: Dict[str, str],
     interest_region: Dict[str, Tuple[float, float]],
     plot_ranges: Dict[str, Tuple[float, float]],
-    font_size: int = 14
+    font_size: int = FONT_SIZE
 ):
-    fig, axs = plt.subplots(1, len(targets), figsize=(5 * len(targets), 5))
+    n_col = len(targets)
+    fig_width = max(15*cm, (6 * n_col + 1)*cm)
+    fig_height = 10*cm
+    fig, axs = plt.subplots(1, len(targets), figsize=(fig_width, fig_height))
 
     # Ensure axs is always a list, even for a single subplot
     axs = [axs] if len(targets) == 1 else axs
@@ -251,7 +242,7 @@ def plot_violin_distribution(
             ax=axs[col],
         )
         axs[col].set_xticklabels([val['name'] for val in data.values()], 
-                                 rotation=20, ha='right', fontsize=font_size-2)
+                                 rotation=20, ha='right', fontsize=font_size)
         axs[col].add_patch(Rectangle(
             (-0.45, interest_region[target][0]),  # x, y
             (len(data) - 0.1),  # width
@@ -262,15 +253,15 @@ def plot_violin_distribution(
         axs[col].set_ylim(plot_ranges[target])
         
         # Set tick label font sizes
-        axs[col].tick_params(axis='both', which='major', labelsize=font_size-2)
+        axs[col].tick_params(axis='both', which='major', labelsize=font_size)
 
 
     # Add labels only if there are multiple subplots
     if len(targets) > 1:
         axs[0].text(-0.03, 1.03, 'a)', transform=axs[0].transAxes, 
-                    ha='right', va='bottom', size=font_size+6)
+                    ha='right', va='bottom', size=font_size+2)
         axs[1].text(-0.03, 1.03, 'b)', transform=axs[1].transAxes, 
-                    ha='right', va='bottom', size=font_size+6)
+                    ha='right', va='bottom', size=font_size+2)
 
     fig.tight_layout()
 
@@ -286,10 +277,12 @@ def targets_kde(
     plot_ranges: Dict[str, Tuple[float, float]],
     bins: int = 20,
     bandwidth: float = 0.1,
-    font_size: int = 14,
+    font_size: int = FONT_SIZE,
 ):
     n_col = len(targets)
-    fig, axs = plt.subplots(1, n_col, figsize=(6*n_col, 6), squeeze=False)
+    fig_width = max(15*cm, (6 * n_col + 1)*cm)
+    fig_height = 10*cm
+    fig, axs = plt.subplots(1, n_col, figsize=(fig_width, fig_height), squeeze=False)
     axs = axs.flatten()  # This ensures axs is always a 1D array
 
     max_count = 0
@@ -310,45 +303,52 @@ def targets_kde(
             q3, cumsum_q3 = get_cum_vol(asvd[exp_key].stars_volumes_x, 75)
             augmentation = asvd[exp_key].get_augmentation(use_star=True)
             exp_stats = (
-                f"Interest: {num_interest}\n"
-                f"Eff. Vol.: {cumsum_q3:.4f}\n"
-                f"Augmentat°: {augmentation:.2f}\n"
+                f"Interest: {format_value(num_interest)}\n"
+                f"Eff. Vol.: {format_value(cumsum_q3)}\n"
+                f"Augmentat°: {format_value(augmentation)}"
             )
             # Plot KDE
             ax.fill_between(x_values, kde_counts, 0, alpha=0.3, color=exp_data['color'])
-            ax.plot(x_values, kde_counts, label=exp_data['name'], color=exp_data['color'], linewidth=2)
+            ax.plot(x_values, kde_counts, label=exp_data['name'], color=exp_data['color'], linewidth=1)
             ax.plot([], [], ' ', label=exp_stats)
 
             # Update max count for y-axis limit
             max_count = max(max_count, np.max(count))
 
-        ax.axvline(x=interest_region[target][0], color='red', linestyle='--')
-        ax.axvline(x=interest_region[target][1], color='red', linestyle='--')
+        ax.axvline(x=interest_region[target][0], color='red', linewidth=1, linestyle='--')
+        ax.axvline(x=interest_region[target][1], color='red', linewidth=1, linestyle='--')
         ax.set_xlabel(latex_mapper[target], fontsize=font_size)
         ax.set_xlim(plot_ranges[target])
         
         # Set tick label font sizes
-        ax.tick_params(axis='both', which='major', labelsize=font_size-2)
+        ax.tick_params(axis='both', which='major', labelsize=font_size)
 
     if len(targets) > 1:
         axs[1].set_ylabel('')
         axs[1].set_yticklabels([])
         axs[0].text(-0.03, 1.03, 'a)', transform=axs[0].transAxes, 
-                    ha='right', va='bottom', size=font_size+6)
+                    ha='right', va='bottom', size=font_size+2)
         axs[1].text(-0.03, 1.03, 'b)', transform=axs[1].transAxes, 
-                    ha='right', va='bottom', size=font_size+6)
+                    ha='right', va='bottom', size=font_size+2)
 
-    axs[0].set_ylabel(f'Count per {100/bins:.0f}% of target range', fontsize=font_size)
-    legend = axs[-1].legend(loc='upper left', bbox_to_anchor=(1.1, 1))
-    legend.set_title('Experiments\n', prop={'size': font_size})
-    for text in legend.get_texts():
-        text.set_fontsize(font_size-2)
+    # Set y label
+    axs[0].set_ylabel(f'Count per {100/bins:.0f}\% of target range', fontsize=font_size)
+
+    # Set legend based on first subplot only to avoid duplicates
+    handles, labels = axs[0].get_legend_handles_labels()
+    fig.legend(
+        handles, labels,
+        loc='upper center', 
+        bbox_to_anchor=(0.5, 0.98),
+        ncol=len(data),
+        fontsize=font_size,
+    )
 
     # Set y-axis limit
     for ax in axs:
         ax.set_ylim(0, max_count * 1.1)
 
-    fig.tight_layout()
+    fig.tight_layout(rect=[0, 0, 1, 0.80])
 
     return fig
 
@@ -358,11 +358,15 @@ def plot_feat_tar(
     targets: List[str],
     latex_mapper: Dict[str, str],
     plot_ranges: Dict[str, Tuple[float, float]],
-    font_size: int = 14
+    font_size: int = FONT_SIZE
 ):
     n_col = len(features)
     n_rows = len(targets)
-    fig, axs = plt.subplots(n_rows, n_col, figsize=(4 * n_col, 4 * n_rows), sharex='col', sharey='row', squeeze=False)
+    
+    # Adjust figure size
+    fig_width = max(15*cm, (4 * n_col + 1)*cm)  # 4 * n_col
+    fig_height = max(15*cm, (4 * n_rows + 1)*cm)  # 4 * n_rows
+    fig, axs = plt.subplots(n_rows, n_col, figsize=(fig_width, fig_height), sharex='col', sharey='row', squeeze=False)
     
     # Get initial data for each experiment
     first_index = get_first_iteration_index(exp_dic['df'])
@@ -396,7 +400,7 @@ def plot_feat_tar(
                 ax.set_ylim(plot_ranges[target])
             
             # Set tick label font sizes
-            ax.tick_params(axis='both', which='major', labelsize=font_size-2)
+            ax.tick_params(axis='both', which='major', labelsize=font_size)
 
     # Get legend handles and labels from the first subplot
     handles, labels = axs[0, 0].get_legend_handles_labels()
@@ -407,7 +411,7 @@ def plot_feat_tar(
                loc='upper center', ncol=len(labels),
                title=exp_dic['name'],
                title_fontsize=font_size,
-               fontsize=font_size-2)
+               fontsize=font_size)
     fig.subplots_adjust(top=0.85)
     
     return fig
